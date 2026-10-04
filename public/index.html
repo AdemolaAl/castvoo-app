@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Castvoo · Telegram broadcasts and auto follow-ups</title>
+<meta name="description" content="Send Telegram broadcasts, welcome every new subscriber and run auto follow-ups for your bots, channels and groups. Cas, the AI helper, writes with you. 7 days free.">
+<meta name="theme-color" content="#2F6BFF">
+<meta property="og:title" content="Castvoo · Telegram broadcasts and auto follow-ups">
+<meta property="og:description" content="Broadcasts, auto follow-ups and an AI helper for your Telegram bots, channels and groups.">
+<meta property="og:type" content="website">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="/css/castvoo.css?v=1">
+<script defer src="/js/core.js?v=1"></script>
+<script defer src="/js/api.js?v=1"></script>
+<script defer src="/js/qr.js?v=1"></script>
+<script defer src="/js/site.js?v=1"></script>
+<script defer src="/js/site-story.js?v=1"></script>
+<script defer src="/js/signup.js?v=1"></script>
+<script defer src="/js/app.js?v=1"></script>
+<script defer src="/js/app-home.js?v=1"></script>
+<script defer src="/js/app-send.js?v=1"></script>
+<script defer src="/js/app-drips.js?v=1"></script>
+<script defer src="/js/app-people.js?v=1"></script>
+<script defer src="/js/app-connect.js?v=1"></script>
+<script defer src="/js/app-cas.js?v=1"></script>
+<script defer src="/js/app-money.js?v=1"></script>
+<script defer src="/js/app-account.js?v=1"></script>
+<script defer src="/js/app-zedapex.js?v=1"></script>
+<script defer src="/js/main.js?v=1"></script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="lgB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5A8CFF"/><stop offset=".5" stop-color="#2F6BFF"/><stop offset="1" stop-color="#1846DB"/></linearGradient>
+    <linearGradient id="tgG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#37BBFE"/><stop offset="1" stop-color="#1E96E8"/></linearGradient>
+    <radialGradient id="casG" cx=".34" cy=".28" r=".85"><stop offset="0" stop-color="#9DBDFF"/><stop offset=".38" stop-color="#4B80FF"/><stop offset=".78" stop-color="#2052E6"/><stop offset="1" stop-color="#1638B8"/></radialGradient>
+    <radialGradient id="casA" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#7DA6FF"/><stop offset="1" stop-color="#1F4FE0"/></radialGradient>
+    <symbol id="logo" viewBox="0 0 40 40"><rect width="40" height="40" rx="12" fill="url(#lgB)"/><rect x="1" y="1" width="38" height="19" rx="11" fill="#fff" opacity=".1"/><path d="M24.6 13.6A9 9 0 1 0 24.6 26.4" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle class="dt" cx="29" cy="20" r="3.3" fill="#fff"/><circle class="dt2" cx="34.6" cy="20" r="1.8" fill="#fff" opacity=".7"/></symbol>
+    <symbol id="jvLogo" viewBox="0 0 40 40"><rect width="40" height="40" rx="12" fill="#5B3DF5"/><rect x="1" y="1" width="38" height="19" rx="11" fill="#fff" opacity=".12"/><circle cx="15.5" cy="20" r="6.5" fill="none" stroke="#fff" stroke-width="3.6"/><circle cx="24.5" cy="20" r="6.5" fill="none" stroke="#fff" stroke-width="3.6" opacity=".85"/></symbol><symbol id="rvLogo" viewBox="0 0 40 40"><rect width="40" height="40" rx="12" fill="#121110"/><path d="M10 12.5a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-8l-5.5 4.5v-4.5H13a3 3 0 0 1-3-3z" fill="#FFC21A"/><circle cx="16" cy="17.5" r="1.7" fill="#121110"/><circle cx="20" cy="17.5" r="1.7" fill="#121110"/><circle cx="24" cy="17.5" r="1.7" fill="#121110"/></symbol>
+    <symbol id="i-tg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="url(#tgG)"/><path d="M5.3 11.7 17 7.2c.55-.2 1.02.13.85.96l-2 9.4c-.15.67-.55.83-1.1.52l-3.05-2.25-1.47 1.42c-.16.16-.3.3-.62.3l.22-3.1 5.64-5.1c.25-.22-.05-.34-.38-.13l-6.97 4.39-3-.94c-.65-.2-.66-.65.14-.97z" fill="#fff"/></symbol>
+    <symbol id="i-vf" viewBox="0 0 24 24"><path d="M12 1.5l2.6 1.9 3.2-.1 1 3 2.6 1.9-1 3 1 3-2.6 1.9-1 3-3.2-.1L12 22.5l-2.6-1.9-3.2.1-1-3L2.6 15.8l1-3-1-3 2.6-1.9 1-3 3.2.1z" fill="#29A9EB"/><path d="M8 12.3l2.6 2.6L16.2 9.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4 18-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-drip" viewBox="0 0 24 24"><path d="M4 6h4v4H4zM10 14h4v4h-4zM16 6h4v4h-4zM6 10v2a2 2 0 0 0 2 2h2M18 10v2a2 2 0 0 1-2 2h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-seg" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.9.7 3.1 2.4 3.5 5.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13v4M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="16.5" cy="14.5" r="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24"><path d="M4 11h16v10H4zM3 7h18v4H3zM12 7v14M12 7S10.5 3 8 3.5 7.5 7 12 7zM12 7s1.5-4 4-3.5S16.5 7 12 7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" fill="currentColor"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-tap" viewBox="0 0 24 24"><path d="M9 11V5a2 2 0 0 1 4 0v6l4.5 1a2 2 0 0 1 1.5 2.3L18 20H9l-3.5-5a1.8 1.8 0 0 1 2.8-2.2L9 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8.5 12l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1.3" fill="currentColor"/><rect x="14" y="4.5" width="4" height="15" rx="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="9" cy="10.5" r="1.2" fill="currentColor"/><circle cx="12" cy="10.5" r="1.2" fill="currentColor"/><circle cx="15" cy="10.5" r="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-login" viewBox="0 0 24 24"><path d="M10 7V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-2M3 12h11M10 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v14M6 12l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V6M6 12l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z M13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 4 4H6l4-4zM12 13v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2M10 12h11M17 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.5 9.5a2.6 2.6 0 0 1 5 .8c0 1.8-2.5 2.2-2.5 3.9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 18 18 6" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4.5M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5M20 20v-4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="2" fill="currentColor"/><path d="m4 18 5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-test" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="maint" id="maintBar" hidden><span class="dl" style="background:var(--gold)"></span><span id="maintText"></span></div>
+
+<!-- ================= WEBSITE ================= -->
+<div id="v-site">
+  <div class="strip" id="annBar" hidden><div class="wrap"><span class="nw">NEW</span><span id="annText"></span><a id="annLink" href="#guide" hidden>Learn more →</a></div></div>
+  <header class="hdr" id="hdr">
+    <div class="wrap hdr-in">
+      <a class="logo" href="#top" aria-label="Castvoo home"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></a>
+      <nav class="nav" aria-label="Main"><a href="#features" data-k="nf">Features</a><a href="#guide" data-k="nh">Setup guide</a><a href="#ai" data-k="na">AI</a><a href="#pricing" data-k="np">Pricing</a><a href="#faq" data-k="nq">FAQ</a></nav>
+      <div class="hdr-r">
+        <div class="lsw" id="lsw"></div>
+        <a class="login" href="#login" data-out><svg><use href="#i-login"/></svg><span data-k="nl">Log in</span></a>
+        <a class="btn b-blue sm hstart" href="#signup" data-out><span data-k="ns">Start free</span></a>
+        <a class="btn b-ink sm hstart" href="#app" data-in hidden>Open dashboard</a>
+        <button class="ib burger" id="burger" type="button" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button>
+      </div>
+    </div>
+  </header>
+  <div class="mnav" id="mnav"><div class="ov" data-close></div><div class="pn" role="dialog" aria-label="Menu">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span class="logo"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></span><button class="ib" type="button" data-close aria-label="Close menu"><svg><use href="#i-x"/></svg></button></div>
+    <a class="l" href="#features" data-close>Features <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#guide" data-close>Setup guide <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#ai" data-close>Cas, the AI helper <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#pricing" data-close>Pricing <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#faq" data-close>FAQ <svg width="18" height="18"><use href="#i-chev"/></svg></a>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px"><div style="width:120px;align-self:center" data-cas="wave"></div><a class="btn b-blue" href="#signup" data-close data-out>Start free trial</a><a class="btn b-ghost" href="#login" data-close data-out>Log in</a><a class="btn b-blue" href="#app" data-close data-in hidden>Open dashboard</a></div>
+  </div></div>
+
+  <section class="hero" id="top">
+    <div class="mesh" style="width:560px;height:560px;left:-10%;top:-6%;background:#D8E4FF"></div>
+    <div class="mesh" style="width:480px;height:480px;right:-8%;top:4%;background:#CDE8FF;animation-delay:-7s"></div>
+    <div class="mesh" style="width:360px;height:360px;left:40%;top:52%;background:#E4ECFF;animation-delay:-13s"></div>
+    <div class="gridbg"></div>
+    <div class="wrap hero-in">
+      <div class="hc">
+        <span class="chip"><span class="cb"><svg><use href="#i-tg"/></svg>Telegram</span><span data-k="hc">Broadcasts, follow-ups and AI in one place</span></span>
+        <h1 class="h1" id="heroTitle">Turn your Telegram into a <em class="gtext">sales machine.</em></h1>
+        <p class="lead" id="heroSub">Castvoo welcomes every new subscriber, follows up at the right time and sends each group the message written for them. Your bots and channels keep selling while you sleep.</p>
+        <div class="hctas"><a class="btn b-blue" href="#signup" id="heroCta"><span id="heroCtaT">Start free · 7 days on us</span><svg><use href="#i-arrow"/></svg></a><a class="btn b-ghost" href="#guide"><svg><use href="#i-play"/></svg><span data-k="h2c">Watch the 40-second setup</span></a></div>
+        <div class="trust"><span><svg><use href="#i-check"/></svg><span data-k="t1">No card needed</span></span><span><svg><use href="#i-check"/></svg><span data-k="t2">Set up in about 5 minutes</span></span><span><svg><use href="#i-check"/></svg><span data-k="t3">Cancel any time</span></span></div>
+      </div>
+      <div class="stage" aria-hidden="true">
+        <div class="halo"></div>
+        <div class="orb"><i style="left:-21px;top:40%"><svg><use href="#i-tg"/></svg></i><i style="right:6%;top:4%;color:var(--blue)"><svg style="width:20px;height:20px"><use href="#i-spark"/></svg></i><i style="right:-14px;top:64%;font-size:20px">💬</i><i style="left:16%;bottom:2%;font-size:20px">📣</i></div>
+        <div class="phone"><div class="notch"></div><div class="scr" id="heroScr"></div></div>
+        <div class="peeps"><div class="pc pc1" id="pc1"></div><div class="pc pc2" id="pc2"></div><div class="pc pc3" id="pc3"></div></div>
+        <div class="say" id="heroSay">Posting to your channel 📣</div>
+        <div class="cas-st" data-cas="wave"></div>
+        <span class="exl" style="left:4%;top:0">Example</span>
+      </div>
+    </div>
+    <div class="wrap"><div class="sendsto"><span style="color:var(--mut2)">Works with</span><span><span class="bx" style="background:var(--tg-s)"><svg width="22" height="22"><use href="#i-tg"/></svg></span>Telegram bots</span><span><span class="bx" style="background:var(--tg-s)"><svg width="22" height="22"><use href="#i-tg"/></svg></span>Channels</span><span><span class="bx" style="background:var(--tg-s)"><svg width="22" height="22"><use href="#i-tg"/></svg></span>Groups</span></div></div>
+  </section>
+
+  <!-- "Automate your Telegram" story: art and chat live in js/site-story.js, styles in the "Story" block of css/castvoo.css -->
+  <section class="sec story" id="story">
+    <div class="wrap">
+      <div class="center rv">
+        <span class="kick">Your time back</span>
+        <h2 class="h2">Automate your Telegram.<br><em class="gtext">Focus on the things you love.</em></h2>
+        <p class="lead">Castvoo sends your welcomes, follow-ups and promos on time, day and night. You stop copying the same message into every chat, and you get your evenings back.</p>
+      </div>
+
+      <div class="st-pair">
+        <figure class="st-card st-before rv">
+          <div class="st-stage">
+            <div class="st-art" data-art="tired"></div>
+            <div class="st-pop p1">Send promo to 1,240 people 😩</div>
+            <div class="st-pop p2">Welcome 37 new members</div>
+            <div class="st-pop p3">Post the 9am deal</div>
+            <div class="st-pop p4">Follow up yesterday's leads</div>
+            <div class="st-fwd"><span>Forwarding by hand</span><b data-st-fwd>214 / 1,240</b><i></i></div>
+          </div>
+          <figcaption><span class="st-tag bad">Without Castvoo</span><p><b>3:12 AM.</b> Still sending the same promo, one chat at a time.</p></figcaption>
+        </figure>
+
+        <div class="st-arrow" aria-hidden="true"><span class="st-arr-l"><svg width="30" height="30"><use href="#logo"/></svg></span><small>Castvoo takes over</small></div>
+
+        <figure class="st-card st-after rv">
+          <div class="st-stage">
+            <div class="st-art" data-art="chill"></div>
+            <div class="st-pop q1"><i class="ok">✓</i>Welcome sent to Tunde</div>
+            <div class="st-pop q2"><i class="ok">✓</i>Day 3 follow-up sent</div>
+            <div class="st-pop q3"><i>👆</i>Kwame tapped “Shop now”</div>
+            <div class="st-sent"><small>Sent today</small><b data-st-sent>0</b></div>
+          </div>
+          <figcaption><span class="st-tag ok">With Castvoo</span><p><b>Saturday, 11:00.</b> Everything went out on time. He's on his second juice.</p></figcaption>
+        </figure>
+      </div>
+
+      <div class="st-talk">
+        <div class="st-phone rv" data-chat>
+          <div class="st-ph-top"><svg width="18" height="18" class="bk"><use href="#i-arrow"/></svg><span class="mav" data-moji="thandi"></span><div><b>Thandi</b><small data-chat-status>online</small></div></div>
+          <div class="st-ph-body" data-chat-body aria-live="polite"></div>
+          <div class="st-ph-ctl">
+            <button type="button" class="st-play" data-chat-play aria-label="Play the chat"><svg class="pl" width="14" height="14" viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg><svg class="pa" width="14" height="14" viewBox="0 0 14 14"><path d="M3 2h3v10H3zM8 2h3v10H8z" fill="currentColor"/></svg></button>
+            <span class="st-bar" data-chat-bar><i></i></span>
+            <span class="st-time" data-chat-time>0:00</span>
+          </div>
+        </div>
+        <div class="st-copy rv">
+          <span class="kick">People notice</span>
+          <h3 class="st-h">“Who's running your Telegram?”<br><span>You are. Castvoo does the sending.</span></h3>
+          <p class="lead">Your channel posts on time, every new subscriber gets a warm welcome, and follow-ups go out while you're out living. It looks like you hired a team. You didn't.</p>
+          <ul class="st-list">
+            <li><svg width="20" height="20"><use href="#i-check"/></svg>Welcome every new subscriber in seconds</li>
+            <li><svg width="20" height="20"><use href="#i-check"/></svg>Follow-ups that send themselves, on day 1, 3 and 7</li>
+            <li><svg width="20" height="20"><use href="#i-check"/></svg>One promo to thousands, no copy and paste</li>
+          </ul>
+          <a class="btn b-blue" href="#signup">Start free · 7 days on us<svg><use href="#i-arrow"/></svg></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" style="padding-top:20px">
+    <div class="wrap">
+      <div class="night rv">
+        <div class="mesh" style="width:420px;height:420px;left:-10%;top:-20%;background:rgba(47,107,255,.35)"></div>
+        <div class="mesh" style="width:360px;height:360px;right:-10%;bottom:-20%;background:rgba(110,195,255,.25);animation-delay:-9s"></div>
+        <div class="center" style="position:relative"><span class="kick">Works around the clock</span><h2 class="h2">Your Telegram keeps selling <span style="color:var(--sky)">while you sleep.</span></h2><p class="lead">Welcome messages at 2am. Day-three follow-ups at breakfast. Your morning post at 9am in your audience's time zone. Castvoo sends it all on time, so you don't have to be awake.</p></div>
+        <div class="nscene"><div data-art="sleeper"></div><div class="ncard nc1" id="nc1"></div><div class="ncard nc2" id="nc2"></div><span class="exl dark" style="right:2%;top:0">Example</span></div>
+        <div class="sto"><span><svg width="20" height="20"><use href="#i-tg"/></svg>Bots</span><span><svg width="20" height="20"><use href="#i-tg"/></svg>Channels and groups</span><span>⏰ Local time sending</span><span>🧹 Blocked users removed for you</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="features" style="padding-top:20px">
+    <div class="wrap">
+      <div class="center rv"><span class="kick">Everything in the box</span><h2 class="h2">One home for every message <span class="gtext">your Telegram sends.</span></h2><p class="lead">Built for creators, communities, shops and media buyers who sell through Telegram.</p></div>
+      <div class="bento">
+        <div class="bx s4 rv"><span class="k"><svg class="tgi"><use href="#i-tg"/></svg>Broadcasts</span><h3>Write once. Land in every Telegram inbox.</h3><p>Text, a photo or video and buttons, sent to the people who started your bot or posted to your channel or group. Preview exactly what people will see, and send yourself a test first.</p>
+          <div class="st bc"><div class="bc-msg"><div class="in"><div class="img shn"></div><b style="display:block;font-size:13.5px">New collection is live 🔥</b><span class="muted" style="font-size:12.5px">Tap below to see it first.</span></div></div><div class="bc-list" id="bcList"></div></div></div>
+        <div class="bx s2 rv"><span class="k">Auto follow-ups</span><h3>Follow-ups that run themselves.</h3>
+          <div class="st dv"><span class="run"></span><div>Welcome<small>Instantly</small></div><div>Quick win<small>Day 1</small></div><div>Proof<small>Day 3</small></div><div>The offer<small>Day 7</small></div></div></div>
+        <div class="bx s2 rv"><span class="k">Audiences</span><h3>The right message for each group.</h3>
+          <div class="st"><div class="sgx" id="sgx"><span>Joined this week</span><span>From ad_14</span><span>Clicked recently</span><span>French</span><span>Tag: buyer</span><span>Quiet 14 days</span></div><div class="sgn"><b class="tnum" id="sgN">3,912</b><small>people match · example</small></div></div></div>
+        <div class="bx s2 bl rv"><span class="k">Local time</span><h3>Morning posts at 9am in your audience's time zone.</h3>
+          <div class="st clks" id="clks"></div></div>
+        <div class="bx s2 rv"><span class="k">Start links</span><h3>Know which ad brought each person.</h3>
+          <div class="st sll"><code>t.me/yourbot?start=<b>tiktok_ad5</b></code><code>t.me/yourbot?start=<b>meta_ad14</b></code><span class="pill p-blue">Each new subscriber is tagged</span></div></div>
+        <div class="bx s2 rv"><span class="k">Tracked clicks</span><h3>Know which message got the clicks.</h3>
+          <div class="st lkw lkc"><svg viewBox="0 0 220 80" preserveAspectRatio="none"><defs><linearGradient id="lkg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F6BFF" stop-opacity=".22"/><stop offset="1" stop-color="#2F6BFF" stop-opacity="0"/></linearGradient></defs><path d="M0 70 L30 60 L60 64 L90 44 L120 48 L150 30 L180 34 L220 10 L220 80 L0 80Z" fill="url(#lkg)"/><path class="ln" d="M0 70 L30 60 L60 64 L90 44 L120 48 L150 30 L180 34 L220 10" fill="none" stroke="#2F6BFF" stroke-width="3" stroke-linejoin="round"/></svg><span class="p1" style="right:8%;top:0">+1 click</span><span class="p1" style="right:40%;top:20px;animation-delay:1s">+1 click</span><span class="p1" style="right:70%;top:30px;animation-delay:2s">+1 click</span></div></div>
+        <div class="bx s4 nt rv"><span class="k">Cas, the AI helper</span><h3 style="color:#fff">Meet Cas. A copywriter that never sleeps.</h3><p>Writes and rewrites your messages, builds whole follow-up sequences from one sentence, translates, and answers questions about your own workspace.</p>
+          <div class="st aib"><div data-cas="think" style="width:120px"></div><div class="tb"><div class="q" id="bAiQ"></div><span id="bAiT"></span></div></div></div>
+        <div class="bx s3 rv"><span class="k">Safe delivery</span><h3>Fast sends that keep your bot healthy.</h3>
+          <div class="st gauge"><svg viewBox="0 0 150 90"><defs><linearGradient id="gg"><stop offset="0" stop-color="#6EC3FF"/><stop offset="1" stop-color="#2F6BFF"/></linearGradient></defs><path d="M15 80 A60 60 0 0 1 135 80" fill="none" stroke="#E9EEF9" stroke-width="14" stroke-linecap="round"/><path d="M15 80 A60 60 0 0 1 115 37" fill="none" stroke="url(#gg)" stroke-width="14" stroke-linecap="round"/><g class="ndl"><line x1="75" y1="80" x2="75" y2="30" stroke="#0B1430" stroke-width="4" stroke-linecap="round"/></g><circle cx="75" cy="80" r="7" fill="#0B1430"/></svg><div><b>Within limits</b><p>About 25 messages a second per bot, inside Telegram's rules. People who block your bot are removed for you.</p></div></div></div>
+        <div class="bx s3 rv"><span class="k">Team</span><h3>Your team writes. You approve.</h3>
+          <div class="st appr"><div class="stack" id="teamStack"></div><div class="rq" id="teamRq"></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="guide" style="background:#fff;border-block:1px solid var(--line)">
+    <div class="wrap">
+      <div class="center rv" style="margin-bottom:40px"><span class="kick">Setup guide</span><h2 class="h2">Connect Telegram <span class="gtext">in 40 seconds.</span></h2><p class="lead">Watch the whole setup play out on a Telegram screen: from @BotFather to your first connected bot and channel.</p></div>
+      <div id="siteGuide"></div>
+    </div>
+  </section>
+
+  <section class="sec" id="ai">
+    <div class="wrap aisec">
+      <div style="display:flex;flex-direction:column;gap:18px;min-width:0" class="rv">
+        <span class="kick">Cas, the AI helper</span>
+        <h2 class="h2">Tell Cas the goal. <span class="gtext">Cas writes the week.</span></h2>
+        <p class="lead">Describe your offer in one sentence. Cas writes the broadcast, builds the follow-up sequence and translates it for every language you sell in. Teach Cas about your business once, and every message sounds like you.</p>
+        <div class="aibul">
+          <div><span class="spk"><svg><use href="#i-spark"/></svg></span><div><b>Message writer</b><p>Hooks, body and button text in your tone. Shorter, clearer, friendlier or more urgent with one tap.</p></div></div>
+          <div><span class="spk"><svg><use href="#i-drip"/></svg></span><div><b>Follow-up builder</b><p>"A welcome for my fitness channel" becomes a set of timed messages you can check, edit and switch on.</p></div></div>
+          <div><span class="spk"><svg><use href="#i-globe"/></svg></span><div><b>Translate</b><p>English, French, Portuguese, Swahili, Pidgin and more, with natural local phrasing.</p></div></div>
+          <div><span class="spk"><svg><use href="#i-chat"/></svg></span><div><b>Ask about your workspace</b><p>"How did my last broadcast do?" Cas answers from your real numbers: deliveries, clicks and new subscribers.</p></div></div>
+        </div>
+      </div>
+      <div class="aibox rv">
+        <div class="peek" data-cas="wave"></div>
+        <div class="aitabs" id="aiTabs"><button type="button" class="aitab on" data-i="0">Broadcast</button><button type="button" class="aitab" data-i="1">Follow-up</button><button type="button" class="aitab" data-i="2">Translate</button><button type="button" class="aitab" data-i="3">Rewrite</button></div>
+        <div class="aip"><span class="spk" style="width:32px;height:32px;border-radius:10px"><svg><use href="#i-spark"/></svg></span><span id="aiPrompt"></span></div>
+        <div class="aiout" id="aiOut"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span class="hint">Example output. AI writes are included in every plan.</span><a class="btn b-blue sm" href="#signup">Try Cas free</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" style="padding-top:0">
+    <div class="wrap">
+      <div class="center rv"><span class="kick">Compare</span><h2 class="h2">Why people switch <span class="gtext">to Castvoo.</span></h2></div>
+      <div class="cmpw rv"><table class="cmp"><thead><tr><th></th><th class="us">Castvoo</th><th>Posting by hand</th><th>Basic bot builders</th></tr></thead><tbody>
+        <tr><td>Welcome message the moment someone starts your bot</td><td class="us y">Yes</td><td class="n">Only if you're awake</td><td class="y">Usually</td></tr>
+        <tr><td>Audiences by start link, tag, language and clicks</td><td class="us y">Yes</td><td class="n">No</td><td class="m">Varies</td></tr>
+        <tr><td>Send at 9am in your audience's time zone</td><td class="us y">Yes</td><td class="n">No</td><td class="m">Rare</td></tr>
+        <tr><td>AI writes, rewrites and translates messages</td><td class="us y">Included</td><td class="n">No</td><td class="m">Often extra</td></tr>
+        <tr><td>Clicks per message and per button</td><td class="us y">Yes</td><td class="n">No</td><td class="m">Varies</td></tr>
+        <tr><td>Channels, groups and bots in one place</td><td class="us y">Yes</td><td class="m">Many apps</td><td class="m">Bots only</td></tr>
+      </tbody></table></div>
+    </div>
+  </section>
+
+  <div class="wrap" id="banners"></div>
+
+  <section class="sec" id="pricing" style="background:#fff;border-block:1px solid var(--line)">
+    <div class="wrap">
+      <div class="center rv"><span class="kick">Pricing</span><h2 class="h2" id="prTitle">Simple prices. Everything included.</h2><p class="lead" id="prSub">Every plan has unlimited broadcasts, auto follow-ups, tracked clicks and Cas the AI helper. No add-on fees.</p>
+        <div class="billtog" id="billTog"><button type="button" class="on" data-b="m">Monthly</button><button type="button" data-b="y">Yearly <small>2 months free</small></button></div></div>
+      <div class="plans" id="plansBox"></div>
+      <div class="prnotes" id="prNotes"></div>
+    </div>
+  </section>
+
+  <section class="sec" id="refer">
+    <div class="wrap">
+      <div class="refw rv">
+        <div class="money" data-money="14"></div>
+        <div style="display:flex;flex-direction:column;gap:16px;position:relative;z-index:1">
+          <span class="kick" style="color:#CFE0FF">Refer and earn</span>
+          <h2 class="h2" style="color:#fff">Get paid when your friends grow.</h2>
+          <p class="lead" id="refText">Earn 10 to 30% of every plan payment from people you invite, every month, for as long as they pay. Use it on your own plan, or withdraw from $300 in USDT or Bitcoin.</p>
+          <div><a class="btn b-w" href="#signup" id="refCta">Get my referral link</a></div>
+        </div>
+        <div class="tiers" id="refTiers" style="z-index:1"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="faq" style="padding-top:0">
+    <div class="wrap">
+      <div class="center rv"><span class="kick">FAQ</span><h2 class="h2">Questions people ask <span class="gtext">before they start.</span></h2></div>
+      <div class="faq" id="faqBox"></div>
+    </div>
+  </section>
+
+  <section class="sec" style="padding-top:0">
+    <div class="wrap">
+      <div class="close rv">
+        <div class="mesh" style="width:420px;height:420px;left:-10%;top:-40%;background:rgba(47,107,255,.45)"></div>
+        <div style="position:relative;display:flex;flex-direction:column;gap:18px"><h2 class="h2">Stop letting your subscribers <span style="color:var(--sky)">go quiet.</span></h2><p class="lead">Connect your Telegram, switch on a welcome follow-up, and let Castvoo do the follow-up from tonight.</p><div><a class="btn b-blue" href="#signup" data-ctat>Start free · 7 days on us<svg><use href="#i-arrow"/></svg></a></div></div>
+        <div class="cc" data-cas="happy"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer><div class="wrap foot">
+    <div class="fcol"><a class="logo" href="#top"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></a><p style="margin-top:12px;max-width:40ch" id="footTag">Telegram broadcasts and follow-ups that sell while you sleep.</p>
+      <p style="margin-top:10px"><a class="fmail" id="footMail" href="mailto:support@castvoo.com"><svg width="16" height="16"><use href="#i-mail"/></svg><span>support@castvoo.com</span></a></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><span class="pill" style="background:#EFEBFF;color:#5B3DF5">Joinvoo · tracking</span><span class="pill" style="background:#FFF4D6;color:#7A5800">Replyvoo · AI replies</span></div></div>
+    <nav aria-label="Product"><b>Product</b><a href="#features">Features</a><a href="#guide">Setup guide</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="#login" data-out>Log in</a><a href="#app" data-in hidden>Dashboard</a></nav>
+    <nav aria-label="Legal"><b>Legal</b><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/refunds">Refunds</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/referral-terms">Referral terms</a><a href="/legal/cookies">Cookies</a></nav>
+  </div><div class="wrap fbot"><span id="footCopy">© 2026 Zedapex</span><span>Castvoo is not affiliated with Telegram.</span></div></footer>
+
+  <div class="mbar"><a class="lg" href="#login" data-out>Log in</a><a class="go" href="#signup" data-out data-ctat>Start free · 7 days on us</a><a class="go" href="#app" data-in hidden>Open dashboard</a></div>
+</div>
+
+<!-- ================= SIGN-UP AND LOGIN ================= -->
+<div id="v-signup" hidden>
+  <div class="su">
+    <div class="su-l">
+      <div class="su-top"><a class="logo" href="#top"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></a><a class="su-bk" href="#top">Back to site</a></div>
+      <div class="su-f">
+        <div class="prog" id="suProg" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div id="suBody" class="su-body"></div>
+      </div>
+    </div>
+    <div class="su-r">
+      <div class="mesh" style="width:480px;height:480px;left:-20%;top:-20%;background:rgba(110,195,255,.35)"></div>
+      <div class="su-q">
+        <div style="width:150px" data-cas="wave"></div>
+        <h2 class="h2" style="color:#fff;font-size:42px">Your subscribers, followed up for you.</h2>
+        <div style="display:grid;gap:10px;width:100%" id="suCards"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DASHBOARD ================= -->
+<div id="v-app" hidden>
+  <div class="app" id="app">
+    <div class="side-ov" id="sideOv"></div>
+    <aside class="side" id="side" aria-label="Dashboard menu">
+      <div class="side-top"><a class="logo" href="#top"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></a><button type="button" class="ib side-x" id="sideX" aria-label="Close menu"><svg><use href="#i-x"/></svg></button></div>
+      <div id="wsBox"></div>
+      <button type="button" class="cnb" data-connect><span class="cnp"><svg><use href="#i-plus"/></svg></span><span><b>Connect Telegram</b><small>Add a channel, group or bot</small></span></button>
+      <nav class="snav" id="snav">
+        <button type="button" class="si" data-v="overview"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-home"/></svg></span><span class="lb">Home<small>Everything at a glance</small></span></button>
+        <button type="button" class="si" data-v="ai"><span class="ti" style="--b:#E8F1FF;--c:#2F6BFF"><span class="mic" data-cas="mini"></span></span><span class="lb">Ask Cas<small>Your AI helper</small></span><span class="tag">AI</span></button>
+        <span class="grp">Send</span>
+        <button type="button" class="si" data-v="broadcast"><span class="ti" style="--b:#FFF1E6;--c:#F76707"><svg><use href="#i-send"/></svg></span><span class="lb">Send a message<small>One message to many people</small></span></button>
+        <button type="button" class="si" data-v="drips"><span class="ti" style="--b:#E2F6EE;--c:#0E9F6E"><svg><use href="#i-drip"/></svg></span><span class="lb">Auto follow-ups<small>Messages that send themselves</small></span><span class="tag" id="navDrips" hidden></span></button>
+        <button type="button" class="si" data-v="calendar"><span class="ti" style="--b:#FDECF4;--c:#D6336C"><svg><use href="#i-cal"/></svg></span><span class="lb">Calendar<small>What goes out and when</small></span></button>
+        <span class="grp">Your people</span>
+        <button type="button" class="si" data-v="bots"><span class="ti" style="--b:#E5F4FC;--c:#29A9EB"><svg class="tgx"><use href="#i-tg"/></svg></span><span class="lb">Channels &amp; bots<small>Your Telegram connections</small></span></button>
+        <button type="button" class="si" data-v="subscribers"><span class="ti" style="--b:#F1ECFF;--c:#7048E8"><svg><use href="#i-users"/></svg></span><span class="lb">Subscribers<small>Everyone you can reach</small></span></button>
+        <button type="button" class="si" data-v="audiences"><span class="ti" style="--b:#FFF6D9;--c:#E67700"><svg><use href="#i-seg"/></svg></span><span class="lb">Audiences<small>Groups of people to target</small></span></button>
+        <button type="button" class="si" data-v="clicks"><span class="ti" style="--b:#E6FCF5;--c:#0CA678"><svg><use href="#i-link"/></svg></span><span class="lb">Clicks<small>Who tapped your buttons</small></span></button>
+        <span class="grp">Money</span>
+        <button type="button" class="si" data-v="wallet"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-wallet"/></svg></span><span class="lb">Wallet and plan<small>Balance, top-ups and plan</small></span></button>
+        <button type="button" class="si" data-v="earn" data-feat="referrals"><span class="ti" style="--b:#E2F6EE;--c:#0E9F6E"><svg><use href="#i-gift"/></svg></span><span class="lb">Earn<small>Invite friends, get paid</small></span><span class="tag" id="navEarn"></span></button>
+        <span class="grp">Account</span>
+        <button type="button" class="si" data-v="help"><span class="ti" style="--b:#FFF0F0;--c:#E5484D"><svg><use href="#i-help"/></svg></span><span class="lb">Help<small>Chat with the Castvoo team</small></span><span class="tag r" id="navHelp" hidden>New</span></button>
+        <button type="button" class="si" data-v="settings"><span class="ti" style="--b:#F1F3F5;--c:#495057"><svg><use href="#i-gear"/></svg></span><span class="lb">Settings<small>Profile, team and data</small></span></button>
+      </nav>
+      <div class="zx"><span class="zxl">More from Zedapex</span>
+        <button type="button" class="zxi" style="background:#EFEBFF;color:#4A2FE0" data-go="joinvoo"><svg width="28" height="28" style="flex:none"><use href="#jvLogo"/></svg>Joinvoo<span class="pill" style="background:#fff;color:#5B3DF5">Tracking</span></button>
+        <button type="button" class="zxi" style="background:#FFF1C7;color:#5C4300" data-go="replyvoo"><svg width="28" height="28" style="flex:none"><use href="#rvLogo"/></svg>Replyvoo<span class="pill" style="background:#121110;color:#FFC21A">AI replies</span></button>
+      </div>
+      <div class="wcard"><div class="money" data-money="6" data-h="160"></div><small style="position:relative">Wallet balance</small><b class="tnum walBal">$0.00</b><button type="button" class="btn b-w xs" data-topup data-feat="topups"><svg><use href="#i-plus"/></svg>Top up</button></div>
+      <div class="me-row" id="meRow"></div>
+    </aside>
+    <div class="main">
+      <div class="topb">
+        <button type="button" class="ib ham" id="ham" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button>
+        <a class="tlogo" href="#app" aria-label="Castvoo home"><svg class="lm"><use href="#logo"/></svg></a>
+        <div class="ttl"><h2 id="pgTitle">Home</h2><div class="sub" id="pgSub"></div></div>
+        <div class="sp">
+          <button type="button" class="wpill" data-go="wallet" aria-label="Wallet"><i class="coin">$</i><b class="tnum walBal">$0.00</b><span class="pl" data-topup data-feat="topups"><svg><use href="#i-plus"/></svg></span></button>
+          <button type="button" class="btn b-ghost sm cnt" data-connect><svg width="18" height="18"><use href="#i-tg"/></svg>Connect</button><button type="button" class="btn b-blue sm newb" data-go="broadcast"><svg><use href="#i-send"/></svg>Send a message</button>
+          <button type="button" class="meb" data-go="settings" aria-label="Settings" id="topAva"></button>
+        </div>
+      </div>
+      <div id="appBanners" class="appbn"></div>
+      <div class="pg" id="pg"></div>
+    </div>
+    <nav class="dock" id="dock" aria-label="Quick menu">
+      <button type="button" data-v="overview"><svg><use href="#i-home"/></svg>Home</button>
+      <button type="button" data-v="ai"><span class="mic" data-cas="mini"></span>Cas</button>
+      <button type="button" class="plus2" data-create aria-label="Create or connect"><svg><use href="#i-plus"/></svg></button>
+      <button type="button" data-v="wallet"><svg><use href="#i-wallet"/></svg>Wallet</button>
+      <button type="button" data-menu><svg><use href="#i-menu"/></svg>More<span class="ddot" id="dockDot" hidden></span></button>
+    </nav>
+  </div>
+</div>
+
+<div id="bootLoad" class="bootl" hidden><div style="width:110px" data-cas="think"></div><span class="spin"></span></div>
+<div id="modalHost"></div>
+<div id="helpHost"></div>
+</body>
+</html>

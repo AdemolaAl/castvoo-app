@@ -1,0 +1,223 @@
+'use strict';
+/* The dashboard's home data, workspace settings, team, plan choices and Cas training. */
+
+const db = require('../db');
+const config = require('../config');
+const billing = require('../services/billing');
+const settings = require('../services/settings');
+const email = require('../services/email');
+const { str, int, oneOf, email: vEmail, randomToken, badRequest, forbidden, notFound, httpError, fmtUSD } = require('../lib/util');
+
+const ownerOnly = (ctx) => { if (ctx.member.role !== 'owner') throw forbidden('Only the workspace owner can do that.'); };
+const canSend = (ctx) => { if (ctx.member.role === 'drafter') throw forbidden('Your role can write drafts. Ask the owner to send.'); };
+
+async function stats(wsId) {
+  const [d, prev, clicks, clickers, replies, starts, series] = await Promise.all([
+    db.one("select count(*)::int n from deliveries where workspace_id = $1 and status = 'sent' and sent_at > now() - interval '14 days'", [wsId]),
+    db.one("select count(*)::int n from deliveries where workspace_id = $1 and status = 'sent' and sent_at between now() - interval '28 days' and now() - interval '14 days'", [wsId]),
+    db.one("select count(*)::int n from clicks where workspace_id = $1 and created_at > now() - interval '14 days'", [wsId]),
+    db.one("select count(distinct subscriber_id)::int n from clicks where workspace_id = $1 and subscriber_id is not null and created_at > now() - interval '14 days'", [wsId]),
+    db.one("select count(*)::int n from replies where workspace_id = $1 and created_at > now() - interval '14 days'", [wsId]),
+    db.one("select count(*)::int n from subscribers s join connections c on c.id = s.connection_id where c.workspace_id = $1 and s.joined_at > now() - interval '1 day'", [wsId]),
+    db.many(`select to_char(d, 'YYYY-MM-DD') as day,
+        (select count(*)::int from deliveries x where x.workspace_id = $1 and x.status = 'sent' and x.sent_at >= d and x.sent_at < d + interval '1 day') as sent,
+        (select count(*)::int from deliveries x where x.workspace_id = $1 and x.status = 'sent' and x.sent_at >= d - interval '14 days' and x.sent_at < d - interval '13 days') as prev
+      from generate_series(date_trunc('day', now()) - interval '13 days', date_trunc('day', now()), interval '1 day') d order by d`, [wsId]),
+  ]);
+  return { delivered_14d: d.n, delivered_prev_14d: prev.n, clicks_14d: clicks.n, clickers_14d: clickers.n, replies_14d: replies.n, new_subscribers_24h: starts.n, series };
+}
+
+async function activity(wsId) {
+  return db.many(`(select 'start' as kind, s.first_name as who, s.source as detail, c.title as place, s.joined_at as at
+        from subscribers s join connections c on c.id = s.connection_id where c.workspace_id = $1 order by s.joined_at desc limit 8)
+    union all (select 'click', coalesce(s.first_name, 'Someone'), l.label, '', k.created_at from clicks k join links l on l.code = k.code left join subscribers s on s.id = k.subscriber_id where k.workspace_id = $1 order by k.created_at desc limit 8)
+    union all (select 'broadcast', b.title, b.status, '', coalesce(b.finished_at, b.started_at, b.created_at) from broadcasts b where b.workspace_id = $1 and b.status in ('sent','sending') order by b.id desc limit 4)
+    order by at desc limit 12`, [wsId]);
+}
+
+module.exports = (r) => {
+  /** Everything the dashboard needs on first load. */
+  r.get('/api/app/state', async (ctx) => {
+    const ws = ctx.workspace;
+    const [plan, conns, wallet, st, act, sending, upcoming, unread] = await Promise.all([
+      billing.planState(ws),
+      db.many("select id, kind, username, title, member_count, status, last_error, created_at from connections where workspace_id = $1 and status <> 'removed' order by id", [ws.id]),
+      db.one('select wallet_cents, bonus_cents from workspaces where id = $1', [ws.id]),
+      stats(ws.id),
+      activity(ws.id),
+      db.one("select b.id, b.title, b.total, b.sent, b.failed, c.title as conn from broadcasts b join connections c on c.id = b.connection_id where b.workspace_id = $1 and b.status = 'sending' order by b.id desc limit 1", [ws.id]),
+      db.many("select id, title, send_at, total from broadcasts where workspace_id = $1 and status = 'scheduled' order by send_at limit 3", [ws.id]),
+      db.one("select count(*)::int n from support_threads where user_id = $1 and unread_user", [ctx.user.id]),
+    ]);
+    const firstBroadcast = await db.one("select 1 from broadcasts where workspace_id = $1 and status in ('sent','sending','scheduled') limit 1", [ws.id]);
+    const anyDrip = await db.one('select 1 from sequences where workspace_id = $1 and active limit 1', [ws.id]);
+    const teammates = await db.one('select count(*)::int n from members where workspace_id = $1', [ws.id]);
+    const anyTopup = await db.one("select 1 from wallet_tx where workspace_id = $1 and kind = 'topup' limit 1", [ws.id]);
+    return {
+      workspace: { id: ws.id, name: ws.name, timezone: ws.timezone, role: ctx.member.role, daily_cap: ws.daily_cap, require_approval: ws.require_approval, ai_trained: Object.keys(ws.ai_profile || {}).length > 0 },
+      plan, connections: conns,
+      wallet: { cash: Number(wallet.wallet_cents) / 100, bonus: Number(wallet.bonus_cents) / 100, total: (Number(wallet.wallet_cents) + Number(wallet.bonus_cents)) / 100 },
+      stats: st, activity: act, sending, upcoming, support_unread: unread.n,
+      checklist: [
+        { key: 'account', label: 'Create your account', done: true },
+        { key: 'connect', label: 'Connect a bot, channel or group', done: conns.length > 0, go: 'connect' },
+        { key: 'drip', label: 'Switch on a welcome follow-up', done: !!anyDrip, go: 'drips' },
+        { key: 'broadcast', label: 'Send your first message', done: !!firstBroadcast, go: 'broadcast' },
+        { key: 'train', label: 'Teach Cas about your business', done: Object.keys(ws.ai_profile || {}).length > 0, go: 'ai' },
+        { key: 'topup', label: 'Top up your wallet', done: !!anyTopup, go: 'topup' },
+        { key: 'team', label: 'Invite a teammate', done: teammates.n > 1, go: 'settings' },
+      ],
+    };
+  }, { auth: 'workspace' });
+
+  r.post('/api/app/settings', async (ctx) => {
+    ownerOnly(ctx);
+    const b = ctx.body;
+    const name = b.name !== undefined ? str(b.name, 'Workspace name', { min: 1, max: 60 }) : ctx.workspace.name;
+    let tz = ctx.workspace.timezone;
+    if (b.timezone !== undefined) {
+      tz = str(b.timezone, 'Time zone', { min: 1, max: 60 });
+      try { new Intl.DateTimeFormat('en', { timeZone: tz }); } catch { throw badRequest('That time zone is not recognised.'); }
+    }
+    const cap = b.daily_cap !== undefined ? int(b.daily_cap, 'Daily limit', { min: 0, max: 20 }) : ctx.workspace.daily_cap;
+    const appr = b.require_approval !== undefined ? !!b.require_approval : ctx.workspace.require_approval;
+    await db.query('update workspaces set name = $2, timezone = $3, daily_cap = $4, require_approval = $5 where id = $1', [ctx.workspace.id, name, tz, cap, appr]);
+    return { ok: true };
+  }, { auth: 'workspace' });
+
+  /* ---------- Team ---------- */
+  r.get('/api/app/team', async (ctx) => {
+    const members = await db.many('select u.id, u.name, u.email, u.tg_username, m.role from members m join users u on u.id = m.user_id where m.workspace_id = $1 order by m.created_at', [ctx.workspace.id]);
+    const invites = await db.many('select email, role, expires_at from invites where workspace_id = $1 and accepted_at is null and expires_at > now() order by created_at desc', [ctx.workspace.id]);
+    return { members, invites, seats: (await billing.limits(ctx.workspace)).seats };
+  }, { auth: 'workspace' });
+
+  r.post('/api/app/team/invite', async (ctx) => {
+    ownerOnly(ctx);
+    const mail = vEmail(ctx.body.email);
+    const role = oneOf(ctx.body.role || 'sender', 'Role', ['sender', 'drafter']);
+    const seats = (await billing.limits(ctx.workspace)).seats;
+    const used = (await db.one('select count(*)::int n from members where workspace_id = $1', [ctx.workspace.id])).n;
+    const pending = (await db.one('select count(*)::int n from invites where workspace_id = $1 and accepted_at is null and expires_at > now()', [ctx.workspace.id])).n;
+    if (used + pending >= seats) throw httpError(402, `Your plan has ${seats} seat${seats > 1 ? 's' : ''}. Upgrade to invite more people.`, 'limit_seats');
+    const token = randomToken(24);
+    await db.query("insert into invites(token, workspace_id, email, role, created_by, expires_at) values ($1,$2,$3,$4,$5, now() + interval '7 days')", [token, ctx.workspace.id, mail, role, ctx.user.id]);
+    const link = `${config.appUrl}/#join/${token}`;
+    await email.sendTo(mail, 'team_invite', { inviter_name: ctx.user.name, workspace_name: ctx.workspace.name, invite_url: link });
+    return { ok: true, link };
+  }, { auth: 'workspace', rate: [30, 3600] });
+
+  r.post('/api/app/team/remove', async (ctx) => {
+    ownerOnly(ctx);
+    const uid = int(ctx.body.user_id, 'Person');
+    if (uid === ctx.user.id) throw badRequest('You cannot remove yourself.');
+    await db.query("delete from members where workspace_id = $1 and user_id = $2 and role <> 'owner'", [ctx.workspace.id, uid]);
+    return { ok: true };
+  }, { auth: 'workspace' });
+
+  r.post('/api/app/team/role', async (ctx) => {
+    ownerOnly(ctx);
+    const role = oneOf(ctx.body.role, 'Role', ['sender', 'drafter']);
+    await db.query("update members set role = $3 where workspace_id = $1 and user_id = $2 and role <> 'owner'", [ctx.workspace.id, int(ctx.body.user_id, 'Person'), role]);
+    return { ok: true };
+  }, { auth: 'workspace' });
+
+  r.post('/api/invites/accept', async (ctx) => {
+    const inv = await db.one('select * from invites where token = $1 and accepted_at is null and expires_at > now()', [str(ctx.body.token, 'Invite', { min: 10, max: 100 })]);
+    if (!inv) throw notFound('That invite');
+    // The invite only works for the email it was sent to, so a forwarded link can't be used by someone else.
+    if (!ctx.user.email || ctx.user.email.toLowerCase() !== inv.email.toLowerCase()) {
+      const hint = inv.email.replace(/^(.).*(@.*)$/, '$1•••$2');
+      throw httpError(403, `This invite was sent to ${hint}. Log in with that email, or add it to your account in Settings, then open the link again.`, 'invite_email');
+    }
+    await db.tx(async (c) => {
+      await c.query('insert into members(workspace_id, user_id, role) values ($1,$2,$3) on conflict do nothing', [inv.workspace_id, ctx.user.id, inv.role]);
+      await c.query('update invites set accepted_at = now() where token = $1', [inv.token]);
+    });
+    return { ok: true, workspace_id: inv.workspace_id };
+  }, { auth: 'user' });
+
+  /* ---------- Plan ---------- */
+  r.get('/api/app/plan', async (ctx) => billing.planState(ctx.workspace), { auth: 'workspace' });
+
+  r.post('/api/app/plan', async (ctx) => {
+    ownerOnly(ctx);
+    const ws = ctx.workspace;
+    const code = str(ctx.body.plan, 'Plan', { min: 1, max: 30 });
+    const cycle = oneOf(ctx.body.cycle || ws.billing_cycle || 'month', 'Billing', ['month', 'year']);
+    const plan = await settings.plan(code);
+    if (!plan || !plan.active) throw badRequest('That plan is not available.');
+    if (ws.plan_status === 'trial') {
+      // Picked during the trial: it starts (and is paid) when the trial ends, unless they want to start now.
+      if (ctx.body.start_now) {
+        const r0 = await billing.activate(ws.id, code, cycle, { expect: (w) => w.plan_status === 'trial' });
+        if (r0.skipped) throw httpError(409, 'Your plan changed a moment ago. Refresh the page and try again.', 'plan_changed');
+        return { ok: true, message: `${plan.name} is active.` };
+      }
+      await db.query('update workspaces set pending_plan_code = $2, pending_cycle = $3 where id = $1', [ws.id, code, cycle]);
+      return { ok: true, message: `${plan.name} starts when your free trial ends.` };
+    }
+    if (ws.plan_status === 'paused' || ws.plan_status === 'cancelled') {
+      // expect: a top-up may have restarted the plan a moment ago; don't charge it twice.
+      const r1 = await billing.activate(ws.id, code, cycle, { expect: (w) => w.plan_status === 'paused' || w.plan_status === 'cancelled' });
+      if (r1.skipped) throw httpError(409, 'Your plan changed a moment ago. Refresh the page and try again.', 'plan_changed');
+      return { ok: true, message: `${plan.name} is active again.` };
+    }
+    const cur = await settings.plan(ws.plan_code);
+    if (cycle === ws.billing_cycle && billing.priceOf(plan, cycle) > billing.priceOf(cur, cycle)) {
+      const r2 = await billing.upgradeNow(ws.id, code);
+      return { ok: true, message: `Upgraded to ${plan.name}. ${r2.charged ? fmtUSD(r2.charged) + ' was taken for the rest of this period.' : ''}`.trim() };
+    }
+    await db.query('update workspaces set pending_plan_code = $2, pending_cycle = $3 where id = $1', [ws.id, code, cycle]);
+    return { ok: true, message: `${plan.name} (${cycle === 'year' ? 'yearly' : 'monthly'}) starts at your next renewal.` };
+  }, { auth: 'workspace' });
+
+  r.post('/api/app/plan/cancel', async (ctx) => {
+    ownerOnly(ctx);
+    await db.query('update workspaces set cancel_at_period_end = $2 where id = $1', [ctx.workspace.id, ctx.body.resume ? false : true]);
+    if (!ctx.body.resume) require('../services/voosquare').event('plan_cancelled', { voo_id: ctx.user.voo_id, label: 'Plan set to cancel' }).catch(() => {});
+    return { ok: true };
+  }, { auth: 'workspace' });
+
+  r.post('/api/app/coupon', async (ctx) => {
+    ownerOnly(ctx);
+    const code = str(ctx.body.code, 'Coupon code', { min: 2, max: 40 }).toUpperCase();
+    const o = (await settings.activeOffers('coupon')).find((x) => (x.code || '').toUpperCase() === code);
+    if (!o) throw badRequest('That code is not valid or has expired.');
+    // One use per account, recorded in coupon_redemptions. (Checking workspaces.coupon_id alone was not
+    // enough: it is cleared when the discount runs out, so the same code could be used again and again.)
+    await db.tx(async (c) => {
+      const owner = ctx.workspace.owner_user_id;
+      const old = (await c.query('select 1 from workspaces where owner_user_id = $1 and coupon_id = $2', [owner, o.id])).rows[0];
+      const first = (await c.query('insert into coupon_redemptions(offer_id, user_id, workspace_id) values ($1,$2,$3) on conflict do nothing returning offer_id', [o.id, owner, ctx.workspace.id])).rows[0];
+      if (old || !first) throw badRequest('You already used this code.');
+      const r2 = (await c.query('update offers set uses = uses + 1 where id = $1 and (max_uses is null or uses < max_uses) returning id', [o.id])).rows[0];
+      if (!r2) throw badRequest('This code has been used up.');
+      await c.query('update workspaces set coupon_id = $2, coupon_months_left = $3 where id = $1', [ctx.workspace.id, o.id, o.months || 1]);
+    });
+    settings.bust();
+    return { ok: true, message: `${o.percent}% off your next ${o.months > 1 ? o.months + ' plan payments' : 'plan payment'}.` };
+  }, { auth: 'workspace', rate: [20, 3600] });
+
+  /* ---------- Train Cas ---------- */
+  r.get('/api/app/ai-profile', async (ctx) => ({ profile: ctx.workspace.ai_profile || {} }), { auth: 'workspace' });
+
+  r.post('/api/app/ai-profile', async (ctx) => {
+    canSend(ctx);
+    const b = ctx.body || {};
+    const f = (k, max) => str(b[k], k, { max, required: false }) || '';
+    const examples = Array.isArray(b.examples) ? b.examples.slice(0, 5).map((x) => str(x, 'Example message', { max: 1500, required: false }) || '').filter(Boolean) : [];
+    const faqs = Array.isArray(b.faqs) ? b.faqs.slice(0, 15).map((x) => ({ q: str(x && x.q, 'Question', { max: 300, required: false }) || '', a: str(x && x.a, 'Answer', { max: 1000, required: false }) || '' })).filter((x) => x.q && x.a) : [];
+    const profile = {
+      business: f('business', 120), what_you_sell: f('what_you_sell', 1500), audience: f('audience', 800), tone: f('tone', 200),
+      language: f('language', 60), offers: f('offers', 1500), links: f('links', 800), always: f('always', 600), never: f('never', 600),
+      examples, faqs,
+    };
+    for (const k of Object.keys(profile)) if (!profile[k] || (Array.isArray(profile[k]) && !profile[k].length)) delete profile[k];
+    await db.query('update workspaces set ai_profile = $2 where id = $1', [ctx.workspace.id, JSON.stringify(profile)]);
+    return { ok: true, profile };
+  }, { auth: 'workspace' });
+};
+
+module.exports.ownerOnly = ownerOnly;
+module.exports.canSend = canSend;
