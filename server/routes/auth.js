@@ -57,7 +57,7 @@ async function meResponse(ctx) {
   return {
     user: {
       id: u.id, name: u.name, email: u.email, email_verified: u.email_verified, country: u.country, tg_linked: !!u.tg_user_id, tg_username: u.tg_username,
-      google_linked: !!u.google_sub, ref_code: u.ref_code, staff_role: u.staff_role, marketing_opt_out: u.marketing_opt_out,
+      google_linked: !!u.google_sub, voo_linked: !!u.voo_id, ref_code: u.ref_code, staff_role: u.staff_role, marketing_opt_out: u.marketing_opt_out,
       perms: u.staff_role ? perms.permsFor(u.staff_role) : [],
     },
     workspaces,
@@ -86,9 +86,10 @@ module.exports = (r) => {
     return { ok: true, created };
   }, { rate: [300, 600], csrf: true });
 
-  for (const provider of ['google', 'voosquare']) {
+  // VooSquare ("Continue with Voo ID") is in routes/voo-connect.js, through the Voo Connect kit.
+  for (const provider of ['google']) {
     r.get(`/api/auth/${provider}/start`, async (ctx) => {
-      const flag = provider === 'google' ? 'login_google' : 'login_voosquare';
+      const flag = 'login_google';
       if (!(await settings.feature(flag))) throw httpError(403, 'This login method is switched off.', 'off');
       const url = await oidc.start(provider, { ref: ctx.query.ref || ctx.cookies.cv_ref || null, country: ctx.query.country || null, signup: ctx.query.signup === '1' });
       // Tie the login to THIS browser: the callback must come back with the same state in a cookie.
@@ -103,7 +104,7 @@ module.exports = (r) => {
         ctx.setCookie('cv_oauth', '', { httpOnly: true, sameSite: 'Lax', maxAge: 0, path: '/api/auth/' });
         if (!mine || !safeEqual(mine, String(ctx.query.state || ''))) throw httpError(400, 'This login link expired. Please try again.', 'oidc_state');
         const info = await oidc.finish(provider, ctx.query);
-        const identity = provider === 'google' ? { google_sub: info.sub, email: info.email } : { voo_id: info.sub, email: info.email };
+        const identity = { google_sub: info.sub, email: info.email };
         const { user, created } = await auth.loginWith(identity, { name: info.name, country: info.data.country || info.country, ref: info.data.ref });
         await auth.createSession(ctx, user);
         ctx.redirect(created ? '/#signup/country' : '/#app');
@@ -115,9 +116,10 @@ module.exports = (r) => {
 
   /** Log out. People who signed in with VooSquare also get VooSquare's logout address, so one logout ends both. */
   r.post('/api/auth/logout', async (ctx) => {
-    const vooUser = !!(ctx.user && ctx.user.voo_id && config.voosquare.base);
+    const k = config.vooConnectOn() ? require('../lib/voo').kit() : null;
+    const vooUser = !!(ctx.user && ctx.user.voo_id && k);
     await auth.destroySession(ctx);
-    return { ok: true, voosquare_logout_url: vooUser ? `${config.voosquare.base}/oauth/logout?redirect_uri=${encodeURIComponent(config.appUrl + '/')}` : null };
+    return { ok: true, voosquare_logout_url: vooUser ? k.logoutUrl(require('../lib/voo').homeUrl()) : null };
   }, { auth: 'optional' });
 
   r.get('/api/me', async (ctx) => meResponse(ctx), { auth: 'optional' });

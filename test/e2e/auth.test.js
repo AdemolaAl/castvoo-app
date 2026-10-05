@@ -389,16 +389,17 @@ describe('profile', () => {
   });
 });
 
-describe('VooSquare login', () => {
-  it('signs up through VooSquare\'s own OAuth endpoints, with the country it sends, and logs out of both', async () => {
+describe('VooSquare login (Voo Connect kit)', () => {
+  it('signs up through VooSquare with prompt=signup and a verified id_token, with the country it sends, and logs out of both', async () => {
     const c = app.client();
     app.fakes.voo.nextUser = { voo_id: 'vs_login1', email: 'VSLogin@Example.com', name: 'Vee Ess', country: 'KE' };
-    const s = await c.get('/api/auth/voosquare/start?signup=1');
+    const s = await c.get('/auth/voosquare?signup=1');
     assert.equal(s.status, 302, s.text);
     const to = new URL(s.headers.get('location'));
     assert.equal(to.origin + to.pathname, app.fakes.base + '/voo/oauth/authorize');
     assert.equal(to.searchParams.get('client_id'), 'cv-client');
     assert.equal(to.searchParams.get('prompt'), 'signup');
+    assert.equal(to.searchParams.get('redirect_uri'), app.url + '/auth/voosquare/callback');
     const back = await fetch(to, { redirect: 'manual' });
     const cb = new URL(back.headers.get('location'));
     const r = await c.get(cb.pathname + cb.search);
@@ -406,9 +407,16 @@ describe('VooSquare login', () => {
     const me = (await c.get('/api/me')).body.user;
     assert.equal(me.email, 'vslogin@example.com');
     assert.equal(me.country, 'KE');
+    assert.equal(me.voo_linked, true);
     assert.equal((await app.db.one("select voo_id from users where id = $1", [me.id])).voo_id, 'vs_login1');
     const out = await c.post('/api/auth/logout');
     assert.match(out.body.voosquare_logout_url, /\/voo\/oauth\/logout\?redirect_uri=/);
+  });
+
+  it('the old button address still works (it sends to /auth/voosquare)', async () => {
+    const r = await app.client().get('/api/auth/voosquare/start?signup=1');
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/auth/voosquare?signup=1');
   });
 });
 

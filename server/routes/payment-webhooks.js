@@ -25,13 +25,14 @@ module.exports = (r) => {
     if (ev && ev.event === 'charge.success' && ev.data && ev.data.reference) {
       await payments.verifyPaystack(String(ev.data.reference)).catch((e) => log.error('paystack webhook verify failed', { err: e }));
     }
-    // A card payment was disputed (chargeback): cancel unsettled referral earnings from that customer.
+    // A card payment was disputed (chargeback): cancel unsettled referral earnings from that customer and tell
+    // VooSquare (chargeback events reverse the affiliate commission). Once per payment, however often Paystack sends it.
     if (ev && ev.event === 'charge.dispute.create' && ev.data) {
-      const ref = String((ev.data.transaction && ev.data.transaction.reference) || ev.data.reference || '');
-      const p = ref ? await db.one('select workspace_id from payments where reference = $1', [ref]) : null;
+      const ref = String((ev.data.transaction && ev.data.transaction.reference) || ev.data.reference || '').slice(0, 60);
+      const p = ref ? await db.one("select reference from payments where reference = $1 and provider = 'paystack' and status = 'paid'", [ref]) : null;
       if (p) {
-        const n = await db.tx((c) => require('../services/referrals').clawback(c, p.workspace_id, 'dispute'));
-        log.warn('paystack dispute opened', { reference: ref, workspace: p.workspace_id, referral_reversed_cents: n });
+        const r = await payments.chargeback(p.reference, { disputeRef: ev.data.id ? 'paystack:' + ev.data.id : 'paystack' });
+        log.warn('paystack dispute opened', { reference: ref, workspace: r.workspace_id, referral_reversed_cents: r.reversed_cents, voo_events: r.events.length, already: r.already });
       }
     }
     ctx.send(200, 'ok');

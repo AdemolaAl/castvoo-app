@@ -103,7 +103,7 @@ function drawDrips(el, bots, alive) {
     } catch (ex) { btnBusy(e.currentTarget, false); err.textContent = ex.message; err.hidden = false; apiErr(ex, { silent: true }); }
   };
   const dl = $('#dDel'); if (dl) dl.onclick = async () => {
-    if (!(await confirmBox('Delete "' + esc(E.name) + '"?', 'It stops for everyone in it, and its numbers are removed. This can\'t be undone.', 'Delete', true))) return;
+    if (!(await confirmBox('Delete "' + E.name + '"?', 'It stops for everyone in it, and its numbers are removed. This can\'t be undone.', 'Delete', true))) return;
     try { await api('DELETE', '/api/drips/' + E.id); DRIP.sel = null; DRIP.dirty = false; toast('Deleted.'); refreshState(); renderPage('drips', {}); } catch (ex) { apiErr(ex); }
   };
 }

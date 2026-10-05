@@ -6,6 +6,7 @@
 
 const db = require('../db');
 const config = require('../config');
+const log = require('../lib/log');
 const email = require('./email');
 const voosquare = require('./voosquare');
 const { str, badRequest, notFound } = require('../lib/util');
@@ -47,7 +48,8 @@ async function userMessage(user, workspaceId, body) {
   if (!t) t = await db.one('insert into support_threads(workspace_id, user_id, subject) values ($1,$2,$3) returning *', [workspaceId, user.id, text.slice(0, 80)]);
   await db.query("insert into support_messages(thread_id, author_type, author_user_id, author_name, body) values ($1,'user',$2,$3,$4)", [t.id, user.id, user.name, text]);
   await db.query("update support_threads set unread_staff = true, status = 'open', last_message_at = now() where id = $1", [t.id]);
-  voosquare.supportMessage({ threadId: t.id, user, subject: t.subject, body: text }).catch(() => {});
+  // Awaited: the copy for the VooSquare HQ inbox is in the outbox before we answer, so the next flush always has it.
+  await voosquare.supportMessage({ threadId: t.id, user, subject: t.subject, body: text }).catch((e) => log.warn('VooSquare support copy not queued', { err: e.message }));
   return t.id;
 }
 

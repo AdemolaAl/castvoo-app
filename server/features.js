@@ -14,7 +14,7 @@ const FEATURES = [
   { key: 'login_email',    group: 'Accounts',  name: 'Email code login',        about: 'Sign in with a 6-digit code sent by email.', default: true },
   { key: 'login_telegram', group: 'Accounts',  name: 'Telegram login',          about: 'Sign in with Telegram (needs CASTVOO_BOT_TOKEN).', default: true },
   { key: 'login_google',   group: 'Accounts',  name: 'Google login',            about: 'Sign in with Google (needs GOOGLE_CLIENT_ID).', default: true },
-  { key: 'login_voosquare',group: 'Accounts',  name: 'VooSquare login',         about: 'Sign in with a VooSquare account (needs VOO_ISSUER).', default: true },
+  { key: 'login_voosquare',group: 'Accounts',  name: 'VooSquare login',         about: 'Continue with Voo ID: VooSquare login and affiliate hand-off (needs VOO_BASE, VOO_CLIENT_ID, VOO_CLIENT_SECRET; VOO_CONNECT on).', default: true },
   { key: 'broadcasts',     group: 'Sending',   name: 'Broadcasts',              about: 'Send messages to bots, channels and groups.', default: true },
   { key: 'drips',          group: 'Sending',   name: 'Auto follow-ups',         about: 'Message sequences that send themselves.', default: true },
   { key: 'join_welcome',   group: 'Sending',   name: 'Join-request welcome',    about: 'Message people who ask to join a channel or group.', default: true },

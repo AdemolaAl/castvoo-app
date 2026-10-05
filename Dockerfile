@@ -6,6 +6,8 @@ ENV UPLOAD_DIR=/data/uploads
 WORKDIR /app
 COPY package.json ./
 COPY server ./server
+# The Voo Connect kit (VooSquare login, affiliate hand-off, events), copied unchanged from VooSquare's sdk/voo-connect.
+COPY voo-connect ./voo-connect
 COPY public ./public
 COPY scripts/check.js ./scripts/check.js
 COPY docs/PRODUCT-FACTS.md ./docs/PRODUCT-FACTS.md

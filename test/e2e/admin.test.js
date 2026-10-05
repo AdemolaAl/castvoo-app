@@ -31,6 +31,7 @@ const ROUTES = [
   ['POST', '/api/admin/payments/nope/approve', 'payments.review', {}],
   ['POST', '/api/admin/payments/nope/reject', 'payments.review', { reason: 'xyz' }],
   ['POST', '/api/admin/payments/nope/recheck', 'payments.review', {}],
+  ['POST', '/api/admin/payments/nope/chargeback', 'payments.review', { reason: 'Card dispute' }],
   ['GET', '/api/admin/withdrawals', 'payments.view'],
   ['POST', '/api/admin/withdrawals/999999/paid', 'withdrawals.review', { txid: 'x'.repeat(20) }],
   ['POST', '/api/admin/withdrawals/999999/reject', 'withdrawals.review', { reason: 'xyz' }],

@@ -49,7 +49,7 @@ async function broadcastsTick() {
         broadcast_title: b.title, delivered: c.sent.toLocaleString('en-US'), failed: c.failed.toLocaleString('en-US'), clicks: k.n.toLocaleString('en-US'), report_url: APP() + '/#app/broadcast',
       });
     }
-    require('../services/voosquare').event('broadcast_sent', { voo_id: ws.voo_id, label: `Broadcast sent to ${c.sent.toLocaleString('en-US')} people` }).catch(() => {});
+    if (c.sent > 0) require('../services/voosquare').activity('broadcast_sent', { wsId: b.workspace_id, idParts: ['bc', b.id], label: `${String(b.title || 'Broadcast').slice(0, 80)}: ${c.sent.toLocaleString('en-US')} message${c.sent === 1 ? '' : 's'}` }).catch(() => {});
   }
 }
 
@@ -102,10 +102,15 @@ async function billingTick() {
   }
   // 2. Trial over: start the chosen plan from the wallet, or pause.
   for (const ws of await db.many("select * from workspaces where plan_status = 'trial' and trial_ends_at <= now() limit 200")) {
+    // Renewal switched off during the trial: the trial just ends. Nothing is charged.
+    if (ws.cancel_at_period_end) {
+      await db.query("update workspaces set plan_status = 'cancelled', period_end = now() where id = $1 and plan_status = 'trial' and cancel_at_period_end", [ws.id]);
+      continue;
+    }
     const code = ws.pending_plan_code || ws.plan_code;
     const cycle = ws.pending_cycle || 'month';
     // expect: only if it is still a trial that has ended (another server may have just done it).
-    try { await billing.activate(ws.id, code, cycle, { expect: (w) => w.plan_status === 'trial' && new Date(w.trial_ends_at) <= new Date() }); } catch (e) {
+    try { await billing.activate(ws.id, code, cycle, { expect: (w) => w.plan_status === 'trial' && !w.cancel_at_period_end && new Date(w.trial_ends_at) <= new Date() }); } catch (e) {
       if (e.code !== 'wallet_short' && e.code !== 'bad_request') { log.error('trial activation failed', { ws: ws.id, err: e }); continue; }
       const r = await db.one("update workspaces set plan_status = 'paused', period_end = now() where id = $1 and plan_status = 'trial' returning id", [ws.id]);
       if (r) {
@@ -129,8 +134,8 @@ async function billingTick() {
   for (const ws of await db.many("select * from workspaces where plan_status = 'active' and period_end <= now() limit 200")) {
     if (ws.cancel_at_period_end) {
       if (!(await db.one("update workspaces set plan_status = 'cancelled' where id = $1 and plan_status = 'active' and cancel_at_period_end returning id", [ws.id]))) continue;
-      const u = await owner(ws);
-      require('../services/voosquare').event('plan_cancelled', { voo_id: u.voo_id, label: 'Plan ended' }).catch(() => {});
+      const plan = await settings.plan(ws.plan_code);
+      require('../services/voosquare').planCancelled({ wsId: ws.id, plan: plan && plan.name, periodEnd: ws.period_end, label: 'Castvoo plan ended' }).catch(() => {});
       continue;
     }
     const code = ws.pending_plan_code || ws.plan_code;
@@ -231,6 +236,7 @@ async function cleanupTick() {
   await db.query("delete from deliveries where created_at < now() - interval '120 days' and status <> 'queued'");
   await db.query("delete from outbox where sent_at < now() - interval '14 days'");
   await db.query('delete from sender_leases where expires_at < now() - interval \'1 hour\'');
+  await require('../services/media-files').removeUnused(3).catch((e) => log.warn('unused media cleanup failed', { err: e.message }));
   await connections.refreshCounts(1000);
 }
 

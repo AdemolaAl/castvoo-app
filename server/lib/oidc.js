@@ -1,6 +1,6 @@
 'use strict';
 /*
- * "Sign in with Google" and "Sign in with VooSquare" (both are OpenID Connect).
+ * "Sign in with Google" (OpenID Connect). VooSquare login uses the Voo Connect kit instead (routes/voo-connect.js).
  * Flow: start() → redirect to provider → provider redirects to our callback → finish().
  * We use PKCE + a one-time state stored in the database, then ask the provider's
  * userinfo endpoint who the person is.
@@ -15,13 +15,7 @@ const discoveryCache = new Map();
 
 function providerConfig(name) {
   if (name === 'google') return { issuer: config.google.issuer, clientId: config.google.clientId, clientSecret: config.google.clientSecret, scope: 'openid email profile' };
-  if (name === 'voosquare') return { issuer: config.voosquare.base, clientId: config.voosquare.clientId, clientSecret: config.voosquare.clientSecret, scope: '', fixed: true };
   throw httpError(404, 'Unknown login provider.');
-}
-
-/** VooSquare publishes fixed endpoints instead of a discovery document. */
-function fixedEndpoints(base) {
-  return { authorization_endpoint: base + '/oauth/authorize', token_endpoint: base + '/oauth/token', userinfo_endpoint: base + '/oauth/userinfo' };
 }
 
 async function discover(issuer) {
@@ -39,7 +33,7 @@ const redirectUri = (name) => `${config.appUrl}/api/auth/${name}/callback`;
 async function start(name, data = {}) {
   const p = providerConfig(name);
   if (!p.clientId) throw httpError(503, 'This login method is not set up yet.', 'not_configured');
-  const doc = p.fixed ? fixedEndpoints(p.issuer) : await discover(p.issuer);
+  const doc = await discover(p.issuer);
   const state = randomToken(24);
   const verifier = randomToken(48);
   const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
@@ -49,7 +43,6 @@ async function start(name, data = {}) {
   const q = { response_type: 'code', client_id: p.clientId, redirect_uri: redirectUri(name), state, code_challenge: challenge, code_challenge_method: 'S256' };
   if (p.scope) q.scope = p.scope;
   if (name === 'google') q.prompt = 'select_account';
-  if (name === 'voosquare' && data.signup) q.prompt = 'signup';
   u.search = new URLSearchParams(q).toString();
   return u.toString();
 }
@@ -59,7 +52,7 @@ async function finish(name, query) {
   const row = await db.one('delete from oauth_states where state = $1 and provider = $2 and expires_at > now() returning *', [String(query.state || ''), name]);
   if (!row) throw httpError(400, 'This login link expired. Please try again.', 'oidc_state');
   const p = providerConfig(name);
-  const doc = p.fixed ? fixedEndpoints(p.issuer) : await discover(p.issuer);
+  const doc = await discover(p.issuer);
   const tr = await fetch(doc.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

@@ -161,7 +161,7 @@ function maintenanceBar() {
 }
 
 function siteApplyConfig() {
-  siteHero(); siteAnnouncement(); sitePlans(); siteFaq(); siteReferral(); siteBanners(); siteFooter(); maintenanceBar();
+  siteHero(); siteAnnouncement(); sitePlans(); siteFaq(); siteReferral(); siteBanners(); siteFooter(); maintenanceBar(); vooLinks();
   $('#prTitle').innerHTML = emph(CFG.content.pricing_title || '');
   $('#prSub').textContent = CFG.content.pricing_subtitle || '';
 }
@@ -174,9 +174,38 @@ function siteAuthUI() {
   sitePlans();
 }
 
+/* ---------- VooSquare: "Part of VooSquare" links and the shared support widget ---------- */
+function vooLinks() {
+  const v = CFG.voo;
+  $$('[data-voo-app]').forEach((a) => { a.hidden = !v; if (v) a.href = v.app_url; });
+}
+/*
+ * On the public website the VooSquare support widget (one inbox for every Zedapex tool) replaces our help bubble.
+ * Inside the dashboard, Help is our own support chat, which is copied into the same VooSquare inbox.
+ * Returns true when the widget is in use.
+ */
+function vooWidget(show) {
+  const v = CFG.voo;
+  if (!v || !v.widget_src) return false;
+  if (!window.__cvVsWidget && show) {
+    window.__cvVsWidget = true;
+    const before = new Set(document.body.children);
+    const sc = document.createElement('script');
+    sc.src = v.widget_src; sc.defer = true;
+    sc.setAttribute('data-product', 'castvoo');
+    sc.setAttribute('data-color', '#2F6BFF');
+    if (ME && ME.user) { if (ME.user.email) sc.setAttribute('data-email', ME.user.email); if (ME.user.name) sc.setAttribute('data-name', ME.user.name); }
+    sc.onload = () => { for (const el of document.body.children) if (!before.has(el) && el.tagName === 'DIV' && el.shadowRoot && !el.id) { el.setAttribute('data-vs-widget', ''); el.hidden = VIEW !== 'site'; } };
+    document.body.appendChild(sc);
+  }
+  $$('[data-vs-widget]').forEach((el) => { el.hidden = !show; });
+  return true;
+}
+
 /* ---------- Help bubble ---------- */
 function renderHelp(view) {
   const h = $('#helpHost');
+  if (vooWidget(view === 'site')) { h.innerHTML = ''; return; }
   if (view !== 'site') { h.innerHTML = ''; return; }
   if ($('#helpB')) return;
   h.innerHTML = '<button type="button" class="help" id="helpB" aria-label="Help and support"><span class="mav hcas" data-cas="mini"></span><span class="hb"><svg><use href="#i-chat"/></svg></span></button>';

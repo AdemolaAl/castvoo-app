@@ -24,4 +24,22 @@ async function removeFiles(workspaceIds) {
   return n;
 }
 
-module.exports = { removeFiles };
+/**
+ * Uploads that no message, draft or follow-up uses, older than `days`: delete the file and the row.
+ * (Uploading and then not sending used to keep the file forever.) Returns how many were removed.
+ */
+async function removeUnused(days = 3, limit = 500) {
+  const rows = await db.many(`select m.id, m.path from media m where m.created_at < now() - make_interval(days => $1)
+      and not exists (select 1 from broadcasts b where b.media_id = m.id)
+      and not exists (select 1 from sequence_steps s where s.media_id = m.id)
+    order by m.id limit $2`, [days, limit]);
+  const root = path.resolve(config.uploadDir) + path.sep;
+  for (const r of rows) {
+    const p = path.resolve(r.path);
+    if (p.startsWith(root)) await fs.promises.unlink(p).catch(() => {});
+  }
+  if (rows.length) await db.query('delete from media where id = any($1::bigint[])', [rows.map((r) => r.id)]);
+  return rows.length;
+}
+
+module.exports = { removeFiles, removeUnused };

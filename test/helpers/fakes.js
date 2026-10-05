@@ -76,7 +76,7 @@ async function startFakes() {
   const flw = { txns: new Map(), byId: new Map(), nextId: 5000 };
   const gatevoo = { invoices: new Map() };
   const oidc = { codes: new Map(), tokens: new Map(), nextUser: { sub: 'g-1', email: 'guser@example.com', email_verified: true, name: 'Goo User' }, clientId: null, clientSecret: null };
-  const voo = { events: [], support: [], failNext: 0, codes: new Map(), nextUser: { voo_id: 'vs_new', email: 'vsuser@example.com', name: 'Voo Square', country: 'KE' }, clientId: 'cv-client', clientSecret: 'cv-secret' };
+  const voo = { events: [], seen: new Set(), rejectIds: new Set(), support: [], failNext: 0, codes: new Map(), nextUser: { voo_id: 'vs_new', email: 'vsuser@example.com', name: 'Voo Square', country: 'KE' }, clientId: 'cv-client', clientSecret: 'cv-secret' };
 
   function record(service, method, params, token) {
     const c = { service, method, params, at: Date.now(), token };
@@ -322,7 +322,14 @@ async function startFakes() {
         if (!c) return send(res, 400, { error: 'invalid_grant' });
         voo.codes.delete(b.code);
         if (b.client_id !== voo.clientId || b.client_secret !== voo.clientSecret || b.redirect_uri !== c.redirect_uri) return send(res, 401, { error: 'invalid_client' });
-        return send(res, 200, { access_token: 'vat_' + crypto.randomBytes(6).toString('hex'), token_type: 'Bearer', id_token: 'x.y.z', user: c.user });
+        // A real HS256 id_token, signed with the client secret, as VooSquare does (the kit verifies it).
+        const now = Math.floor(Date.now() / 1000);
+        const u2 = { sub: c.user.voo_id, email_verified: true, ...c.user };
+        const claims = { iss: base + '/voo', aud: voo.clientId, sub: u2.voo_id, voo_id: u2.voo_id, email: u2.email, email_verified: u2.email_verified, name: u2.name, country: u2.country, voo_ref: u2.voo_ref || '', iat: now, exp: now + 600, ...(voo.tokenClaims || {}) };
+        const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+        const h = b64({ alg: 'HS256', typ: 'JWT' }), pl = b64(claims);
+        const idToken = `${h}.${pl}.${crypto.createHmac('sha256', voo.idTokenSecret || voo.clientSecret).update(`${h}.${pl}`).digest('base64url')}`;
+        return send(res, 200, { access_token: 'vat_' + crypto.randomBytes(6).toString('hex'), token_type: 'Bearer', expires_in: 3600, id_token: idToken, user: u2 });
       }
       if ((p === '/voo/api/v1/events' || p === '/voo/events') && req.method === 'POST') {
         if (String(req.headers.authorization || '') !== 'Bearer voo-api-key-456') return send(res, 401, { error: 'bad key' });
@@ -330,8 +337,15 @@ async function startFakes() {
         record('voosquare', 'event', { raw: raw.toString('utf8'), sig });
         if (voo.failNext > 0) { voo.failNext--; return send(res, 500, { error: 'down' }); }
         const body = json();
-        for (const ev of (body.events || [body])) voo.events.push({ raw: raw.toString('utf8'), body: ev, sig });
-        return send(res, 200, { ok: true });
+        const rejected = [];
+        let stored = 0;
+        for (const ev of (body.events || [body])) {
+          if (voo.rejectIds && voo.rejectIds.has(ev.event_id)) { rejected.push({ event_id: ev.event_id, error: 'occurred_at is more than 400 days ago' }); continue; }
+          if (voo.seen.has(ev.event_id)) continue; // repeats are ignored, like VooSquare
+          voo.seen.add(ev.event_id); stored++;
+          voo.events.push({ raw: raw.toString('utf8'), body: ev, sig });
+        }
+        return send(res, 200, { ok: true, stored, ...(rejected.length ? { rejected } : {}) });
       }
       if (p === '/voo/api/v1/support/messages' && req.method === 'POST') {
         if (String(req.headers.authorization || '') !== 'Bearer voo-api-key-456') return send(res, 401, { error: 'bad key' });

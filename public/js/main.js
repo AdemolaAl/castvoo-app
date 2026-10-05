@@ -99,6 +99,7 @@ function boot() {
   ready().then(() => {
     siteApplyConfig();
     siteAuthUI();
+    renderHelp(VIEW);
     if (APP.booted) appBanners();
   });
 }

@@ -154,31 +154,30 @@ describe('VooSquare API', () => {
 });
 
 describe('VooSquare events', () => {
-  it('outbox events go to <VOO_BASE>/api/v1/events in one batch, with the API key, retries, and no customer details', async () => {
+  it('outbox events go to <VOO_BASE>/api/v1/events in one batch through the kit, with the API key, retries, stable ids and no customer details', async () => {
     await app.voosquare.flush(); // send what earlier tests queued
     const u = await app.loginByEmail('events@example.com');
     await app.db.query("update users set voo_id = 'voo_evt' where id = $1", [u.user.id]);
-    await u.post('/api/app/plan/cancel');
     await app.connectBot(u);
-    await app.waitFor(async () => (await app.db.one("select count(*)::int n from outbox where payload->>'voo_id' = 'voo_evt'")).n === 2);
+    await app.waitFor(async () => (await app.db.one("select count(*)::int n from outbox where payload->>'voo_id' = 'voo_evt'")).n === 1);
     app.fakes.voo.failNext = 1;
     await app.voosquare.flush();
     const failed = await app.db.many("select * from outbox where payload->>'voo_id' = 'voo_evt' order by id");
-    assert.equal(failed.length, 2);
+    assert.equal(failed.length, 1);
     assert.ok(failed.every((f) => f.attempts === 1 && f.sent_at === null), 'the batch is retried later');
     await app.db.query('update outbox set next_at = now() where sent_at is null');
     await app.voosquare.flush();
     const evs = app.fakes.voo.events.filter((e) => e.body.voo_id === 'voo_evt');
-    assert.deepEqual(evs.map((e) => e.body.type).sort(), ['channel_connected', 'plan_cancelled']);
+    assert.deepEqual(evs.map((e) => e.body.type).sort(), ['channel_connected']);
     for (const e of evs) {
-      assert.equal(e.sig, crypto.createHmac('sha256', 'voo-webhook-secret').update(e.raw).digest('hex'), 'also signed when a secret is set');
+      assert.match(e.body.event_id, /^cv_conn_\d+$/);
       assert.deepEqual(Object.keys(e.body).sort(), ['event_id', 'label', 'occurred_at', 'type', 'voo_id']);
       assert.ok(!e.raw.includes('events@example.com'));
     }
     assert.equal((await app.db.one("select count(*)::int n from outbox where payload->>'voo_id' = 'voo_evt' and sent_at is null")).n, 0);
     const plain = await app.loginByEmail('novoo@example.com');
-    await plain.post('/api/app/plan/cancel');
-    assert.equal((await app.db.one("select count(*)::int n from outbox where kind = 'voosquare' and payload->>'type' = 'plan_cancelled' and payload->>'voo_id' is null")).n, 0);
+    await app.connectBot(plain);
+    assert.equal((await app.db.one("select count(*)::int n from outbox where kind = 'voosquare' and payload->>'voo_id' is null")).n, 0, 'nothing for people without a Voo ID');
   });
 });
 

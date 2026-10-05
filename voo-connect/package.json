@@ -1,0 +1,35 @@
+{
+  "name": "voo-connect",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Voo Connect: the drop-in kit that connects a Zedapex tool to VooSquare (Voo ID login, affiliate hand-off, events, support). Zero dependencies.",
+  "type": "commonjs",
+  "main": "./index.js",
+  "module": "./index.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs",
+      "require": "./index.js"
+    },
+    "./browser": "./voo-connect-browser.js",
+    "./check": "./check.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "voo-connect-check": "./check.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "index.js",
+    "index.mjs",
+    "index.d.ts",
+    "voo-connect-browser.js",
+    "voo-connect-browser.d.ts",
+    "check.js",
+    "example-tool"
+  ]
+}

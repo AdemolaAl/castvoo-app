@@ -122,6 +122,8 @@ async function credit(reference, { reviewedBy = null, overrideCents = null, txid
     const label = { paystack: 'Paystack', flutterwave: 'Flutterwave', gatevoo: 'Crypto (Gatevoo)', manual_crypto: p.coin || 'Crypto' }[p.provider] || p.provider;
     await c.query("insert into wallet_tx(workspace_id, kind, amount_cents, cash_cents, method, ref, note, created_by) values ($1,'topup',$2,$2,$3,$4,'Top up',$5)", [p.workspace_id, amount, label, p.reference, reviewedBy]);
     if (bonus > 0) await c.query("insert into wallet_tx(workspace_id, kind, amount_cents, bonus_part_cents, method, ref, note) values ($1,'bonus',$2,$2,'Offer',$3,'Top-up bonus')", [p.workspace_id, bonus, p.reference]);
+    // VooSquare: wallet_topup (money in, no commission). The spend is sent when a plan uses the money.
+    await require('../services/voosquare').topupPaid(c, { payment: { ...p, amount_cents: amount, txid: txid || p.txid }, label, at: new Date() });
     return { already: false, p: { ...p, amount_cents: amount, bonus_cents: bonus }, label };
   });
   if (res.already) return res;
@@ -136,6 +138,24 @@ async function credit(reference, { reviewedBy = null, overrideCents = null, txid
     await require('../services/billing').activate(ws.id, ws.pending_plan_code || ws.plan_code, ws.pending_cycle || ws.billing_cycle, { expect: (w) => w.plan_status === 'paused' }).catch(() => {});
   }
   return res;
+}
+
+/**
+ * A paid top-up was disputed / charged back (Paystack webhook, or recorded by finance staff for other providers).
+ * Once per payment: cancels unsettled referral earnings from that customer and tells VooSquare, which reverses the
+ * affiliate commission on the plan payments that used this money. Returns { already, reversed_cents, events }.
+ */
+async function chargeback(reference, { disputeRef = null } = {}) {
+  return db.tx(async (c) => {
+    const p = (await c.query('select * from payments where reference = $1 for update', [reference])).rows[0];
+    if (!p) throw httpError(404, 'Payment not found.', 'not_found');
+    if (p.status !== 'paid') throw badRequest('Only a paid top-up can be charged back.');
+    if (p.disputed_at) return { already: true, reversed_cents: 0, events: [] };
+    await c.query('update payments set disputed_at = now(), dispute_ref = $2 where id = $1', [p.id, disputeRef ? String(disputeRef).slice(0, 120) : null]);
+    const reversed = await require('../services/referrals').clawback(c, p.workspace_id, 'dispute');
+    const events = await require('../services/voosquare').chargedBack(c, { payment: p, at: new Date() });
+    return { already: false, reversed_cents: reversed, events: events.map((e) => e.event_id), workspace_id: p.workspace_id };
+  });
 }
 
 /* ---------- Provider checks (server to server) ---------- */
@@ -199,4 +219,4 @@ async function verify(reference, extra = {}) {
   return false;
 }
 
-module.exports = { start, credit, verify, verifyPaystack, verifyFlutterwave, verifyGatevoo, localAmount };
+module.exports = { start, credit, chargeback, verify, verifyPaystack, verifyFlutterwave, verifyGatevoo, localAmount };

@@ -96,7 +96,7 @@ describe('public endpoints', () => {
     const code = c.user.ref_code;
     const r = await app.client().get('/r/' + code.toUpperCase());
     assert.equal(r.status, 302);
-    assert.equal(r.headers.get('location'), `/?ref=${code}#signup`);
+    assert.equal(r.headers.get('location'), `/?cvref=${code}#signup`); // ?ref= is VooSquare's affiliate code (V8)
     const cookie = r.headers.getSetCookie().find((x) => x.startsWith('cv_ref='));
     assert.ok(cookie, 'cv_ref cookie set');
     assert.match(cookie, /HttpOnly/);

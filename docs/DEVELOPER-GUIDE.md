@@ -80,6 +80,6 @@ same process, in loops that never overlap.
 Sessions are random tokens stored hashed; HttpOnly + SameSite=Lax cookies; CSRF header on every change;
 strict Content-Security-Policy (no inline scripts); bot tokens AES-256-GCM encrypted; webhook signatures
 checked (Telegram secret token, Paystack HMAC-SHA512, Flutterwave hash, Gatevoo HMAC-SHA256 + 5-minute
-window, VooSquare service key); rate limits on logins, codes, AI and payments; login codes hashed with
+window, VooSquare API key, Voo ID `id_token`); rate limits on logins, codes, AI and payments; login codes hashed with
 5-try lock; team roles with ranks; audit log; uploads checked by file signature; CSV export protected
 against formula injection; tracked-link clicks signed per subscriber.

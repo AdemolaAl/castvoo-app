@@ -116,10 +116,12 @@ module.exports = (r) => {
       const col = kind === 'cash' ? 'wallet_cents' : 'bonus_cents';
       if (Number(ws[col]) + amount < 0) throw badRequest(`That would make the ${kind} balance negative.`);
       await c.query(`update workspaces set ${col} = ${col} + $2 where id = $1`, [id, amount]);
-      await c.query('insert into wallet_tx(workspace_id, kind, amount_cents, cash_cents, bonus_part_cents, method, note, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8)',
-        [id, asRefund ? 'refund' : 'adjustment', amount, kind === 'cash' ? amount : 0, kind === 'bonus' ? amount : 0, 'Castvoo team', reason, ctx.user.id]);
+      const tx = (await c.query('insert into wallet_tx(workspace_id, kind, amount_cents, cash_cents, bonus_part_cents, method, note, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id',
+        [id, asRefund ? 'refund' : 'adjustment', amount, kind === 'cash' ? amount : 0, kind === 'bonus' ? amount : 0, 'Castvoo team', reason, ctx.user.id])).rows[0];
       // A refund cancels the referral earnings this customer's payments created that haven't settled yet.
       if (asRefund) clawed = await require('../../services/referrals').clawback(c, id, 'refund');
+      // Cash given back to the customer: VooSquare logs a refund (it never reverses affiliate commission).
+      if (asRefund && kind === 'cash' && amount < 0) await require('../../services/voosquare').refunded(c, { wsId: id, txId: tx.id, amountCents: -amount, at: new Date() });
     });
     await audit(ctx, asRefund ? 'wallet.refund' : 'wallet.adjust', 'workspace:' + id, { amount_cents: amount, kind, reason, referral_reversed_cents: clawed });
     return { ok: true, referral_reversed: clawed / 100 };

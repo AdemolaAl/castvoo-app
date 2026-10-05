@@ -73,7 +73,7 @@ module.exports = (r) => {
     const [queue, leases, outbox, failed, dbsize, version, errorsByConn] = await Promise.all([
       db.many("select sender_key, count(*)::int queued, min(due_at) oldest from deliveries where status = 'queued' group by 1 order by 2 desc limit 30"),
       db.many('select * from sender_leases where expires_at > now()'),
-      db.one('select count(*) filter (where sent_at is null)::int pending, count(*) filter (where sent_at is null and attempts > 3)::int failing from outbox'),
+      db.one('select count(*) filter (where sent_at is null and failed_at is null)::int pending, count(*) filter (where sent_at is null and failed_at is null and attempts > 3)::int failing, count(*) filter (where failed_at is not null)::int refused from outbox'),
       db.many("select error, count(*)::int n from deliveries where status = 'failed' and sent_at > now() - interval '1 day' group by 1 order by 2 desc limit 10"),
       db.one('select pg_size_pretty(pg_database_size(current_database())) as size'),
       db.one('select version()'),

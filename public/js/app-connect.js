@@ -178,7 +178,7 @@ PAGES.bots = {
     el.addEventListener('click', async (e) => {
       const rm = e.target.closest('[data-rm]'); if (!rm) return;
       const c = d.connections.find((x) => x.id === +rm.dataset.rm);
-      if (!(await confirmBox('Remove ' + esc(connName(c)) + '?', c.kind === 'bot' ? 'Castvoo stops sending from this bot and its follow-ups stop. Its subscriber list stays until you delete your data.' : 'Castvoo stops posting here. You can connect it again later.', 'Remove', true))) return;
+      if (!(await confirmBox('Remove ' + connName(c) + '?', c.kind === 'bot' ? 'Castvoo stops sending from this bot and its follow-ups stop. Its subscriber list stays until you delete your data.' : 'Castvoo stops posting here. You can connect it again later.', 'Remove', true))) return;
       try { await api('DELETE', '/api/connections/' + c.id); toast('Removed.'); await refreshState(); renderPage('bots', {}); } catch (ex) { apiErr(ex); }
     });
     const bots = d.connections.filter((c) => c.kind === 'bot');

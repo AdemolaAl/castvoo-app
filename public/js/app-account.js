@@ -31,7 +31,7 @@ PAGES.settings = {
       '<div class="srow"><span class="sri">' + icon('mail') + '</span><div style="flex:1;min-width:0"><b>Email</b><small class="ell" style="display:block">' + (u.email ? esc(u.email) + (u.email_verified ? ' · verified' : '') : 'No email yet. Add one for receipts and login codes.') + '</small></div><button type="button" class="btn b-ghost xs" id="stEm">' + (u.email ? 'Change' : 'Add email') + '</button></div><div id="stEmBox"></div>' +
       '<div class="srow"><span class="sri">' + icon('tg') + '</span><div style="flex:1;min-width:0"><b>Telegram</b><small style="display:block">' + (u.tg_linked ? 'Linked' + (u.tg_username ? ' as @' + esc(u.tg_username) : '') + '. Used for channels, groups and test messages.' : 'Not linked. Link it to add channels and groups and get test messages.') + '</small></div>' + (u.tg_linked ? '<span class="pill p-ok">Linked</span>' : '<button type="button" class="btn b-ghost xs" id="stTg">Link Telegram</button>') + '</div>' +
       (u.google_linked ? '<div class="srow"><span class="sri">G</span><div style="flex:1"><b>Google</b><small style="display:block">You can log in with Google.</small></div><span class="pill p-ok">Linked</span></div>' : '') +
-      (L.voosquare ? '<div class="srow"><span class="sri vq">V</span><div style="flex:1"><b>VooSquare</b><small style="display:block">One login for all Zedapex tools.</small></div></div>' : '') +
+      (L.voosquare ? '<div class="srow"><span class="sri vq">V</span><div style="flex:1;min-width:0"><b>VooSquare</b><small style="display:block">' + (u.voo_linked ? 'Linked. One Voo ID for all Zedapex tools.' : 'Connect your VooSquare account to log in with your Voo ID.') + '</small></div>' + (u.voo_linked ? '<span class="pill p-ok">Linked</span>' : '<button type="button" class="btn b-ghost xs" id="stVoo">Connect</button>') + '</div>' : '') +
       '<div class="tg"><span><b style="font-size:14.5px">Tips and offers by email</b><br><small class="muted">Helpful emails about getting more from Castvoo. Receipts and login codes always arrive.</small></span>' + toggleBtn('stMk', !u.marketing_opt_out, 'Tips and offers by email') + '</div></div>' +
       // Workspace
       '<div class="box c6"><div class="bh"><h3>' + icon('gear') + 'Workspace</h3>' + (owner ? '' : '<span class="pill p-grey">Only the owner can change these</span>') + '</div>' +
@@ -57,6 +57,10 @@ PAGES.settings = {
 
     const ctH = () => { const c = $('#stCt').value; if (!c) return; GET('/api/public/methods?country=' + c).then((r) => { if ($('#stCtH')) $('#stCtH').textContent = r.methods.length ? 'You can pay with: ' + r.methods.map((m) => m.label + (m.detail ? ' (' + m.detail + ')' : '')).join(', ') + '.' : 'Card and crypto options appear here once payments are switched on.'; }).catch(() => {}); };
     $('#stCt').onchange = ctH; ctH();
+    const sv = $('#stVoo'); if (sv) sv.onclick = async () => {
+      btnBusy(sv, true, 'Opening…');
+      try { const r = await POST('/api/auth/voosquare/link'); location.href = r.url; } catch (ex) { btnBusy(sv, false); apiErr(ex); }
+    };
     $('#stPSave').onclick = async (e) => {
       const name = $('#stName').value.trim();
       if (!name) { toast('Your name can\'t be empty.', { kind: 'err' }); return; }

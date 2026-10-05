@@ -39,7 +39,7 @@ process.env.QUIET_LOGS = '1';
 /* 1. Syntax */
 {
   let n = 0;
-  for (const f of [...walk('server', ['.js']), ...walk('public', ['.js']), ...walk('scripts', ['.js']), ...walk('test', ['.js'])]) {
+  for (const f of [...walk('server', ['.js']), ...walk('public', ['.js']), ...walk('scripts', ['.js']), ...walk('test', ['.js']), ...walk('voo-connect', ['.js'])]) {
     try { execFileSync(process.execPath, ['--check', path.join(ROOT, f)], { stdio: 'pipe' }); n++; } catch (e) { fail('syntax', `${f}: ${String(e.stderr).split('\n').slice(0, 4).join(' ')}`); }
   }
   passed.push(`syntax: ${n} JavaScript files parse`);
@@ -163,7 +163,7 @@ process.env.QUIET_LOGS = '1';
   const legalSlugs = require('../server/legal/index.js').map((l) => l.slug);
   for (const m of html.matchAll(/(?:href|src)="(\/[^"#?]*)/g)) {
     const p = m[1];
-    if (p === '/' || p.startsWith('/api/') || p === '/admin') continue;
+    if (p === '/' || p.startsWith('/api/') || p === '/admin' || p === '/voo-connect-browser.js') continue; // served by routes/voo-connect.js
     if (p.startsWith('/legal/')) { if (!legalSlugs.includes(p.slice(7))) fail('links', `index.html links to unknown legal page ${p}`); continue; }
     if (!fs.existsSync(path.join(ROOT, 'public', p))) fail('links', `index.html references missing file ${p}`);
   }

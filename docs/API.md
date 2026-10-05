@@ -1,6 +1,6 @@
 # API reference
 
-Generated from the code by `node scripts/api-docs.js` (160 routes).
+Generated from the code by `node scripts/api-docs.js` (168 routes).
 
 Rules: JSON in and out. Every non-GET request from the browser must send the header `x-cv: 1`. A user in several workspaces sends `x-ws: <workspace id>`. Errors look like `{"error": "Friendly message", "code": "machine_code"}`.
 Each route has a comment above it in `server/routes/` explaining its input and output.
@@ -16,8 +16,6 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 | POST | `/api/auth/telegram` | anyone · max 300 per 600s per IP |
 | GET | `/api/auth/google/start` | anyone · max 300 per 600s per IP |
 | GET | `/api/auth/google/callback` | anyone |
-| GET | `/api/auth/voosquare/start` | anyone · max 300 per 600s per IP |
-| GET | `/api/auth/voosquare/callback` | anyone |
 | POST | `/api/auth/logout` | anyone |
 | GET | `/api/me` | anyone |
 | POST | `/api/me` | logged in |
@@ -88,12 +86,16 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 | POST | `/api/referrals/withdraw` | logged in + workspace · max 10 per 3600s per IP |
 | GET | `/api/support` | logged in + workspace |
 | POST | `/api/support` | logged in + workspace · max 30 per 600s per IP |
+| GET | `/api/auth/voosquare/start` | anyone |
+| GET | `/api/auth/voosquare/callback` | anyone |
 
 ## Pages
 
 | Method | Path | Who can call it |
 |---|---|---|
 | GET | `/health` | anyone |
+| GET | `/dashboard` | anyone |
+| GET | `/voo-connect-browser.js` | anyone |
 | GET | `/legal` | anyone |
 | GET | `/legal/:slug` | anyone |
 | GET | `/r/:code` | anyone |
@@ -119,6 +121,7 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 |---|---|---|
 | GET | `/api/voosquare/summary` | Bearer VOO_API_KEY (or VOO_SERVICE_KEY) |
 | POST | `/api/voosquare/support/webhook` | Bearer VOO_API_KEY (or VOO_SERVICE_KEY) |
+| POST | `/hooks/voosquare/support` | Bearer VOO_API_KEY (or VOO_SERVICE_KEY) |
 | GET | `/api/voosquare/support/boxes` | Bearer VOO_API_KEY (or VOO_SERVICE_KEY) |
 | GET | `/api/voosquare/support/tickets` | Bearer VOO_API_KEY (or VOO_SERVICE_KEY) |
 | GET | `/api/voosquare/support/tickets/:ref` | Bearer VOO_API_KEY (or VOO_SERVICE_KEY) |
@@ -130,6 +133,15 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 | GET | `/api/voosquare/support/threads/:id` | Bearer VOO_API_KEY (or VOO_SERVICE_KEY) |
 | POST | `/api/voosquare/support/threads/:id/reply` | Bearer VOO_API_KEY (or VOO_SERVICE_KEY) |
 | POST | `/api/voosquare/support/threads/:id/status` | Bearer VOO_API_KEY (or VOO_SERVICE_KEY) |
+
+## Voo Connect (VooSquare login)
+
+| Method | Path | Who can call it |
+|---|---|---|
+| GET | `/auth/voosquare` | anyone · max 300 per 600s per IP |
+| POST | `/api/auth/voosquare/link` | logged in · max 20 per 600s per IP |
+| GET | `/auth/voosquare/callback` | anyone |
+| GET | `/logout` | anyone |
 
 ## Admin (team only)
 
@@ -145,6 +157,7 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 | GET | `/api/admin/payments` | staff: `payments.view` |
 | POST | `/api/admin/payments/:ref/approve` | staff: `payments.review` |
 | POST | `/api/admin/payments/:ref/reject` | staff: `payments.review` |
+| POST | `/api/admin/payments/:ref/chargeback` | staff: `payments.review` |
 | POST | `/api/admin/payments/:ref/recheck` | staff: `payments.review` |
 | GET | `/api/admin/withdrawals` | staff: `payments.view` |
 | POST | `/api/admin/withdrawals/:id/paid` | staff: `withdrawals.review` |

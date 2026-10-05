@@ -15,10 +15,11 @@ const { HttpError } = require('./lib/util');
 const rl = require('./lib/ratelimit');
 const auth = require('./services/auth');
 const perms = require('./permissions');
+const voo = require('./lib/voo');
 
 const ROUTE_FILES = [
   'public', 'auth', 'workspace', 'connections', 'subscribers', 'segments', 'media', 'broadcasts', 'drips',
-  'ai', 'wallet', 'referrals', 'support', 'telegram-webhooks', 'payment-webhooks', 'voosquare', 'pages',
+  'ai', 'wallet', 'referrals', 'support', 'telegram-webhooks', 'payment-webhooks', 'voosquare', 'voo-connect', 'pages',
   'admin/index',
 ];
 
@@ -31,18 +32,22 @@ const MIME = {
 
 function cspHeader() {
   const gv = config.gatevoo.url ? ' ' + config.gatevoo.url : '';
+  // VooSquare's support widget (public website only) loads from VOO_BASE and talks to it.
+  const vs = config.vooConnectOn() && config.voosquare.widget ? ' ' + originOf(config.voosquare.base) : '';
   return [
     "default-src 'self'",
-    `script-src 'self' https://telegram.org${gv}`,
+    `script-src 'self' https://telegram.org${gv}${vs}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob: https://t.me https://telegram.org https://*.telegram.org https://lh3.googleusercontent.com",
     "media-src 'self' blob:",
     `frame-src https://oauth.telegram.org${gv}`,
-    `connect-src 'self'${gv}`,
+    `connect-src 'self'${gv}${vs}`,
     "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'", "object-src 'none'",
   ].join('; ');
 }
+
+function originOf(u) { try { return new URL(u).origin; } catch { return ''; } }
 
 function buildRouter() {
   const r = create();
@@ -121,12 +126,16 @@ async function serveStatic(ctx) {
 
 function createServer() {
   const router = buildRouter();
+  const kit = config.vooConnectOn() ? voo.kit() : null;
+  const attr = kit ? kit.captureAttribution() : null;
 
   async function handle(req, res) {
     const ctx = makeCtx(req, res);
     securityHeaders(res, config.appUrl.startsWith('https://'));
     try {
       const m = router.match(req.method, ctx.path);
+      // Voo Connect: an affiliate click (?ref= &vclick= &coupon=) on any page is kept in the first-party cookie voo_attr.
+      if (attr && (req.method === 'GET' || req.method === 'HEAD') && /[?&](ref|vclick|coupon)=/.test(req.url)) attr(req, voo.resShim(ctx));
       if (!m) {
         if ((req.method === 'GET' || req.method === 'HEAD') && (await serveStatic(ctx))) return;
         if (ctx.path.startsWith('/api/')) throw new HttpError(404, 'Not found.', 'not_found');
@@ -198,6 +207,10 @@ function createServer() {
           return ctx.html(err.status, `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Castvoo</title><body style="font-family:system-ui;padding:40px;text-align:center;color:#0B1430"><h2>${err.message}</h2><p><a href="/" style="color:#2F6BFF">Back to Castvoo</a></p>`);
         }
         return sendJson(res, err.status, { error: err.message, code: err.code, ...(err.extra || {}) });
+      }
+      // A number or id the database cannot read ("abc", 1e20 for a bigint): the request was bad, not the server.
+      if (err && (err.code === '22P02' || err.code === '22003')) {
+        return sendJson(res, 400, { error: 'One of the values sent is not valid. Check it and try again.', code: 'bad_value' });
       }
       log.error('unhandled error', { path: ctx.path, method: req.method, err });
       sendJson(res, 500, { error: 'Something went wrong on our side. Please try again.', code: 'server_error' });

@@ -39,6 +39,12 @@ async function publicConfig() {
     support: { reply_time: s.support.reply_time, email: s.company.support_email, telegram: s.support.telegram_username || null },
     company: { name: s.company.name, address: s.company.address },
     ai_available: f.ai && integ.ai,
+    // VooSquare (Voo Connect): login button, "Part of VooSquare" links, support widget on the public website.
+    voo: integ.voo_connect ? {
+      app_url: config.voosquare.base + '/app',
+      referrals_url: config.voosquare.base + '/app#referrals',
+      widget_src: config.voosquare.widget ? config.voosquare.base + '/widget.js' : null,
+    } : null,
   };
 }
 

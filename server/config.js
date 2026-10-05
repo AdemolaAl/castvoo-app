@@ -27,7 +27,9 @@ const config = {
   ownerEmail: (env.OWNER_EMAIL || '').trim().toLowerCase(),
   uploadDir: env.UPLOAD_DIR || require('node:path').join(__dirname, '..', 'data', 'uploads'),
   runWorkers: bool(env.RUN_WORKERS, true),
-  trustProxy: bool(env.TRUST_PROXY, true),
+  // Trust X-Forwarded-For only behind a proxy that appends the real address: on by default on Railway, off elsewhere
+  // (without a proxy the header is whatever the visitor sends, and per-IP rate limits could be dodged).
+  trustProxy: bool(env.TRUST_PROXY, !!env.RAILWAY_ENVIRONMENT),
 
   telegram: {
     apiBase: trimSlash(env.TELEGRAM_API_BASE || 'https://api.telegram.org'),
@@ -64,8 +66,12 @@ const config = {
     clientSecret: env.VOO_CLIENT_SECRET || '',
     apiKey: env.VOO_API_KEY || '',                            // Castvoo → VooSquare calls, and VooSquare → Castvoo calls
     serviceKey: env.VOO_SERVICE_KEY || '',                    // optional second key VooSquare may use to call Castvoo
-    eventsUrl: env.VOO_EVENTS_URL || '',                      // optional override; default <VOO_BASE>/api/v1/events
-    webhookSecret: env.VOO_WEBHOOK_SECRET || '',              // optional: also sign events with X-Voo-Signature
+    // Voo Connect kit (./voo-connect): Voo ID login, affiliate hand-off, money events, support widget.
+    // VOO_CONNECT=off switches all of it off at once (the old email / Telegram / Google logins keep working).
+    connect: bool(env.VOO_CONNECT, true),
+    signalSecret: env.VOO_SIGNAL_SECRET || '',                // hashes fraud hints; make once, never change
+    serverBase: trimSlash(env.VOO_SERVER_BASE || ''),         // optional private address for server-to-server calls
+    widget: bool(env.VOO_SUPPORT_WIDGET, true),               // VooSquare support widget on the public website
   },
 
   paystack: {
@@ -86,14 +92,20 @@ const config = {
   },
 };
 
+/** Voo ID login + affiliate hand-off: switched on by VOO_CONNECT (default on) and the login credentials. */
+config.vooConnectOn = () => !!(config.voosquare.connect && config.voosquare.base && config.voosquare.clientId && config.voosquare.clientSecret);
+/** Money and activity events to VooSquare: VOO_CONNECT on, plus the address and the API key. */
+config.vooEventsOn = () => !!(config.voosquare.connect && config.voosquare.base && config.voosquare.apiKey);
+
 config.integrations = () => ({
   telegram: !!config.telegram.botToken,
   email: config.email.provider === 'resend' && !!config.email.resendKey,
   ai: !!config.ai.apiKey,
   google: !!(config.google.clientId && config.google.clientSecret),
-  voosquare_login: !!(config.voosquare.base && config.voosquare.clientId && config.voosquare.clientSecret),
+  voosquare_login: config.vooConnectOn(),
   voosquare_api: !!(config.voosquare.apiKey || config.voosquare.serviceKey),
-  voosquare_events: !!((config.voosquare.base || config.voosquare.eventsUrl) && config.voosquare.apiKey),
+  voosquare_events: config.vooEventsOn(),
+  voo_connect: config.vooConnectOn(),
   paystack: !!config.paystack.secretKey,
   flutterwave: !!(config.flutterwave.secretKey && config.flutterwave.webhookHash),
   gatevoo: !!(config.gatevoo.url && config.gatevoo.key && config.gatevoo.webhookSecret),

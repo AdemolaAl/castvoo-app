@@ -85,13 +85,17 @@ function makeClient(base, { csrf = true, ip } = {}) {
   };
 }
 
-async function startApp({ env = {} } = {}) {
+/**
+ * port / host: the address Castvoo is reached at (APP_URL). The hub connection test uses host "localhost" so Castvoo's
+ * cookies never mix with VooSquare's on 127.0.0.1 (browsers ignore ports for cookies).
+ */
+async function startApp({ env = {}, port: wantPort, host = '127.0.0.1' } = {}) {
   const pg = await startPgServer({ ssl: false });
-  let fakes, server, uploadDir;
+  let fakes, server, uploadDir, app6 = null;
   try {
     fakes = await startFakes();
-    const port = await freePort();
-    const appUrl = `http://127.0.0.1:${port}`;
+    const port = wantPort || await freePort();
+    const appUrl = `http://${host}:${port}`;
     uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'castvoo-uploads-'));
     const platformBotToken = '600000001:' + crypto.randomBytes(26).toString('base64url').slice(0, 35);
     fakes.tg.addBot(platformBotToken, { id: 600000001, username: 'CastvooBot' });
@@ -130,7 +134,6 @@ async function startApp({ env = {} } = {}) {
       VOO_API_KEY: 'voo-api-key-456',
       VOO_CLIENT_ID: 'cv-client',
       VOO_CLIENT_SECRET: 'cv-secret',
-      VOO_WEBHOOK_SECRET: 'voo-webhook-secret',
       OWNER_EMAIL: 'owner@castvoo.test',
       UPLOAD_DIR: uploadDir,
       TG_SEND_PER_SECOND: '200',
@@ -145,6 +148,10 @@ async function startApp({ env = {} } = {}) {
     const { createServer } = require(S('app'));
     server = createServer();
     await new Promise((r) => server.listen(port, '127.0.0.1', r));
+    if (host === 'localhost') { // some systems resolve localhost to ::1 first
+      app6 = require(S('app')).createServer();
+      await new Promise((r) => { app6.once('error', () => r()); app6.listen(port, '::1', r); });
+    }
 
     const config = require(S('config'));
     const jobs = require(S('workers/jobs'));
@@ -267,6 +274,7 @@ async function startApp({ env = {} } = {}) {
         process.removeListener('SIGINT', onSignal);
         process.removeListener('SIGTERM', onSignal);
         try { if (server) { server.closeAllConnections(); await new Promise((r) => server.close(r)); } } catch { /* ignore */ }
+        try { if (app6 && app6.listening) { app6.closeAllConnections(); await new Promise((r) => app6.close(r)); } } catch { /* ignore */ }
         try { await Promise.race([sender.stop(), sleep(3000)]); } catch { /* ignore */ }
         // Don't wait forever for a query that is still running; stopping postgres ends it anyway.
         try { await Promise.race([db.end(), sleep(5000)]); } catch { /* ignore */ }

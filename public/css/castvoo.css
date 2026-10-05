@@ -1768,3 +1768,10 @@ input.trigsel::placeholder{color:rgba(255,255,255,.5)}
 .cc{flex-wrap:wrap}
 .nmtip{flex-basis:100%;font-weight:600;color:var(--blue-t);background:var(--blue-s);border-radius:10px;padding:7px 10px;line-height:1.4}
 .fmt .nmb{width:auto;padding-inline:10px;font-size:12.5px;font-weight:800;white-space:nowrap}
+/* VooSquare: "Part of VooSquare" (sidebar and footer) */
+.zxv{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:12px;font-size:12.5px;font-weight:700;color:var(--mut2);text-decoration:none}
+.zxv:hover{background:var(--bg2,#F1F4FA);color:var(--ink)}
+.zxv .vq{width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,#0B1430,#2F6BFF);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:900;flex:none}
+.fbot a[data-voo-app]{color:var(--mut2);text-decoration:none;font-weight:600}
+.fbot a[data-voo-app]:hover{color:var(--ink)}
+[data-vs-widget][hidden]{display:none!important}

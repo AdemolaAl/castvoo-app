@@ -13,6 +13,7 @@
 const db = require('../db');
 const settings = require('./settings');
 const email = require('./email');
+const voosquare = require('./voosquare');
 const { httpError, badRequest, fmtUSD, fmtDate, addDays } = require('../lib/util');
 
 const DAY = 86400000;
@@ -114,11 +115,12 @@ async function takePayment(c, wsId, amount, note, ref) {
   const bonus = Math.min(Number(ws.bonus_cents), amount);
   const cash = amount - bonus;
   await c.query('update workspaces set bonus_cents = bonus_cents - $2, wallet_cents = wallet_cents - $3 where id = $1', [wsId, bonus, cash]);
+  let txId = null;
   if (amount > 0) {
-    await c.query("insert into wallet_tx(workspace_id, kind, amount_cents, cash_cents, bonus_part_cents, method, ref, note) values ($1,'plan',$2,$3,$4,'wallet',$5,$6)",
-      [wsId, -amount, -cash, -bonus, ref || null, note]);
+    txId = (await c.query("insert into wallet_tx(workspace_id, kind, amount_cents, cash_cents, bonus_part_cents, method, ref, note) values ($1,'plan',$2,$3,$4,'wallet',$5,$6) returning id",
+      [wsId, -amount, -cash, -bonus, ref || null, note])).rows[0].id;
   }
-  return { charged: amount, cash, bonus };
+  return { charged: amount, cash, bonus, txId };
 }
 
 /** Pay referral commission on the cash part of a plan payment. */
@@ -166,6 +168,8 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
       coupon_months_left = greatest(0, coupon_months_left - $5), coupon_id = case when coupon_months_left - $5 <= 0 then null else coupon_id end
       where id = $1`, [wsId, plan.code, cycle, end, couponUsed ? 1 : 0]);
     const commission = await payCommission(c, ws, paid.cash, ref);
+    // VooSquare: spend (cash part) + plan_started / plan_renewed, queued in this same transaction.
+    await voosquare.planPaid(c, { wsId, txId: paid.txId, plan, cycle, priceCents: price, cashCents: paid.cash, first: !ws.paid_ever, at: start });
     return { ok: true, price, start, end, commission, ref, wsName: ws.name, ownerId: ws.owner_user_id };
   });
   if (result.skipped) return result;
@@ -184,7 +188,6 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
       settle_date: fmtDate(result.commission.settles), referrals_url: require('../config').appUrl + '/#app/referrals',
     });
   }
-  require('./voosquare').event('spend', { voo_id: owner.voo_id, label: `${plan.name} plan`, value_usd: result.price / 100 }).catch(() => {});
   return result;
 }
 
@@ -202,6 +205,7 @@ async function upgradeNow(wsId, planCode) {
     if (!paid) throw httpError(402, `Your wallet needs ${fmtUSD(diff)} to upgrade now. Top up and try again.`, 'wallet_short', { needed: diff / 100 });
     await c.query('update workspaces set plan_code = $2, pending_plan_code = null, pending_cycle = null where id = $1', [wsId, plan.code]);
     await payCommission(c, ws, paid.cash, `upgrade-${wsId}`);
+    await voosquare.upgradePaid(c, { wsId, txId: paid.txId, plan, cashCents: paid.cash, at: new Date() });
     return { ok: true, charged: diff };
   });
 }

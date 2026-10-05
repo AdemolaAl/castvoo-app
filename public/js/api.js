@@ -149,7 +149,10 @@ function mediaUrl(id) { const ws = WS.get() || (WS.current() || {}).id; return '
 
 /* Referral code from the link (?ref=), kept for this visit. */
 function refCode() {
-  const q = parseQuery(location.search).ref || parseQuery((location.hash.split('?')[1]) || '').ref;
+  // Castvoo's own referral code. A VooSquare affiliate click (?ref=...&vclick=...) is NOT one: the server keeps it
+  // for VooSquare (voo_attr cookie) and VooSquare credits the affiliate.
+  const sq = parseQuery(location.search), hq = parseQuery((location.hash.split('?')[1]) || '');
+  const q = sq.cvref || hq.cvref || (sq.vclick || hq.vclick ? '' : sq.ref || hq.ref);
   if (q) store.sset('cv_ref', String(q).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40));
   return store.sget('cv_ref') || '';
 }

@@ -175,7 +175,7 @@ module.exports = (r) => {
   r.post('/api/app/plan/cancel', async (ctx) => {
     ownerOnly(ctx);
     await db.query('update workspaces set cancel_at_period_end = $2 where id = $1', [ctx.workspace.id, ctx.body.resume ? false : true]);
-    if (!ctx.body.resume) require('../services/voosquare').event('plan_cancelled', { voo_id: ctx.user.voo_id, label: 'Plan set to cancel' }).catch(() => {});
+    // VooSquare hears plan_cancelled when the plan really ends (workers/jobs.js), so a resumed plan never reports a cancel.
     return { ok: true };
   }, { auth: 'workspace' });
 

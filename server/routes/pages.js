@@ -13,7 +13,7 @@ const LEGAL_DIR = path.join(__dirname, '..', 'legal');
 const shell = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escHtml(title)} · Castvoo</title><link rel="icon" href="/img/favicon.svg"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"><link rel="stylesheet" href="/css/legal.css"></head>
 <body><header class="lh"><a class="lg" href="/"><span class="lm">C</span><b>Cast<i>voo</i></b></a><a class="bk" href="/">Back to Castvoo</a></header><main class="lw">${body}</main>
-<footer class="lf"><nav>${LEGAL.map((l) => `<a href="/legal/${l.slug}">${escHtml(l.title)}</a>`).join('')}</nav><p>Castvoo is not affiliated with Telegram.</p></footer></body></html>`;
+<footer class="lf"><nav>${LEGAL.map((l) => `<a href="/legal/${l.slug}">${escHtml(l.title)}</a>`).join('')}</nav><p>Castvoo is not affiliated with Telegram.${config.vooConnectOn() ? ` <a href="${escHtml(config.voosquare.base)}/app" target="_blank" rel="noopener">Part of VooSquare</a>` : ''}</p></footer><script src="/voo-connect-browser.js" defer></script></body></html>`;
 
 module.exports = (r) => {
   r.get('/legal', async (ctx) => ctx.redirect('/legal/terms'));
@@ -31,7 +31,8 @@ module.exports = (r) => {
     if (code && (await db.one("select 1 from users where ref_code = $1 and status = 'active'", [code]))) {
       ctx.setCookie('cv_ref', code, { maxAge: days * 86400, sameSite: 'Lax', secure: config.appUrl.startsWith('https://'), httpOnly: true });
     }
-    ctx.redirect('/?ref=' + encodeURIComponent(code) + '#signup');
+    // cvref, not ref: ?ref= on a landing page is VooSquare's affiliate hand-off (Voo Connect).
+    ctx.redirect('/?cvref=' + encodeURIComponent(code) + '#signup');
   });
 
   /** Tracked button link: log the click, then go to the real address. */

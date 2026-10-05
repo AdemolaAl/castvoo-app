@@ -51,7 +51,7 @@ async function connectBot(ws, rawToken) {
     await db.query("update connections set status = 'removed' where id = $1", [conn.id]);
     throw httpError(502, 'Telegram did not accept the connection: ' + (e.description || e.message) + '. Make sure APP_URL is a public https address.', 'webhook_failed');
   }
-  require('./voosquare').event('channel_connected', { workspace_id: ws.id, label: `Bot @${me.username} connected` }).catch(() => {});
+  require('./voosquare').activity('channel_connected', { wsId: ws.id, idParts: ['conn', conn.id], label: `Bot @${me.username} connected` }).catch(() => {});
   return conn;
 }
 
@@ -111,7 +111,7 @@ async function addChat(wsId, chat, memberCount) {
     if (e.code === '23505') throw httpError(409, 'This chat is already connected to another Castvoo workspace.', 'chat_taken');
     throw e;
   }
-  require('./voosquare').event('channel_connected', { workspace_id: wsId, label: `${kind === 'channel' ? 'Channel' : 'Group'} connected` }).catch(() => {});
+  require('./voosquare').activity('channel_connected', { wsId, idParts: ['conn', conn.id], label: `${kind === 'channel' ? 'Channel' : 'Group'} connected: ${String(chat.title || chat.username || '').slice(0, 60)}`.replace(/: $/, '') }).catch(() => {});
   return conn;
 }
 

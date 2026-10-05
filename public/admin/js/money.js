@@ -41,6 +41,8 @@
           <div class="acts">
             ${canReview && p.status === 'pending' && isManual ? html`<button class="btn ok sm" data-approve="${p.reference}">${icon('check')} Approve</button><button class="btn danger sec sm" data-reject="${p.reference}">${icon('x')} Reject</button>` : ''}
             ${canReview && p.status === 'pending' && !isManual ? html`<button class="btn sec sm" data-recheck="${p.reference}">${icon('refresh')} Recheck</button>` : ''}
+            ${canReview && p.status === 'paid' && !p.disputed_at && p.provider !== 'paystack' ? html`<button class="btn danger sec sm" data-chargeback="${p.reference}">${icon('warn')} Chargeback</button>` : ''}
+            ${p.disputed_at ? html`<span class="bd bad">${icon('warn')} Charged back ${dt(p.disputed_at)}</span>` : ''}
           </div>
         </div>`;
       };
@@ -91,6 +93,15 @@
               title: 'Reject this payment?', text: 'The customer gets an email with your reason. Their wallet is not changed.', danger: true, okText: 'Reject payment',
               fields: [{ name: 'reason', label: 'Reason the customer will read', type: 'textarea', rows: 3, required: true, value: p.txid ? 'We could not find this transaction on the network, or it was sent to a different address.' : '' }],
               onSubmit: async (v) => { await post(`/api/admin/payments/${encodeURIComponent(p.reference)}/reject`, { reason: v.reason }); toast('Payment rejected.'); CV.reload(); CV.refreshCounts(); },
+            });
+          });
+          on(el, 'click', '[data-chargeback]', (e, b) => {
+            const p = res.payments.find((x) => x.reference === b.dataset.chargeback);
+            dialog({
+              title: `Record a chargeback on ${usd(p.amount, { cents: true })}?`, icon: 'warn', danger: true, okText: 'Record chargeback',
+              text: 'Use this when the bank or crypto processor took this top-up back. Unsettled referral earnings from this customer are cancelled, and the affiliate commission paid on plans bought with this money is reversed in VooSquare. The wallet is not changed: adjust it in Users if needed. This can be done once per payment.',
+              fields: [{ name: 'reason', label: 'Reason (for the audit log)', type: 'textarea', rows: 2, required: true, value: 'Card dispute' }],
+              onSubmit: async (v) => { const r = await post(`/api/admin/payments/${encodeURIComponent(p.reference)}/chargeback`, { reason: v.reason }); toast(`Chargeback recorded. ${r.voosquare_events ? r.voosquare_events + ' commission reversal(s) sent to VooSquare.' : 'No plan payment used this money.'}`); CV.reload(); },
             });
           });
           on(el, 'click', '[data-recheck]', async (e, b) => {

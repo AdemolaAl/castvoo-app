@@ -53,6 +53,7 @@ module.exports = (r) => {
     const user = await db.one("select * from users where voo_id = $1 and status = 'active'", [String(ctx.query.voo_id || '')]);
     if (!user) return { tool: 'castvoo', linked: false };
     const ws = await db.one('select * from workspaces where owner_user_id = $1 order by id limit 1', [user.id]);
+    if (!ws) return { tool: 'castvoo', linked: true, status: 'none', metrics: [], open_url: config.appUrl + '/dashboard' };
     // hasOwn: "?period=constructor" must not pick up Object.prototype.constructor (that crashed with a 500).
     const period = Object.hasOwn(PERIOD, String(ctx.query.period)) ? String(ctx.query.period) : '1d';
     const days = PERIOD[period];
@@ -73,8 +74,9 @@ module.exports = (r) => {
     return { tool: 'castvoo', linked: true, status, period, metrics, open_url: config.appUrl + '/#app' };
   });
 
-  /** A staff reply written in VooSquare's HQ inbox. VooSquare has already emailed the customer. */
-  r.post('/api/voosquare/support/webhook', async (ctx) => {
+  /** A staff reply written in VooSquare's HQ inbox. VooSquare has already emailed the customer.
+   *  Two addresses: ours, and the Voo Connect default (/hooks/voosquare/support). */
+  const supportReply = async (ctx) => {
     requireKey(ctx);
     const b = ctx.body || {};
     if (b.type !== 'support.reply') return { ok: true, ignored: true };
@@ -82,7 +84,9 @@ module.exports = (r) => {
     if (!m) return { ok: true, ignored: true };
     await support.staffReply(Number(m[1]), { authorName: String(b.agent || 'Castvoo team').slice(0, 60), body: b.body, via: 'voosquare', notify: false });
     return { ok: true };
-  });
+  };
+  r.post('/api/voosquare/support/webhook', supportReply);
+  r.post('/hooks/voosquare/support', supportReply);
 
   r.get('/api/voosquare/support/boxes', async (ctx) => {
     requireKey(ctx);

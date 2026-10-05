@@ -64,6 +64,7 @@ No request or response shapes and no route paths changed. Only these behaviours 
 11. **Commission tiers count the converting workspace itself.** A referrer with 4 paying referrals earns 20% on the 5th one's first payment. Product decision; the test documents current behaviour.
 12. **Migration 002 adds unique indexes.** It will fail on a database that already has the same bot live in two workspaces or duplicate broadcast deliveries. Fine before launch; check first if data exists.
 13. Legal pages and admin-edited text are inserted as HTML without escaping. Only staff can edit them.
+14. **Sending is at-least-once on a network timeout.** If Telegram receives a message but the answer is lost (20 s timeout), the delivery is retried up to 4 times, so that one subscriber can get it twice. Queueing itself is exactly once (each follow-up step is queued and the run advanced in one locked transaction; one delivery per broadcast and subscriber is enforced by a unique index).
 
 ## Running the tests
 
@@ -110,3 +111,44 @@ Everything is stopped and deleted after each file, also when a test fails or the
 | Home-page story: tired seller vs relaxed seller, and the chat that plays like a video | `public/index.html` (#story), `public/js/site-story.js`, "Story" block in `public/css/castvoo.css` |
 | Personal messages: `{name}` becomes each bot subscriber's first name (`{name\|friend}` sets the word used when there is no name) | `server/services/telegram.js` (`personalize`), `send.js`, `workers/sender.js`; composer "👤 Name" button; tests in `test/e2e/personal-names.test.js` |
 | Admin → Users: "Total spent" column, "Top spenders" sort, and a money strip on each user (total spent, paid in, spent on plans, refunded, wallet) | `server/routes/admin/users.js`, `public/admin/js/people.js`, migration `005_spend.sql`; test in `test/e2e/admin-spend.test.js` |
+
+## Voo Connect and audit, October 2026
+
+VooSquare connection through the Voo Connect kit (`voo-connect/`, details in [INTEGRATIONS.md](INTEGRATIONS.md)), and
+fixes from a security, billing and scheduler audit. Tests: `test/e2e/voo-connect.test.js`, `test/e2e/voo-connect-hub.test.js`
+(real VooSquare), `test/e2e/audit-fixes.test.js`.
+
+| # | Where | Problem | Fix |
+|---|---|---|---|
+| V1 | `services/voosquare.js` | Event ids were random, so a retry or a second run counted money twice in VooSquare | Stable ids (`cv_pay_<wallet_tx id>`, ...), a unique index on the outbox, sent through the kit |
+| V2 | `services/auth.js` | A `plan_started` event without plan or price was sent for every free trial (VooSquare refuses it) | Removed; plan_started is sent for the first PAID plan, with plan and price |
+| V3 | `services/billing.js` | `spend` was the full plan price, including bonus credit that was never paid, and sent after the transaction | `spend` = cash part, queued in the same transaction; plus `plan_started` / `plan_renewed`, upgrades, `wallet_topup` |
+| V4 | refunds, disputes | No `refund` / `chargeback` events, so affiliate commission on disputed money was never reversed | `refund` (commission stays) and one `chargeback` per plan payment that used the disputed top-up (FIFO), with `original_event_id` |
+| V5 | `routes/workspace.js` | `plan_cancelled` was sent when renewal was switched off (and again when it ended), even if it was switched back on | Sent once, when the plan really ends |
+| V6 | `lib/oidc.js`, `routes/auth.js` | VooSquare login: `id_token` not verified, no affiliate hand-off, callback not at the registered `/auth/voosquare/callback` | The kit's login: signed state, verified `id_token`, `prompt=signup`, `ref`/`vclick`/`coupon` hand-off, launcher `return_to` |
+| V7 | `services/auth.js` | A VooSquare login joined any account with the same email, verified or not | Linked only when the email is verified on both sides, or from Settings → Connect |
+| V8 | `routes/pages.js` | Castvoo referral links used `?ref=`, the same name as VooSquare's affiliate code | `?cvref=` |
+| A1 | `app.js` | Ids or numbers the database cannot read (`?connection_id=abc`, `1e20`) answered 500 | 400 `bad_value` |
+| A2 | `lib/util.js` (`safeEqual`) | Two empty values compared equal: a bot connection with an empty webhook secret accepted updates with no secret header | Empty never matches |
+| A3 | `workers/jobs.js` | Renewal switched off during the trial was ignored: the plan started and the wallet was charged at the end of the trial | The trial ends without a charge (status cancelled) |
+| A4 | `services/auth.js` | Team members added by an admin stayed "email not verified" after logging in with an emailed code | Code login marks the email verified |
+| A5 | `routes/voo-connect.js` | (new code) "Connect your VooSquare account" must not be startable from another website | A POST with our `x-cv` header; a plain Voo ID login while someone is logged in switches account, never links |
+| A6 | `routes/media.js`, `services/media-files.js` | No storage limit: one account could fill the shared disk (60 × 50 MB every 10 minutes); unused uploads kept forever | 2 GB / 1,000 files per workspace; uploads no message uses are removed after 3 days |
+| A7 | `app-connect.js`, `app-drips.js` | Names with `&` or `<` showed as `&amp;` in the Remove / Delete questions (escaped twice) | Escaped once |
+| A8 | Admin → System | Refused VooSquare events were counted as "waiting" | Shown separately ("refused by VooSquare") |
+| A9 | Admin → Payments | The chargeback route existed but had no button, so non-Paystack disputes could only be recorded through the API | **Chargeback** button on paid Flutterwave / Gatevoo / crypto top-ups (reason required, once per payment); disputed top-ups show "Charged back <date>" |
+| A10 | `config.js` (`TRUST_PROXY`) | Trusted `X-Forwarded-For` by default everywhere; without a proxy in front, a visitor picks their own IP and dodges every per-IP limit | Default on only when `RAILWAY_ENVIRONMENT` is set (like VooSquare); `TRUST_PROXY` still overrides |
+| A11 | `services/support.js` | The copy of a Help message for VooSquare's inbox was queued fire-and-forget, so a flush right after could miss it (flaky test, a 10 s delay in production) | Queued before the request answers |
+| A12 | tests | `admin.test.js` did not list the new chargeback route; `public.test.js` still expected `?ref=` from `/r/<code>` (V8 changed it to `?cvref=`) | Both updated |
+
+### How the connection was proved (October 5, 2026)
+- `npm test` twice in a row, all green; `npm run check` all passed.
+- `test/e2e/voo-connect-hub.test.js` against a fresh copy of the **current** VooSquare (`VOOSQUARE_DIR=<copy>`).
+- Playwright, Castvoo on 4862 and VooSquare on 4861: affiliate link → Castvoo landing (`ref`, `vclick` kept) →
+  Continue with Voo ID (`prompt=signup`) → VooSquare sign-up → back in Castvoo, logged in → attribution in VooSquare
+  → mock Paystack top-up → Growth plan from the wallet → `wallet_topup` + `spend` + `plan_started` in VooSquare →
+  RevShare commission → refund (commission stays) → Paystack dispute (clawback of exactly that commission) → log out
+  everywhere → 390 px: login with the same Voo ID; no horizontal scroll; no console errors. `check.js`: 12/12 PASS.
+- Every customer and admin page at 1440 and 390 with hostile names (`<img onerror>`) in every field: no overflow,
+  no console errors, no script ran.
+

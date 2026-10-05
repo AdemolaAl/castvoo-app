@@ -36,8 +36,9 @@ const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex'
 const hmac = (key, data, alg = 'sha256', enc = 'hex') => crypto.createHmac(alg, key).update(data).digest(enc);
 
 function safeEqual(a, b) {
-  const x = Buffer.from(String(a)), y = Buffer.from(String(b));
-  if (x.length !== y.length) return false;
+  const x = Buffer.from(String(a ?? '')), y = Buffer.from(String(b ?? ''));
+  // Two empty values are never a match: a missing secret on our side must not accept a missing header.
+  if (!x.length || x.length !== y.length) return false;
   return crypto.timingSafeEqual(x, y);
 }
 

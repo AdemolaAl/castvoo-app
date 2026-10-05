@@ -53,6 +53,18 @@ module.exports = (r) => {
     return { ok: true };
   }, { staff: 'payments.review' });
 
+  /**
+   * Record a chargeback / dispute on a paid top-up (Flutterwave, Gatevoo or manual crypto; Paystack disputes arrive by
+   * webhook). Cancels unsettled referral earnings and reverses the affiliate commission in VooSquare. Once per payment.
+   */
+  r.post('/api/admin/payments/:ref/chargeback', async (ctx) => {
+    const reason = str(ctx.body.reason, 'Reason', { min: 3, max: 300 });
+    const out = await payments.chargeback(String(ctx.params.ref), { disputeRef: 'admin:' + ctx.user.id });
+    if (out.already) throw badRequest('This payment was already recorded as charged back.');
+    await audit(ctx, 'payment.chargeback', 'payment:' + ctx.params.ref, { reason, referral_reversed_cents: out.reversed_cents, voo_events: out.events });
+    return { ok: true, referral_reversed: out.reversed_cents / 100, voosquare_events: out.events.length };
+  }, { staff: 'payments.review' });
+
   /** Ask Paystack / Flutterwave / Gatevoo again whether a payment went through. */
   r.post('/api/admin/payments/:ref/recheck', async (ctx) => {
     const ok = await payments.verify(ctx.params.ref).catch((e) => { throw badRequest('Check failed: ' + e.message); });

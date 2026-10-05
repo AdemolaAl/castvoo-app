@@ -21,6 +21,9 @@ const TYPES = {
   'video/quicktime': { kind: 'video', ext: '.mov', max: 50 * 1024 * 1024, magic: (b) => b.slice(4, 8).toString() === 'ftyp' || b.slice(4, 8).toString() === 'moov' || b.slice(4, 8).toString() === 'wide' },
 };
 
+/** Per-workspace storage for uploads (the Railway volume is shared by everyone). */
+const STORAGE = { bytes: 2 * 1024 * 1024 * 1024, files: 1000 };
+
 module.exports = (r) => {
   r.post('/api/media', async (ctx) => {
     await settings.requireFeature('media');
@@ -29,6 +32,12 @@ module.exports = (r) => {
     if (!t) throw badRequest('Use a JPG, PNG, WEBP, GIF, MP4 or MOV file.');
     const declared = Number(ctx.req.headers['content-length'] || 0);
     if (declared > t.max) throw httpError(413, t.kind === 'video' ? 'Videos can be up to 50 MB.' : 'Photos can be up to 10 MB.', 'too_large');
+    // Storage per workspace: without a cap one account could fill the disk (60 uploads × 50 MB every 10 minutes).
+    // Files no message uses are removed after a few days (workers/jobs.js cleanupTick), so the cap rarely bites.
+    const used = await db.one('select count(*)::int n, coalesce(sum(size_bytes), 0)::bigint bytes from media where workspace_id = $1', [ctx.workspace.id]);
+    if (used.n >= STORAGE.files || Number(used.bytes) + Math.max(declared, 0) > STORAGE.bytes) {
+      throw httpError(413, 'Your workspace has no room for more photos and videos right now. Files you have not used in a message are cleared after 3 days; try again then, or reuse a file you already uploaded.', 'storage_full');
+    }
     const name = String(ctx.req.headers['x-filename'] || 'file').replace(/[^\w.\- ]/g, '').slice(0, 80) || 'file';
     const dir = path.join(config.uploadDir, String(ctx.workspace.id));
     await fs.promises.mkdir(dir, { recursive: true });
@@ -70,3 +79,5 @@ module.exports = (r) => {
     ctx.sent = true;
   }, { auth: 'workspace' });
 };
+
+module.exports.STORAGE = STORAGE;

@@ -21,6 +21,10 @@ Tick every line before opening Castvoo to the public.
 - [ ] Paystack: LIVE secret key, webhook URL saved, NGN/GHS/ZAR enabled
 - [ ] Flutterwave: LIVE secret key, webhook URL + secret hash saved, M-Pesa / XAF enabled
 - [ ] Gatevoo: key + webhook secret set, "Send test" from Gatevoo succeeds, castvoo.com in EMBED_ORIGINS
+- [ ] VooSquare: Admin → Products → Castvoo filled in (SSO on, both redirect URIs, summary URL, support webhook), the four
+      `VOO_*` variables and `VOO_SIGNAL_SECRET` set, and `node voo-connect/check.js ...` (docs/INTEGRATIONS.md) prints only PASS
+- [ ] VooSquare: open a test affiliate link, "Continue with Voo ID" with a new email, top up, start a plan: the affiliate
+      sees the sale; refund (commission stays); Log out lands on castvoo.com logged out of VooSquare too
 - [ ] Manual crypto fallback addresses (USDT TRC20 + BTC) entered and double-checked
 - [ ] Google login (optional) redirect URI saved
 

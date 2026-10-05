@@ -75,24 +75,79 @@ console.cloud.google.com → APIs & Services → OAuth consent screen (External,
 Credentials → Create OAuth client ID (Web application) → Authorized redirect URI
 `https://castvoo.com/api/auth/google/callback` → copy `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
-## VooSquare (the Zedapex account hub)
-In VooSquare: **Admin → Products → Add Castvoo**. Set its URL, switch SSO on, and fill in:
-- Redirect URI: `https://castvoo.com/api/auth/voosquare/callback`
-- Support webhook: `https://castvoo.com/api/voosquare/support/webhook`
-- Summary URL: `https://castvoo.com/api/voosquare/summary`
+## VooSquare (the Zedapex account hub) · Voo Connect
 
-Copy the credentials into Railway: `VOO_BASE=https://voosquare.com`, `VOO_CLIENT_ID`, `VOO_CLIENT_SECRET`, `VOO_API_KEY`.
+Castvoo connects to VooSquare with **Voo Connect**, the kit VooSquare publishes in its repo at `sdk/voo-connect/`. It is
+copied **unchanged** into `voo-connect/` here (never edit it: copy the new folder over it when VooSquare publishes a new
+version). Castvoo's own code around it: `server/lib/voo.js` (creates the kit), `server/routes/voo-connect.js` (login,
+logout), `server/services/voosquare.js` (events), `server/routes/voosquare.js` (calls from VooSquare). The contract is
+VooSquare's `docs/VOO_CONNECT.md` (Castvoo sheet) and `docs/INTEGRATION.md`.
 
-What then works:
-- **Login**: "Continue with VooSquare" on the sign-up page (VooSquare's `/oauth/authorize` → `/oauth/token`; the
-  person's `voo_id`, email, name and country come back). Logging out of Castvoo also logs out of VooSquare.
-- **Support in VooSquare's HQ inbox**: every message a customer writes in Castvoo's Help chat is copied to
-  `POST <VOO_BASE>/api/v1/support/messages` with `external_ref = castvoo-<conversation id>`, so one Castvoo conversation
-  is one VooSquare ticket. When someone answers in VooSquare, VooSquare posts `{type: "support.reply", external_ref, body, agent}`
-  to the Support webhook and the answer appears in the customer's Castvoo chat (VooSquare emails the customer itself, so
-  Castvoo doesn't send a second email). Answers written in Castvoo's own Admin → Support also reach the customer. Both
-  places work; each message shows where it was written.
-- **Two-way desk** (VooSquare's "Support HQ" plan, Part 5 of the spec): Castvoo already exposes
+### Set it up (once per VooSquare: staging and live have separate credentials)
+In VooSquare: **Admin → Products → Castvoo**:
+- URL `https://castvoo.com` · **SSO on**
+- Launch path `/dashboard` (the page VooSquare's launcher opens after login; empty also means `/dashboard`, the Castvoo dashboard)
+- Redirect URIs, two lines, exact: `https://castvoo.com/auth/voosquare/callback` and `https://castvoo.com/`
+- Summary URL `https://castvoo.com/api/voosquare/summary`
+- Support webhook `https://castvoo.com/hooks/voosquare/support` (the older `/api/voosquare/support/webhook` also works)
+
+Railway → Variables: `VOO_BASE=https://voosquare.com`, `VOO_CLIENT_ID`, `VOO_CLIENT_SECRET`, `VOO_API_KEY` (from
+Credentials), `VOO_SIGNAL_SECRET` (`openssl rand -hex 32`, made once, never changed). `VOO_CONNECT=off` switches all of
+it off at once (the other logins keep working); `VOO_SUPPORT_WIDGET=off` keeps our own help bubble on the website.
+
+Then check every setting against VooSquare (changes nothing there):
+```bash
+node voo-connect/check.js --base "$VOO_BASE" --client-id "$VOO_CLIENT_ID" --client-secret "$VOO_CLIENT_SECRET" \
+  --api-key "$VOO_API_KEY" --redirect-uri https://castvoo.com/auth/voosquare/callback --logout-uri https://castvoo.com/ \
+  --summary-url https://castvoo.com/api/voosquare/summary
+```
+Every line must say PASS. Add `--voo-id <your Voo ID>` to prove the API key and the client ID are the same product.
+
+### What then works
+- **Continue with Voo ID** on the sign-up and log-in page. "Start free" opens VooSquare's sign-up view
+  (`/auth/voosquare?signup=1` → `prompt=signup`). The kit checks a signed state cookie (10 minutes), exchanges the code
+  server side and verifies the `id_token` (HS256 with the client secret, `aud`, `iss`, expiry). VooSquare's launcher
+  opens `/auth/voosquare?return_to=/dashboard`, which lands on the dashboard (`/#app`).
+- **Who is who.** A Castvoo account is found by its `voo_id`. The existing logins (email code, Telegram, Google) stay.
+  An existing Castvoo account is linked to a Voo ID when (a) the person presses **Settings → VooSquare → Connect**
+  while logged in (a POST from our page; a link from another website cannot do it), or (b) owner's rule: the email is
+  verified on **both** sides (VooSquare says `email_verified`, and Castvoo verified it with a code or a provider) and
+  the account has no Voo ID yet. An unverified email never joins accounts. A Voo ID login while someone else is logged
+  in on the same browser switches account; it never links. New accounts get the free trial, the country VooSquare
+  sends and VooSquare's referral code (`users.voo_ref`, saved once).
+- **Affiliate hand-off.** An affiliate link (`voosquare.com/a/<code>?p=castvoo`) lands on Castvoo with
+  `?ref=&vclick=`; every page keeps `ref`, `vclick` and `coupon` in the first-party cookie `voo_attr` (60 days, last
+  click wins; `server/app.js`), and the login replays them to VooSquare, which decides the attribution. The browser
+  snippet `/voo-connect-browser.js` is on the website and legal pages too. Castvoo's own referral links (`/r/<code>`)
+  now land with `?cvref=` so they are never mistaken for an affiliate click.
+- **Log out everywhere.** `/logout` (and the Log out buttons) end the Castvoo session, then VooSquare's, then come back
+  to `https://castvoo.com/`.
+- **Money events** (commission is calculated by VooSquare from these). Castvoo is a wallet: top-ups add money, plans
+  are paid from the wallet. The workspace owner's Voo ID is the customer.
+
+  | When | Event | Id | Commission |
+  |---|---|---|---|
+  | A top-up is paid | `wallet_topup` | `cv_topup_<payment id>` | none |
+  | A plan is paid from the wallet (start or renewal) | `spend` (the cash part; bonus credit is not money) | `cv_pay_<wallet_tx id>` | yes |
+  | The first paid plan | `plan_started` (plan, price) | `cv_plan_<wallet_tx id>` | none (plan sync) |
+  | Every later plan payment | `plan_renewed` | `cv_renew_<wallet_tx id>` | none |
+  | An upgrade paid for the rest of the period | `spend` | `cv_pay_<wallet_tx id>` | yes |
+  | The plan ends after renewal was switched off | `plan_cancelled` | `cv_cancel_<workspace>_<date>` | none |
+  | Admin → Users → wallet → **refund** of cash | `refund` | `cv_rf_<wallet_tx id>` | never reversed |
+  | A top-up is charged back (Paystack `charge.dispute.create`, or **Admin → Payments → Chargeback** for other providers) | one `chargeback` per plan payment that used that money (oldest money is spent first), `original_event_id = cv_pay_<wallet_tx id>` | `cv_cb_<payment id>_<wallet_tx id>` | reversed |
+
+  Activity: `broadcast_sent` (`cv_bc_<broadcast>`, label "<title>: N messages"), `channel_connected`
+  (`cv_conn_<connection>`), `drip_step_sent` (one per workspace per finished hour, `cv_drip_<workspace>_<hour>`).
+  Never sent: subscribers' Telegram IDs, usernames, names, phone numbers, emails; read receipts (bots get none).
+- **How events travel.** Each event is checked by the kit when it is queued and written to our `outbox` table in the
+  same database transaction as the money. Every 10 s the worker hands due rows to the kit's sender (batches of 100,
+  resend when VooSquare asks, backoff on network trouble). Ids are stable, so a retry or a second run never counts
+  twice. Events VooSquare refuses for good are kept with `failed_at` and shown in **Admin → System**.
+- **Support in VooSquare's inbox**: every message a customer writes in Castvoo's Help chat is copied to VooSquare with
+  `external_ref = castvoo-<conversation id>` (one Castvoo conversation = one ticket). Replies written in VooSquare come
+  back through the support webhook and appear in the customer's chat. On the public website the VooSquare support
+  widget (`data-product="castvoo"`) replaces our help bubble; inside the dashboard, Help stays our own chat.
+- **Two-way desk** (VooSquare's "Support HQ"): Castvoo exposes
   ```
   GET  /api/voosquare/support/boxes
   GET  /api/voosquare/support/tickets?status=active|open|pending|closed|all&view=mine|unassigned&q=&voo_id=
@@ -102,9 +157,34 @@ What then works:
   GET/POST /api/voosquare/staff                      {voo_id, email, name, role: admin|support|finance|content|viewer, active}
   Header on every call: Authorization: Bearer <VOO_API_KEY>   (or VOO_SERVICE_KEY if you set one)
   ```
-  VooSquare can add, change or remove Castvoo team members (never owners; owners are managed in Castvoo).
-- **Dashboard numbers**: `GET /api/voosquare/summary?voo_id=&period=1d|7d|30d` returns messages sent, broadcasts,
-  active follow-ups, subscribers and clicks.
-- **Live feed**: Castvoo sends `broadcast_sent`, `channel_connected`, `plan_started`, `plan_cancelled` and `spend`
-  events in batches to `<VOO_BASE>/api/v1/events` with `Authorization: Bearer <VOO_API_KEY>`, retried for up to a day.
-  No subscriber personal data is ever sent.
+- **Dashboard card**: `GET /api/voosquare/summary?voo_id=&period=1d|7d|30d` returns messages sent, broadcasts,
+  active follow-ups, subscribers (and clicks).
+- **"Part of VooSquare"** link in the website footer, the dashboard sidebar and the legal pages.
+
+### Tests
+`test/e2e/voo-connect.test.js` (against a fake VooSquare, always runs) and `test/e2e/voo-connect-hub.test.js` (against
+the **real** VooSquare: it boots VooSquare from its repo, registers Castvoo, runs `check.js`, and goes affiliate link →
+sign-up → money → commission → refund → chargeback → summary → support → logout). The second one runs when the
+VooSquare repo is found (`VOOSQUARE_DIR`, or `../voosquare-app` next to this repo) and is skipped otherwise. Point
+`VOOSQUARE_DIR` at a fresh **copy** of the current VooSquare (without its `data/` folder), never at the live repo
+folder: the test boots it with `NODE_ENV=test` on `127.0.0.1` (VooSquare only hands out login codes in the response
+then) and its own temporary database. Ports: the first free pair in 4863–4869.
+
+The Playwright run of the same journey in a real browser (screens at 1440 and 390) is described in
+[CHANGES-FROM-TESTS.md](CHANGES-FROM-TESTS.md), "Voo Connect and audit, October 2026".
+
+### What VooSquare enforces (checked against the current VooSquare, October 2026)
+- Every money event (`spend`, `refund`, `chargeback`, `plan_started`, `plan_renewed`, `wallet_topup`) needs an
+  `event_id` of at most 80 characters; malformed or id-less events come back in `rejected`. Castvoo's ids are at most
+  ~40 characters, the kit refuses a bad one before it is queued, and anything VooSquare still refuses is kept as
+  "refused by VooSquare" in Admin → System (never retried, never dropped silently).
+- Logout may return to any page on Castvoo's own site (the product URL's origin) or a registered Redirect URI. We
+  return to `<APP_URL>/`, which is both.
+- VooSquare logout also revokes the access tokens it gave Castvoo; Castvoo does not keep or reuse them (the
+  `id_token` is read once at login).
+
+### Not done on purpose (owner decisions)
+- VooSquare's sheet asks tools to drop their own referral balances and withdrawals. Castvoo's referral program
+  (wallet credit and crypto withdrawals) is still on, because removing a live feature is the owner's call.
+- A chargeback reverses commission in VooSquare and unsettled Castvoo referral earnings, but does not take the
+  disputed money out of the customer's wallet (Paystack's event is the dispute opening, which can still be won).

@@ -83,6 +83,8 @@ async function loginWith(identity, extra = {}) {
     if (user.status === 'suspended') throw httpError(403, 'This account is suspended. Contact support@castvoo.com.', 'suspended');
     if (user.status === 'deleted') throw httpError(403, 'This account was deleted.', 'deleted');
     if (identity.tg_username !== undefined && identity.tg_user_id) await db.query('update users set tg_username = $2 where id = $1', [user.id, identity.tg_username]);
+    // Logging in with an emailed code proves the email (team members added by an admin started unverified).
+    if (field === 'email' && !user.email_verified) { await db.query('update users set email_verified = true where id = $1', [user.id]); user.email_verified = true; }
     if (user.email && config.ownerEmail && user.email === config.ownerEmail && user.staff_role !== 'owner') {
       await db.query("update users set staff_role = 'owner' where id = $1", [user.id]);
       user.staff_role = 'owner';
@@ -113,8 +115,71 @@ async function loginWith(identity, extra = {}) {
 
   const ws = await db.one('select * from workspaces where owner_user_id = $1 order by id limit 1', [user.id]);
   await email.send('welcome', user, { trial_end_date: fmtDate(ws.trial_ends_at), guide_url: config.appUrl + '/#guide' });
-  require('./voosquare').event('plan_started', { voo_id: user.voo_id, label: 'Free trial started' }).catch(() => {});
   return { user, created: true };
+}
+
+/**
+ * "Continue with Voo ID" (VooSquare login through the Voo Connect kit). `vu` is the kit's verified user:
+ * { voo_id, email, email_verified, name, country, voo_ref }.
+ *   1. Somebody is already logged in to Castvoo ("Connect your VooSquare account"): link the Voo ID to THAT account.
+ *   2. A Castvoo account already has this voo_id: log it in.
+ *   3. Owner's rule: an existing Castvoo account whose email is verified on BOTH sides (VooSquare says
+ *      email_verified, and Castvoo verified it with a code or a provider) and that has no Voo ID yet is linked.
+ *      An unverified email is never used to join accounts.
+ *   4. Otherwise create a new account (free trial, workspace), with country and VooSquare's referral code.
+ * Returns { user, created, linked }.
+ */
+async function loginWithVoo(vu, { current = null, ref = null } = {}) {
+  const vooId = String(vu.voo_id || '').slice(0, 120);
+  if (!vooId) throw httpError(400, 'VooSquare did not send your account.', 'voo_no_id');
+  const vooRef = vu.voo_ref ? String(vu.voo_ref).slice(0, 40) : null;
+  const mail = vu.email && vu.email_verified ? String(vu.email).trim().toLowerCase().slice(0, 254) : null;
+  const usable = (u) => {
+    if (u.status === 'suspended') throw httpError(403, 'This account is suspended. Contact support@castvoo.com.', 'suspended');
+    if (u.status === 'deleted') throw httpError(403, 'This account was deleted.', 'deleted');
+  };
+  const promoteOwner = async (u) => {
+    if (u.email && config.ownerEmail && u.email === config.ownerEmail && u.staff_role !== 'owner') {
+      await db.query("update users set staff_role = 'owner' where id = $1", [u.id]);
+      u.staff_role = 'owner';
+    }
+    return u;
+  };
+  const link = async (u) => {
+    // "where voo_id is null" makes two logins at the same moment safe; the unique index refuses a second account.
+    try {
+      await db.query('update users set voo_id = $2, voo_ref = coalesce(voo_ref, $3), voo_linked_at = now() where id = $1 and (voo_id is null or voo_id = $2)', [u.id, vooId, vooRef]);
+    } catch (e) {
+      if (e.code === '23505') throw httpError(409, 'That VooSquare account is already linked to another Castvoo login.', 'already_linked');
+      throw e;
+    }
+    return db.one('select * from users where id = $1', [u.id]);
+  };
+
+  const byVoo = await db.one('select * from users where voo_id = $1', [vooId]);
+  if (current) {
+    if (byVoo && String(byVoo.id) !== String(current.id)) throw httpError(409, 'That VooSquare account is already linked to another Castvoo login.', 'already_linked');
+    if (current.voo_id && current.voo_id !== vooId) throw httpError(409, 'Your Castvoo account is already linked to a different VooSquare account.', 'already_linked');
+    return { user: await link(current), created: false, linked: !byVoo };
+  }
+  if (byVoo) { usable(byVoo); return { user: await promoteOwner(byVoo), created: false, linked: false }; }
+
+  let mailFree = !!mail;
+  if (mail) {
+    const byMail = await db.one('select * from users where email = $1', [mail]);
+    if (byMail) {
+      mailFree = false;
+      if (byMail.email_verified && !byMail.voo_id && byMail.status === 'active') {
+        const u = await link(byMail);
+        return { user: await promoteOwner(u), created: false, linked: true };
+      }
+      if (byMail.status !== 'active') usable(byMail);
+      // Verified elsewhere but not here, or already linked to another Voo ID: a new account without that email.
+    }
+  }
+  const { user, created } = await loginWith({ voo_id: vooId, ...(mailFree ? { email: mail } : {}) }, { name: vu.name || '', country: vu.country ? String(vu.country).toUpperCase().slice(0, 2) : null, ref });
+  if (created) await db.query('update users set voo_ref = $2, voo_linked_at = now() where id = $1', [user.id, vooRef]);
+  return { user: await db.one('select * from users where id = $1', [user.id]), created, linked: false };
 }
 
 async function createWorkspace(c, user) {
@@ -145,4 +210,4 @@ async function currentWorkspace(user, wanted) {
   return rows[0] || null;
 }
 
-module.exports = { COOKIE, createSession, loadSession, destroySession, loginWith, createWorkspace, currentWorkspace, TZ_BY_COUNTRY };
+module.exports = { COOKIE, createSession, loadSession, destroySession, loginWith, loginWithVoo, createWorkspace, currentWorkspace, TZ_BY_COUNTRY };

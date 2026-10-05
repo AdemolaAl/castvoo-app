@@ -45,7 +45,8 @@ Already have a database? `DATABASE_URL=postgres://... APP_SECRET=$(openssl rand 
 
 ```bash
 npm run check      # 30 seconds: syntax, prices agree everywhere, no unfinished copy, every route protected, env documented
-npm test           # 2-3 minutes: 313 tests against a real database and fake Telegram/Paystack/Flutterwave/Gatevoo/AI/email
+npm test           # 3-4 minutes: 340+ tests against a real database and fake Telegram/Paystack/Flutterwave/Gatevoo/AI/email,
+                   # plus the real VooSquare when its repo is next to this one (VOOSQUARE_DIR)
 ```
 Both must pass. (Tests need PostgreSQL 16 installed locally; they start and stop their own.)
 
@@ -70,6 +71,7 @@ server/
   emails/             email layout + all 28 templates
   legal/              the 6 policy pages
   lib/                small tools: our PostgreSQL client, router, helpers
+voo-connect/          VooSquare's Voo Connect kit, copied unchanged (login, affiliate hand-off, events). Never edit it.
 public/
   index.html, css/, js/   website + sign-up + dashboard (see public/js/README.md)
   admin/                   admin panel
@@ -86,6 +88,6 @@ docs/                 guides (start with DEVELOPER-GUIDE.md)
 | [docs/API.md](docs/API.md) | Every API endpoint |
 | [docs/DEPLOY-RAILWAY.md](docs/DEPLOY-RAILWAY.md) | Going live, scaling, backups |
 | [docs/LAUNCH-CHECKLIST.md](docs/LAUNCH-CHECKLIST.md) | What to check before opening to the public |
-| [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Telegram, Resend, Anthropic, Paystack, Flutterwave, Gatevoo, Google, VooSquare |
+| [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Telegram, Resend, Anthropic, Paystack, Flutterwave, Gatevoo, Google, VooSquare (Voo Connect) |
 | [docs/PRODUCT-FACTS.md](docs/PRODUCT-FACTS.md) | What Castvoo promises. Copy, emails and policies must agree with it |
 | [docs/CHANGES-FROM-TESTS.md](docs/CHANGES-FROM-TESTS.md) | Bugs the tests caught and how they were fixed |
