@@ -29,7 +29,7 @@ module.exports = (r) => {
         count(*) filter (where status = 'blocked' and sent_at > now() - interval '1 day')::int blocked_24h from deliveries where created_at > now() - interval '2 days'`),
       one(`select count(*) filter (where status <> 'closed')::int open, count(*) filter (where unread_staff and status <> 'closed')::int unread from support_threads`),
       one(`select count(*)::int queued, min(due_at) filter (where due_at <= now()) as oldest_due from deliveries where status = 'queued'`),
-      one(`select coalesce(sum(writes), 0)::int writes_24h, coalesce(sum(input_tokens), 0)::bigint input_24h, coalesce(sum(output_tokens), 0)::bigint output_24h from ai_usage where created_at > now() - interval '1 day'`),
+      one(`select coalesce(sum(writes), 0)::int writes_24h, coalesce(sum(input_tokens), 0)::bigint input_24h, coalesce(sum(output_tokens), 0)::bigint output_24h, coalesce(sum(cost_usd), 0)::float cost_24h from ai_usage where created_at > now() - interval '1 day'`),
       db.many(`select to_char(d, 'YYYY-MM-DD') as day, (select count(*)::int from users u where u.created_at >= d and u.created_at < d + interval '1 day') n
         from generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') d order by d`),
       db.many(`select to_char(d, 'YYYY-MM-DD') as day, (select coalesce(sum(-amount_cents), 0)::bigint from wallet_tx t where t.kind = 'plan' and t.created_at >= d and t.created_at < d + interval '1 day') cents

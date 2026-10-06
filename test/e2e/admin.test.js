@@ -70,6 +70,8 @@ const ROUTES = [
   ['PUT', '/api/admin/knowledge/999999', 'knowledge.edit', { title: 'Title', body: 'Body text' }],
   ['DELETE', '/api/admin/knowledge/999999', 'knowledge.edit'],
   ['POST', '/api/admin/ai/test', 'knowledge.edit', {}],
+  ['GET', '/api/admin/ai/provider', 'overview.view'],
+  ['PUT', '/api/admin/ai/provider', 'ai.edit', {}],
   ['GET', '/api/admin/team', 'overview.view'],
   ['POST', '/api/admin/team', 'team.manage', {}],
   ['POST', '/api/admin/team/999999/role', 'team.manage', { role: 'viewer' }],

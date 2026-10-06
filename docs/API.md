@@ -1,6 +1,6 @@
 # API reference
 
-Generated from the code by `node scripts/api-docs.js` (168 routes).
+Generated from the code by `node scripts/api-docs.js` (170 routes).
 
 Rules: JSON in and out. Every non-GET request from the browser must send the header `x-cv: 1`. A user in several workspaces sends `x-ws: <workspace id>`. Errors look like `{"error": "Friendly message", "code": "machine_code"}`.
 Each route has a comment above it in `server/routes/` explaining its input and output.
@@ -195,6 +195,8 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 | POST | `/api/admin/knowledge` | staff: `knowledge.edit` |
 | PUT | `/api/admin/knowledge/:id` | staff: `knowledge.edit` |
 | DELETE | `/api/admin/knowledge/:id` | staff: `knowledge.edit` |
+| GET | `/api/admin/ai/provider` | staff: `overview.view` |
+| PUT | `/api/admin/ai/provider` | staff: `ai.edit` · max 30 per 600s per IP |
 | POST | `/api/admin/ai/test` | staff: `knowledge.edit` · max 60 per 600s per IP |
 | GET | `/api/admin/team` | staff: `overview.view` |
 | POST | `/api/admin/team` | staff: `team.manage` |

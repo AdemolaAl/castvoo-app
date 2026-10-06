@@ -29,6 +29,35 @@ its feature on. See [INTEGRATIONS.md](INTEGRATIONS.md).
 `DATABASE_URL` from Railway's private network needs no SSL. If you ever use the public database URL,
 add `?sslmode=require` to it.
 
+### Use OpenRouter for Cas (optional)
+
+OpenRouter lets Cas run on almost any AI model (Claude, GPT, Gemini, Llama…) with one key and one bill.
+Claude direct (`ANTHROPIC_API_KEY`) stays the default; nothing changes unless you switch.
+
+1. Make an account at [openrouter.ai](https://openrouter.ai), add some credit, then **Keys → Create key**.
+2. In Railway → Castvoo service → **Variables**, add:
+   ```
+   AI_PROVIDER=openrouter
+   OPENROUTER_API_KEY=sk-or-...
+   OPENROUTER_MODEL=anthropic/claude-sonnet-4.5
+   # optional, tried in order when the main model is down or busy:
+   OPENROUTER_FALLBACK_MODELS=openai/gpt-4o-mini
+   ```
+   Or skip the variables and do it in **Admin → Cas AI → Who answers for Cas** (Owner or Admin). The key is stored
+   encrypted, only its last 4 characters are ever shown, every change is in the audit log (without the key), and
+   switching provider means pasting the key again.
+3. **Pick a model**: copy its id from [openrouter.ai/models](https://openrouter.ai/models), e.g.
+   `anthropic/claude-sonnet-4.5` (the default) or `openai/gpt-4o-mini` (much cheaper).
+4. Press **Test** next to Cas AI in **Settings & connections**, or ask Cas something in Admin → Cas AI.
+
+**Costs.** You pay per token at the price on each model's page, from prepaid OpenRouter credit.
+`anthropic/claude-sonnet-4.5` is $3 per million input tokens and $15 per million output, about 3 times Claude Haiku
+direct, so roughly 1–2 cents per AI write. Customers' AI write allowances work the same on every provider, and
+Admin → Cas AI shows the last 24 hours of tokens and cost.
+
+**Privacy.** The privacy page (`server/legal/privacy.html`) and `docs/PRODUCT-FACTS.md` name Anthropic as the AI
+sub-processor. Before you switch Cas to OpenRouter, add OpenRouter (and the model's maker) there.
+
 ## 3. Domain
 Service → **Settings → Networking → Custom Domain** → `castvoo.com` (and `www.castvoo.com` if you like).
 Add the CNAME record Railway shows at your DNS provider. HTTPS is automatic.

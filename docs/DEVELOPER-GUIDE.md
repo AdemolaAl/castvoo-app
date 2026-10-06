@@ -70,6 +70,22 @@ same process, in loops that never overlap.
 - `t.me/<bot>?start=<tag>` passes `<tag>` to `/start`. `?startchannel&admin=...` / `?startgroup&admin=...`
   open Telegram's "add as admin" screen.
 
+## Cas and the AI providers
+`server/services/llm.js` has one `complete({ system, messages, maxTokens, temperature, json })`; `services/ai.js`
+calls it. It sends to the provider in Admin → Cas AI (`ai_provider` setting) or `AI_PROVIDER`:
+- `anthropic` (default): the original request to `ANTHROPIC_API_BASE/v1/messages`, one try, system as cached blocks.
+- `openrouter`: `POST https://openrouter.ai/api/v1/chat/completions` with `Authorization: Bearer`,
+  `HTTP-Referer` (APP_URL) and `X-Title: Castvoo`. The system prompt becomes a `system` message (its
+  `cache_control` marks are kept, so prompt caching still works), fallbacks go in `models`, `json: true` adds
+  `response_format: { type: "json_object" }` (the sequence writer asks for a JSON array, so it does not use it).
+- `openai`: the same format to `https://api.openai.com/v1`.
+OpenRouter/OpenAI calls retry 408/429/5xx twice with backoff (honouring `Retry-After`), time out after 60 s
+(`AI_TIMEOUT_MS`, `AI_RETRIES`, `AI_RETRY_BASE_MS`) and treat an `{ error }` inside a 200 as a failure.
+`OPENROUTER_BASE_URL` / `OPENAI_BASE_URL` are for tests only: ignored in production, where keys only go to
+`openrouter.ai` / `api.openai.com`. A key saved in the admin is bound to its provider and address and is never sent
+anywhere else. `ai_usage` records provider, model, tokens and (OpenRouter) `cost_usd`. Tests:
+`test/e2e/openrouter.test.js` with the mock in `test/helpers/mock-openrouter.js` (ports 4971–4979).
+
 ## Tests
 - `test/e2e/*.test.js` run the real server against a real throwaway PostgreSQL, with fake Telegram,
   Resend, Anthropic, Paystack, Flutterwave, Gatevoo, Google and VooSquare (`test/helpers/fakes.js`).

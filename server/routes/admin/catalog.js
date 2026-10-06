@@ -194,7 +194,8 @@ module.exports = (r) => {
 
   /* ---------- Settings ---------- */
   r.get('/api/admin/settings', async () => {
-    const s = (await settings.load()).settings;
+    // ai_provider holds the encrypted AI key: it has its own endpoint (GET /api/admin/ai/provider) that never returns it.
+    const { ai_provider: _secret, ...s } = (await settings.load()).settings;
     return { settings: s, integrations: config.integrations(), problems: config.problems(), gatevoo: { configured: config.integrations().gatevoo, url: config.gatevoo.url || null, on: await settings.gatevooOn() } };
   }, { staff: 'overview.view' });
 

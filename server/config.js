@@ -47,9 +47,27 @@ const config = {
     replyTo: env.EMAIL_REPLY_TO || 'support@castvoo.com',
   },
 
+  // Cas AI. AI_PROVIDER picks who answers: anthropic (default, Claude direct), openrouter (one key, many models) or
+  // openai. Admin → Cas AI can override the provider, the OpenRouter model and the key. OPENROUTER_BASE_URL and
+  // OPENAI_BASE_URL are for tests/mocks only and are ignored in production.
   ai: {
+    provider: String(env.AI_PROVIDER || 'anthropic').trim().toLowerCase(),
     apiKey: env.ANTHROPIC_API_KEY || '',
     apiBase: trimSlash(env.ANTHROPIC_API_BASE || 'https://api.anthropic.com'),
+    openrouter: {
+      apiKey: env.OPENROUTER_API_KEY || '',
+      model: env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4.5',
+      fallbacks: env.OPENROUTER_FALLBACK_MODELS || '',
+      apiBase: trimSlash(((env.NODE_ENV || '') !== 'production' && env.OPENROUTER_BASE_URL) || 'https://openrouter.ai/api/v1'),
+    },
+    openai: {
+      apiKey: env.OPENAI_API_KEY || '',
+      model: env.OPENAI_MODEL || 'gpt-4o-mini',
+      apiBase: trimSlash(((env.NODE_ENV || '') !== 'production' && env.OPENAI_BASE_URL) || 'https://api.openai.com/v1'),
+    },
+    timeoutMs: num(env.AI_TIMEOUT_MS, 60000),
+    retries: Math.max(0, Math.min(5, Math.floor(num(env.AI_RETRIES, 2)))),
+    retryBaseMs: num(env.AI_RETRY_BASE_MS, 800),
   },
 
   google: {
@@ -97,10 +115,13 @@ config.vooConnectOn = () => !!(config.voosquare.connect && config.voosquare.base
 /** Money and activity events to VooSquare: VOO_CONNECT on, plus the address and the API key. */
 config.vooEventsOn = () => !!(config.voosquare.connect && config.voosquare.base && config.voosquare.apiKey);
 
+/** Cas has a key for the provider in use. services/llm.js replaces this with one that also sees Admin → Cas AI. */
+config.aiReady = () => !!({ openrouter: config.ai.openrouter.apiKey, openai: config.ai.openai.apiKey }[config.ai.provider] ?? config.ai.apiKey);
+
 config.integrations = () => ({
   telegram: !!config.telegram.botToken,
   email: config.email.provider === 'resend' && !!config.email.resendKey,
-  ai: !!config.ai.apiKey,
+  ai: config.aiReady(),
   google: !!(config.google.clientId && config.google.clientSecret),
   voosquare_login: config.vooConnectOn(),
   voosquare_api: !!(config.voosquare.apiKey || config.voosquare.serviceKey),

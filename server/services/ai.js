@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Cas, the AI helper (Anthropic Claude API).
+ * Cas, the AI helper (Claude direct by default; OpenRouter or OpenAI when chosen: see services/llm.js).
  * What Cas knows, in order:
  *   1. House rules           Admin → Cas AI (the team's own instructions)
  *   2. Castvoo knowledge     Admin → Cas knowledge (help articles)
@@ -11,10 +11,8 @@
  */
 
 const db = require('../db');
-const config = require('../config');
 const settings = require('./settings');
-const log = require('../lib/log');
-const { httpError } = require('../lib/util');
+const llm = require('./llm');
 
 const PERSONA = `You are Cas, the friendly AI helper inside Castvoo, a tool for sending Telegram broadcasts and automatic follow-up messages.
 Your voice: warm, clear, confident, never pushy. Short sentences. Plain words a 12-year-old understands.
@@ -84,26 +82,11 @@ async function systemPrompt({ profile, extra = '' }) {
   return blocks;
 }
 
-/** One call to the Claude API. Returns { text, usage }. */
-async function complete({ system, messages, maxTokens, temperature }) {
-  if (!config.ai.apiKey) throw httpError(503, 'Cas is not switched on yet on this server (ANTHROPIC_API_KEY is missing).', 'ai_not_configured');
-  const ai = await settings.get('ai');
-  const r = await fetch(config.ai.apiBase + '/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': config.ai.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: ai.model, max_tokens: maxTokens || ai.max_output_tokens || 900, temperature: temperature ?? ai.temperature ?? 0.7, system, messages }),
-    signal: AbortSignal.timeout(60000),
-  }).catch((e) => { log.warn('AI request failed', { err: e.message }); throw httpError(502, 'Cas could not be reached. Please try again.', 'ai_down'); });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    if (r.status === 429 || r.status === 529) throw httpError(503, 'Cas is very busy right now. Please try again in a minute.', 'ai_busy');
-    // The provider's own error text stays in our logs; customers get a plain message.
-    log.warn('AI provider error', { status: r.status, err: (j.error && j.error.message) || '' });
-    throw httpError(502, 'Cas had a problem answering. Please try again.', 'ai_error');
-  }
-  const text = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
-  return { text, usage: j.usage || {} };
-}
+/**
+ * One call to the AI provider in use (Claude direct by default, or OpenRouter / OpenAI: see services/llm.js).
+ * Returns { text, usage } with usage.input_tokens / output_tokens (plus provider, model and, on OpenRouter, cost_usd).
+ */
+async function complete(opts) { return llm.complete(opts); }
 
 const clean = (t) => String(t || '').replace(/\*\*(.+?)\*\*/g, '*$1*').replace(/^#+\s*/gm, '').replace(/^["“]|["”]$/g, '').trim();
 

@@ -40,6 +40,8 @@ async function load() {
   return cache;
 }
 function bust() { cache = null; }
+/** The last loaded settings without waiting (null when nothing is loaded yet). For sync callers only. */
+const peek = () => (cache ? cache.settings : null);
 
 const get = async (key) => (await load()).settings[key];
 const features = async () => (await load()).features;
@@ -124,4 +126,4 @@ async function publicVars() {
   };
 }
 
-module.exports = { load, bust, get, features, feature, requireFeature, plans, plan, methodsFor, activeOffers, topupBonus, publicVars, gatevooOn };
+module.exports = { load, bust, peek, get, features, feature, requireFeature, plans, plan, methodsFor, activeOffers, topupBonus, publicVars, gatevooOn };

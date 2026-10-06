@@ -123,7 +123,7 @@
 
   /** Friendly names for integrations. */
   const INTEG = {
-    telegram: 'Telegram bot', email: 'Email (Resend)', ai: 'Cas AI (Anthropic)', paystack: 'Paystack', flutterwave: 'Flutterwave',
+    telegram: 'Telegram bot', email: 'Email (Resend)', ai: 'Cas AI', paystack: 'Paystack', flutterwave: 'Flutterwave',
     gatevoo: 'Gatevoo', google: 'Google login', voosquare_login: 'VooSquare login', voosquare_api: 'VooSquare API',
   };
 

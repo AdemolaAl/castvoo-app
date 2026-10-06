@@ -232,30 +232,48 @@
   CV.page('ai', {
     intro: 'How Cas writes for customers. Changes apply to the next answer Cas gives.',
     async render() {
-      const [s, ov0] = await Promise.all([get('/api/admin/settings'), get('/api/admin/overview').catch(() => null)]);
-      const ov = ov0 || { ai: { writes_24h: null, input_24h: null, output_24h: null } };
+      const [s, ov0, pv] = await Promise.all([get('/api/admin/settings'), get('/api/admin/overview').catch(() => null), get('/api/admin/ai/provider')]);
+      const ov = ov0 || { ai: { writes_24h: null, input_24h: null, output_24h: null, cost_24h: null } };
+      const P = pv.ai;
       const n = (v) => (v == null ? '—' : num(v));
       const ai = s.settings.ai;
       const ed = can('ai.edit') && can('settings.edit');
       const dis = ed ? '' : raw(' disabled');
       const known = MODELS.some(([k]) => k === ai.model);
       const page = html`
-        ${s.integrations.ai ? '' : html`<div class="note warn">${icon('warn')}<span>Cas is not connected yet: add ANTHROPIC_API_KEY in Railway. <a href="#settings">See how</a></span></div>`}
+        ${P.has_key ? '' : html`<div class="note warn">${icon('warn')}<span>Cas is not connected yet: ${P.label} is selected but has no key. Paste it below or add ${P.key_env} in Railway. <a href="#settings">See how</a></span></div>`}
         <div class="kpis">
           <div class="kpi"><div class="kh"><small>AI writes, last 24h</small><span class="ki" style="--c:#A855F7">${icon('spark')}</span></div><b>${n(ov.ai.writes_24h)}</b><span class="sub">${ov0 ? 'Customer writes, rewrites and answers' : 'Usage could not load right now'}</span></div>
           <div class="kpi"><div class="kh"><small>Tokens read, 24h</small><span class="ki" style="--c:#6366F1">${icon('book')}</span></div><b>${n(ov.ai.input_24h)}</b></div>
           <div class="kpi"><div class="kh"><small>Tokens written, 24h</small><span class="ki" style="--c:#2F6BFF">${icon('edit')}</span></div><b>${n(ov.ai.output_24h)}</b></div>
-          <div class="kpi"><div class="kh"><small>Connection</small><span class="ki" style="--c:${s.integrations.ai ? '#0E9F6E' : '#E5484D'}">${icon('plug')}</span></div><b style="font-size:18px">${s.integrations.ai ? 'Connected' : 'Not connected'}</b></div>
+          <div class="kpi"><div class="kh"><small>Connection</small><span class="ki" style="--c:${P.has_key ? '#0E9F6E' : '#E5484D'}">${icon('plug')}</span></div><b style="font-size:18px">${P.has_key ? 'Connected' : 'Not connected'}</b><span class="sub">${P.label}${ov.ai.cost_24h ? ' · $' + Number(ov.ai.cost_24h).toFixed(2) + ' in 24h' : ''}</span></div>
         </div>
         <form class="card" id="aif"><div class="ch"><h3>${icon('sliders')} How Cas writes</h3>${ed ? '' : html`<span class="bd">${icon('lock')} Only Owner and Admin can change this</span>`}</div>
           <div class="fr two">
             <div class="f"><label>AI model</label><select name="model_pick"${dis}>${MODELS.map(([k, l]) => html`<option value="${k}" ${ai.model === k ? raw('selected') : ''}>${l}</option>`)}<option value="other" ${known ? '' : raw('selected')}>Another model (type the name)</option></select>
-              <input name="model" value="${ai.model}" placeholder="Model name" ${known ? raw('hidden') : ''}${dis}><span class="hint">Faster models answer quicker and cost less.</span></div>
+              <input name="model" value="${ai.model}" placeholder="Model name" ${known ? raw('hidden') : ''}${dis}><span class="hint">${P.provider === 'anthropic' ? 'Faster models answer quicker and cost less.' : raw('Used with Claude direct. Cas is on <b>' + CV.esc(P.label) + '</b> now, which uses <span class="mono">' + CV.esc(P.model) + '</span> (set below).')}</span></div>
             <div class="f"><label>Max answer length</label><input name="max_output_tokens" type="number" min="200" max="4000" step="50" value="${ai.max_output_tokens}"${dis}><span class="hint">In tokens (about ¾ of a word each). 900 ≈ a long message. Between 200 and 4,000.</span></div>
           </div>
           <div class="f"><label>Creativity: <b id="temp-v">${ai.temperature}</b></label><input name="temperature" type="range" min="0" max="1" step="0.05" value="${ai.temperature}"${dis}><div class="row between hint"><span>0 = careful, same answer every time</span><span>1 = playful, more variety</span></div></div>
           <div class="f"><label>House rules</label><textarea name="house_rules" rows="7" placeholder="e.g. Never promise profits. Always answer in the customer's language. Keep it under 120 words."${dis}>${ai.house_rules}</textarea><span class="hint">Cas follows these in every answer, on top of the knowledge articles.</span></div>
           ${ed ? html`<div class="row end"><button class="btn" type="submit">${icon('check')} Save AI settings</button></div>` : ''}
+        </form>
+        <form class="card" id="aipf"><div class="ch"><h3>${icon('plug')} Who answers for Cas</h3>${ed ? '' : html`<span class="bd">${icon('lock')} Only Owner and Admin can change this</span>`}
+            <p>Claude direct, or OpenRouter: one key for hundreds of models (Claude, GPT, Gemini, Llama…) with automatic fallbacks.</p></div>
+          ${P.test_endpoint ? html`<div class="note warn">${icon('warn')}<span>Test address in use: ${P.endpoint}. Production always uses the real API.</span></div>` : ''}
+          ${P.saved_key_other_endpoint ? html`<div class="note warn">${icon('warn')}<span>The saved key belongs to another provider and is not used. Paste the key for ${P.label}.</span></div>` : ''}
+          <div class="fr two">
+            <div class="f"><label>Provider</label><select name="provider"${dis}>
+              <option value="" ${P.provider_from === 'env' ? raw('selected') : ''}>Default from AI_PROVIDER (${(P.providers.find((x) => x.id === P.env_provider) || { label: P.env_provider }).label})</option>
+              ${P.providers.map((x) => html`<option value="${x.id}" ${P.provider_from === 'admin' && P.provider === x.id ? raw('selected') : ''}>${x.label}</option>`)}
+            </select><span class="hint">Changes apply to the next answer Cas gives.</span></div>
+            <div class="f"><label>API key ${P.has_key ? html`<span class="bd">${P.key_source === 'admin' ? 'saved ' + P.key_hint : 'from ' + P.key_env + ' ' + P.key_hint}</span>` : ''}</label><input name="key" type="password" autocomplete="new-password" placeholder="${P.key_source === 'admin' ? '•••••••• ' + P.key_hint + ' saved. Paste to replace.' : 'sk-or-…'}"${dis}><span class="hint">For the provider on the left. Stored encrypted and never shown again. Switching provider means pasting its key again.${P.key_source === 'env' ? ' A key in ' + P.key_env + ' also works; the one saved here wins.' : ''}</span></div>
+          </div>
+          <div class="fr two" data-or>
+            <div class="f"><label>OpenRouter model</label><input name="openrouter_model" list="or-models" value="${P.openrouter_model}" placeholder="${P.default_openrouter_model}"${dis}><datalist id="or-models"><option value="anthropic/claude-sonnet-4.5"></option><option value="openai/gpt-4o-mini"></option></datalist><span class="hint">Leave empty for ${P.default_openrouter_model}. Copy any id from openrouter.ai/models.</span></div>
+            <div class="f"><label>Fallback models (optional)</label><input name="fallback_models" value="${P.fallback_models}" placeholder="${P.default_fallbacks || 'openai/gpt-4o-mini'}"${dis}><span class="hint">Comma list. Tried in order if the main model is down or busy.</span></div>
+          </div>
+          ${ed ? html`<div class="row end"><button class="btn" type="submit">${icon('check')} Save provider</button></div>` : ''}
         </form>
         ${can('knowledge.edit') ? tryCas() : ''}`;
       return {
@@ -268,6 +286,16 @@
             e.preventDefault();
             const value = { model: f.model_pick.value === 'other' ? f.model.value.trim() : f.model_pick.value, max_output_tokens: Number(f.max_output_tokens.value), temperature: Number(f.temperature.value), house_rules: f.house_rules.value };
             await act($('button[type=submit]', f), () => putj('/api/admin/settings/ai', { value }), 'AI settings saved.');
+          });
+          const pf = $('#aipf', el);
+          const sync = () => { const p = pf.provider.value || P.env_provider; $$('[data-or]', pf).forEach((x) => { x.hidden = p !== 'openrouter'; }); };
+          pf.provider.addEventListener('change', sync); sync();
+          pf.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = { provider: pf.provider.value, openrouter_model: pf.openrouter_model.value.trim(), fallback_models: pf.fallback_models.value.trim() };
+            if (pf.key.value.trim()) body.key = pf.key.value.trim();
+            const r = await act($('button[type=submit]', pf), () => putj('/api/admin/ai/provider', body));
+            if (r) { toast(r.key_cleared ? 'Saved. The provider changed, so paste its API key again.' : 'Provider saved.'); CV.reload(); }
           });
           mountTryCas(el);
         },

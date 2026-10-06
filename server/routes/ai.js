@@ -12,8 +12,8 @@ async function run(ctx, kind, writes, fn) {
   await billing.useAi(ctx.workspace, writes);
   try {
     const out = await fn();
-    await db.query('insert into ai_usage(workspace_id, user_id, kind, writes, input_tokens, output_tokens) values ($1,$2,$3,$4,$5,$6)',
-      [ctx.workspace.id, ctx.user.id, kind, writes, out.usage.input_tokens || 0, out.usage.output_tokens || 0]);
+    await db.query('insert into ai_usage(workspace_id, user_id, kind, writes, input_tokens, output_tokens, provider, model, cost_usd) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [ctx.workspace.id, ctx.user.id, kind, writes, out.usage.input_tokens || 0, out.usage.output_tokens || 0, out.usage.provider || 'anthropic', out.usage.model || null, out.usage.cost_usd || 0]);
     const left = await billing.limits(ctx.workspace);
     const used = (await db.one('select ai_used from workspaces where id = $1', [ctx.workspace.id])).ai_used;
     return { ...out.result, ai_writes_left: Math.max(0, left.ai_writes - used) };

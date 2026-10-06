@@ -58,6 +58,8 @@ const SETTINGS = {
   billing: { refund_days: 14, data_retention_days: 60, min_topup_cents: 1000, max_topup_cents: 500000, renew_reminder_days: 3 },
   referral: { rates: [10, 20, 30], tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw_cents: 30000, cookie_days: 60 },
   ai: { model: 'claude-haiku-4-5-20251001', max_output_tokens: 900, temperature: 0.7, house_rules: '' },
+  // Who answers for Cas. provider '' = AI_PROVIDER env. key_enc is encrypted and only used for the endpoint in key_for.
+  ai_provider: { provider: '', openrouter_model: '', fallback_models: '', key_enc: '', key_for: '' },
   crypto: { use_gatevoo: true, usdt_address: '', btc_address: '' },
   support: { reply_time: 'We usually reply within a few hours, every day from 8am to 10pm West Africa Time.', telegram_username: '' },
   legal_updated: '3 October 2026',

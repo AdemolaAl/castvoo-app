@@ -5,6 +5,7 @@ const db = require('../../db');
 const support = require('../../services/support');
 const email = require('../../services/email');
 const ai = require('../../services/ai');
+const llm = require('../../services/llm');
 const { audit } = require('../../services/audit');
 const { str, int, notFound, badRequest, bool } = require('../../lib/util');
 
@@ -48,7 +49,7 @@ module.exports = (r) => {
     const system = await ai.systemPrompt({ extra: `${facts}\n# Your job now\nYou are drafting a reply for the Castvoo support team to send to a customer. Be kind, specific and short (under 120 words). Answer only from the knowledge above and the account facts. If you are not sure, say what the team will check and by when. Sign off as "${(ctx.user.name || 'The Castvoo team').split(' ')[0]} from Castvoo". Reply with the message only.` });
     const convo = messages.slice(-12).map((m) => `${m.author_type === 'user' ? 'Customer' : 'Castvoo team'}: ${m.body}`).join('\n\n');
     const res = await ai.complete({ system, messages: [{ role: 'user', content: `Customer: ${thread.user_name} (plan ${thread.plan_code || 'none'}, ${thread.plan_status || ''}).\n\nConversation so far:\n${convo}\n\nWrite the next reply.` }], maxTokens: 500, temperature: 0.4 });
-    await db.query("insert into ai_usage(workspace_id, user_id, kind, writes, input_tokens, output_tokens) values (0, $1, 'support_suggest', 0, $2, $3)", [ctx.user.id, res.usage.input_tokens || 0, res.usage.output_tokens || 0]);
+    await db.query("insert into ai_usage(workspace_id, user_id, kind, writes, input_tokens, output_tokens, provider, model, cost_usd) values (0, $1, 'support_suggest', 0, $2, $3, $4, $5, $6)", [ctx.user.id, res.usage.input_tokens || 0, res.usage.output_tokens || 0, res.usage.provider || 'anthropic', res.usage.model || null, res.usage.cost_usd || 0]);
     return { text: res.text };
   }, { staff: 'support.reply', rate: [60, 600] });
 
@@ -138,11 +139,30 @@ module.exports = (r) => {
     return { ok: true };
   }, { staff: 'knowledge.edit' });
 
+  /* ---------- Cas AI provider (Claude direct, OpenRouter or OpenAI) ---------- */
+  /** Which provider and model Cas uses. The key is never returned: only where it comes from and its last 4 characters. */
+  r.get('/api/admin/ai/provider', async () => ({ ai: await llm.publicInfo() }), { staff: 'overview.view' });
+
+  /**
+   * Change the provider, OpenRouter model, fallbacks or key. The key is stored encrypted and only used for the
+   * endpoint it was saved for; switching provider clears it, so it has to be pasted again. Owner and Admin only.
+   */
+  r.put('/api/admin/ai/provider', async (ctx) => {
+    const v = await llm.validate(ctx.body || {});
+    if (v.changed.length || v.key) {
+      await db.query('insert into settings(key, value, updated_at) values ($1,$2, now()) on conflict (key) do update set value = excluded.value, updated_at = now()', ['ai_provider', JSON.stringify(v.value)]);
+      require('../../services/settings').bust();
+      // Field names and what happened to the key; never the key or its ciphertext.
+      await audit(ctx, 'settings.ai_provider', 'settings:ai_provider', { changed: v.changed, key: v.key || 'unchanged', provider: v.value.provider || 'env default' });
+    }
+    return { ok: true, key_cleared: /cleared/.test(v.key), ai: await llm.publicInfo() };
+  }, { staff: 'ai.edit', rate: [30, 600] });
+
   /** Try Cas with the current knowledge and house rules (no customer data). */
   r.post('/api/admin/ai/test', async (ctx) => {
     const q = str(ctx.body.question, 'Question', { min: 2, max: 1500 });
     const res = await ai.complete({ system: await ai.systemPrompt({ profile: ctx.body.profile || undefined, extra: 'Answer as Cas would answer a Castvoo customer. Under 150 words.' }), messages: [{ role: 'user', content: q }], maxTokens: 600 });
-    await db.query("insert into ai_usage(workspace_id, user_id, kind, writes, input_tokens, output_tokens) values (0, $1, 'admin_test', 0, $2, $3)", [ctx.user.id, res.usage.input_tokens || 0, res.usage.output_tokens || 0]);
+    await db.query("insert into ai_usage(workspace_id, user_id, kind, writes, input_tokens, output_tokens, provider, model, cost_usd) values (0, $1, 'admin_test', 0, $2, $3, $4, $5, $6)", [ctx.user.id, res.usage.input_tokens || 0, res.usage.output_tokens || 0, res.usage.provider || 'anthropic', res.usage.model || null, res.usage.cost_usd || 0]);
     return { answer: res.text, usage: res.usage };
   }, { staff: 'knowledge.edit', rate: [60, 600] });
 };
