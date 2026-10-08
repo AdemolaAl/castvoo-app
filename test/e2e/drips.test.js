@@ -213,11 +213,11 @@ describe('join-request welcome', () => {
     assert.equal(s.status, 'joinreq');
     assert.ok(await app.db.one("select 1 from deliveries where subscriber_id = $1 and status = 'sent'", [s.id]), 'welcome recorded');
 
-    // Step 2 is due, but they have not pressed Start: it waits.
+    // Step 2 is due, but they have not pressed Start: it waits (Telegram: bots can't message people who never pressed Start).
     await dueNow(seqId);
     await tickAndSend();
     assert.equal(textsTo(bot.token, 61001).length, 1);
-    assert.ok(new Date((await runOf(seqId, s.id)).due_at) > new Date());
+    assert.equal((await runOf(seqId, s.id)).status, 'waiting');
     // A broadcast does not reach join-request people either.
     const b = await c.post('/api/broadcasts', { connection_id: bot.connId, body: 'Broadcast' });
     assert.equal(b.body.queued, 0);
@@ -239,7 +239,7 @@ describe('join-request welcome', () => {
     assert.equal(textsTo(bot.token, 61003).length, 0);
   });
 
-  it('join welcome switched off, or a paused plan: no welcome', async () => {
+  it('join welcome switched off, or a paused plan: no welcome; an ended trial welcomes as the Free plan', async () => {
     await app.setFeature('join_welcome', false);
     try {
       await app.telegramUpdate(bot.connId, { chat_join_request: { chat: { id: CHAT, type: 'channel' }, from: { id: 61004, first_name: 'J4' }, user_chat_id: 61004, date: 1 } });
@@ -254,7 +254,7 @@ describe('join-request welcome', () => {
     await app.db.query("update workspaces set trial_ends_at = now() - interval '1 hour' where id = $1", [ws.id]);
     try {
       await app.telegramUpdate(bot.connId, { chat_join_request: { chat: { id: CHAT, type: 'channel' }, from: { id: 61006, first_name: 'J6' }, user_chat_id: 61006, date: 1 } });
-      assert.equal(textsTo(bot.token, 61006).length, 0, 'trial over');
+      assert.match(textsTo(bot.token, 61006)[0], /Free welcome bot by Castvoo\.com/, 'trial over: the Free welcome, with the Castvoo line');
     } finally { await app.db.query("update workspaces set trial_ends_at = now() + interval '5 days' where id = $1", [ws.id]); }
   });
 });

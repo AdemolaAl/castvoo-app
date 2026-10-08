@@ -119,8 +119,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const addDays = (d, n) => new Date(new Date(d).getTime() + n * 86400000);
 const fmtDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
+/**
+ * A person's display name, safe to show anywhere and to put in an AI prompt (SEC-4): control and format characters
+ * (newlines, tabs, zero-width and bidi marks) are removed, every kind of space (NBSP, line/paragraph separators...)
+ * becomes one plain space, and the result is trimmed and capped. Letters in any language are kept.
+ */
+function cleanName(v, max = 80) {
+  return String(v ?? '').normalize('NFC').replace(/[\p{Cc}\p{Cf}\p{Co}\p{Cs}]+/gu, ' ').replace(/[\p{Z}\s]+/gu, ' ').trim().slice(0, max).trim();
+}
+/** Text that reads like a web address or domain ("pay-castvoo.com", "https://x", "www.y"): refused in names shown in emails (SEC-12). */
+const LOOKS_LIKE_URL = /(https?:\/\/|www\.|\b[a-z0-9-]{2,}\.(com|net|org|io|co|app|xyz|link|me|ng|ke|za|gh|info|biz|online|site|top|shop|pay|support)\b|@[a-z0-9-]+\.[a-z]{2,})/i;
+
 module.exports = {
   HttpError, httpError, badRequest, notFound, forbidden,
   randomToken, randomCode, randomDigits, sha256, hmac, safeEqual, encrypt, decrypt, sign, checkSig,
-  cents, dollars, fmtUSD, str, int, oneOf, email, url, bool, fill, escHtml, sleep, addDays, fmtDate,
+  cents, dollars, fmtUSD, str, int, oneOf, email, url, bool, fill, escHtml, sleep, addDays, fmtDate, cleanName, LOOKS_LIKE_URL,
 };

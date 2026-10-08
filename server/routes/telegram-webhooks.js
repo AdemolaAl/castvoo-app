@@ -23,7 +23,8 @@ module.exports = (r) => {
     const conn = Number.isInteger(id) ? await db.one("select * from connections where id = $1 and kind = 'bot' and status <> 'removed'", [id]) : null;
     if (!conn || !safeEqual(ctx.req.headers['x-telegram-bot-api-secret-token'] || '', conn.webhook_secret || '')) return ctx.send(401, 'no');
     const u = parse(ctx);
-    if (u) await botUpdates.handleUpdate(conn, u);
+    // Join requests are answered at once and handled right after (ENG-10); other updates are quick.
+    if (u) await botUpdates.handleSoon(conn, u);
     ctx.send(200, 'ok');
   }, { raw: true, limit: 512 * 1024 });
 };

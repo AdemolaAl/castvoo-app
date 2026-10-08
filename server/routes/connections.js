@@ -5,6 +5,7 @@ const db = require('../db');
 const config = require('../config');
 const connections = require('../services/connections');
 const settings = require('../services/settings');
+const billing = require('../services/billing');
 const { ownerOnly } = require('./workspace');
 const { str, int, oneOf, randomToken, badRequest, httpError, notFound } = require('../lib/util');
 
@@ -64,6 +65,7 @@ module.exports = (r) => {
 
   r.post('/api/connections/:id/start-links', async (ctx) => {
     await settings.requireFeature('start_links');
+    await billing.requirePlanFeature(ctx.workspace, 'start_links');
     const conn = await db.one("select * from connections where id = $1 and workspace_id = $2 and kind = 'bot' and status <> 'removed'", [int(ctx.params.id, 'Connection'), ctx.workspace.id]);
     if (!conn) throw notFound('That bot');
     const tag = str(ctx.body.tag, 'Name', { min: 1, max: 64 }).replace(/\s+/g, '_');

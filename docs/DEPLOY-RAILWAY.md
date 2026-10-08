@@ -23,7 +23,7 @@ EMAIL_FROM=Castvoo <hello@castvoo.com>
 CASTVOO_BOT_TOKEN=123456:AA...
 CASTVOO_BOT_USERNAME=CastvooBot
 ```
-Add the others (AI, payments, Google, Gatevoo, VooSquare) when you have the keys; each one switches
+Add the others (AI, payments, Gatevoo, VooSquare) when you have the keys; each one switches
 its feature on. See [INTEGRATIONS.md](INTEGRATIONS.md).
 
 `DATABASE_URL` from Railway's private network needs no SSL. If you ever use the public database URL,
@@ -79,7 +79,23 @@ Run `npm run check` and `npm test` before pushing.
 
 ## 6. Backups
 Railway PostgreSQL → **Backups** → turn on daily backups. Also download a manual backup before big changes.
-The `/data` volume holds only uploaded media (Telegram keeps its own copy after the first send).
+The `/data` volume must be backed up too (Railway → the volume → **Backups**). It holds:
+- **payment proofs** (screenshots customers send for manual top-ups): financial evidence, keep them,
+- support chat images (customers' and staff screenshots) and the support agents' photos,
+- uploaded photos and videos for messages (Telegram keeps its own copy after the first send).
+
+Castvoo checks the volume when it starts, **before** it runs the database migrations (so a refused start never
+leaves a half-upgraded database):
+- On Railway in production it refuses to start if `UPLOAD_DIR` is not inside `RAILWAY_VOLUME_MOUNT_PATH` (no volume attached).
+- It keeps a marker file, `UPLOAD_DIR/.castvoo-volume`. If the marker is missing:
+  - and the uploads folder already holds files (photos, payment proofs, support images): this is an existing volume
+    from a version that did not write the marker yet. Castvoo writes the marker, logs a warning
+    (`uploads volume marker was missing; existing files found`) and starts. **Upgrades need no manual step.**
+  - and the folder is empty and the database lists no saved files: a fresh volume. The marker is written; it starts.
+  - and the folder is empty but the database lists saved files: the volume was replaced or is not attached. In
+    production Castvoo refuses to start with `setup problem: The uploads folder (...) is empty but the database lists N
+    saved files`. Re-attach the right volume at `/data`. Set `ALLOW_NO_VOLUME=true` only if you accept the missing files
+    (it then starts, writes the marker, and you remove the variable again).
 
 ## 7. How much it can handle, and how to grow
 One Railway service (1–2 vCPU, 1–2 GB RAM) with the web server and workers together comfortably handles
@@ -98,10 +114,13 @@ When you outgrow one service:
 2. Only then think about more replicas. The sending and job code is ready for it (database leases and row
    locks, so no message is sent twice), **but uploaded photos and videos are saved on the `/data` volume, and a
    Railway volume belongs to one replica.** So stay on one replica (the default in `railway.json`) until uploads
-   move to object storage such as Cloudflare R2 or S3. Uploads are touched in three places:
+   move to object storage such as Cloudflare R2 or S3. Uploads are touched in these places:
    `server/routes/media.js` (save and preview), `server/services/telegram.js` (the first send reads the file;
-   after that Telegram's file_id is reused) and `server/services/media-files.js` (delete), so that change is small.
-   Also note: login and AI rate limits are kept in memory, so with N replicas each limit is N times looser.
+   after that Telegram's file_id is reused), `server/services/media-files.js` (delete),
+   `server/services/payment-proofs.js` (manual top-up proofs), `server/services/support-images.js` (support chat
+   images) and `server/services/support-ai.js` (agent photos).
+   Rate limits that protect money or AI cost (login codes, Cas, the support chat, the website chat, payment rechecks)
+   are counted in PostgreSQL (`rate_buckets`), so they hold across replicas and restarts; other per-route limits are per replica.
 3. Watch Admin → **System**: queue size, oldest waiting message, failures.
 
 ## 8. If something goes wrong

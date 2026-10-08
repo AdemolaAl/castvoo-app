@@ -10,7 +10,10 @@
  *
  * Castvoo's money model and the events it produces (the customer is the workspace owner's Voo ID):
  *   wallet top-up paid            wallet_topup  cv_topup_<payment id>          no commission
- *   plan paid from the wallet     spend         cv_pay_<wallet_tx id>          the CASH part only (bonus credit is not money)
+ *   plan paid from the wallet     spend         cv_pay_<wallet_tx id>          the CASH part only (bonus credit is not money), minus
+ *                                                                              the processor fee when known. NOT sent when the
+ *                                                                              Castvoo referral got this payment's commission (AUD-1:
+ *                                                                              one commission per payment, first attribution wins)
  *                                 plan_started  cv_plan_<wallet_tx id>         first paid plan (price in value_usd)
  *                                 plan_renewed  cv_renew_<wallet_tx id>        every later plan payment
  *   upgrade paid from the wallet  spend         cv_pay_<wallet_tx id>
@@ -112,6 +115,8 @@ async function spendsUsingTopup(c, wsId, reference) {
   const used = [];
   for (const t of txs) {
     const cash = Number(t.cash_cents);
+    // A chargeback takes the disputed top-up's money out of the wallet: that lot is gone, nothing else is spent.
+    if (t.kind === 'chargeback') { const lot = lots.find((x) => x.ref === t.ref); if (lot) lot.left = Math.max(0, lot.left + cash); continue; }
     if (cash > 0) { lots.push({ ref: t.kind === 'topup' ? t.ref : null, left: cash }); continue; }
     let need = -cash;
     while (need > 0 && lots.length) {
@@ -134,7 +139,13 @@ async function chargedBack(c, { payment, at }) {
   if (!o.voo_id) return [];
   const out = [];
   for (const u of await spendsUsingTopup(c, payment.workspace_id, payment.reference)) {
-    const ev = await queue('chargeback', { eventId: voo.eventId('cb', payment.id, u.txId), vooId: o.voo_id, valueUsd: usd(u.cents), originalEventId: voo.eventId('pay', u.txId),
+    // AUD-1: a plan payment whose commission went to the Castvoo referral sent no spend, so there is nothing to reverse.
+    // The spend was sent net of processor fees: reverse at most that share.
+    const tx = (await c.query('select cash_cents, commission_to, commission_base_cents from wallet_tx where id = $1', [u.txId])).rows[0] || {};
+    if (tx.commission_to === 'castvoo_referral') continue;
+    const cents = tx.commission_base_cents != null && Number(tx.cash_cents) ? Math.round(u.cents * Number(tx.commission_base_cents) / Math.abs(Number(tx.cash_cents))) : u.cents;
+    if (!(cents >= 1)) continue;
+    const ev = await queue('chargeback', { eventId: voo.eventId('cb', payment.id, u.txId), vooId: o.voo_id, valueUsd: usd(cents), originalEventId: voo.eventId('pay', u.txId),
       label: 'Castvoo top-up disputed', occurredAt: at }, c);
     if (ev) out.push(ev);
   }

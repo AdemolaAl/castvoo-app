@@ -28,14 +28,19 @@ const ROUTES = [
   ['POST', '/api/admin/workspaces/999999/plan', 'users.edit', {}],
   ['POST', '/api/admin/workspaces/999999/wallet', 'wallet.adjust', { amount: 1, reason: 'test' }],
   ['GET', '/api/admin/payments', 'payments.view'],
+  ['GET', '/api/admin/payments/nope/screenshot', 'payments.view'],
   ['POST', '/api/admin/payments/nope/approve', 'payments.review', {}],
   ['POST', '/api/admin/payments/nope/reject', 'payments.review', { reason: 'xyz' }],
   ['POST', '/api/admin/payments/nope/recheck', 'payments.review', {}],
   ['POST', '/api/admin/payments/nope/chargeback', 'payments.review', { reason: 'Card dispute' }],
+  ['POST', '/api/admin/payments/nope/dispute-won', 'payments.review', {}],
+  ['GET', '/api/admin/referrals/held', 'payments.view'],
+  ['POST', '/api/admin/referrals/held/999999', 'withdrawals.review', { action: 'release' }],
   ['GET', '/api/admin/withdrawals', 'payments.view'],
   ['POST', '/api/admin/withdrawals/999999/paid', 'withdrawals.review', { txid: 'x'.repeat(20) }],
   ['POST', '/api/admin/withdrawals/999999/reject', 'withdrawals.review', { reason: 'xyz' }],
   ['GET', '/api/admin/plans', 'users.view'],
+  ['GET', '/api/admin/plan-features', 'users.view'],
   ['POST', '/api/admin/plans', 'pricing.edit', {}],
   ['PUT', '/api/admin/plans/nope', 'pricing.edit', {}],
   ['GET', '/api/admin/offers', 'users.view'],
@@ -46,6 +51,8 @@ const ROUTES = [
   ['GET', '/api/admin/countries', 'users.view'],
   ['PUT', '/api/admin/countries/QQ', 'countries.edit', {}],
   ['PUT', '/api/admin/methods/nope', 'countries.edit', {}],
+  ['POST', '/api/admin/methods', 'countries.edit', {}],
+  ['DELETE', '/api/admin/methods/nope', 'countries.edit'],
   ['GET', '/api/admin/features', 'overview.view'],
   ['POST', '/api/admin/features/nope', 'features.edit', {}],
   ['GET', '/api/admin/content', 'overview.view'],
@@ -53,12 +60,26 @@ const ROUTES = [
   ['GET', '/api/admin/settings', 'overview.view'],
   ['PUT', '/api/admin/settings/company', 'settings.edit', {}],
   ['PUT', '/api/admin/settings/crypto', 'MONEY', { value: { usdt_address: 'bad' } }],
+  ['POST', '/api/admin/links/nope/disable', 'users.edit', {}],
   ['GET', '/api/admin/support', 'support.view'],
   ['GET', '/api/admin/support/999999', 'support.view'],
   ['POST', '/api/admin/support/999999/reply', 'support.reply', { body: 'x' }],
   ['POST', '/api/admin/support/999999/status', 'support.reply', { status: 'open' }],
   ['POST', '/api/admin/support/999999/assign', 'support.reply', { user_id: 999999 }],
   ['POST', '/api/admin/support/999999/suggest', 'support.reply', {}],
+  ['POST', '/api/admin/support/999999/ai', 'support.reply', { action: 'takeover' }],
+  ['POST', '/api/admin/support/999999/attachments', 'support.reply', {}],
+  ['GET', '/api/admin/support/attachments/999999', 'support.view'],
+  ['GET', '/api/admin/support-ai', 'support.view'],
+  ['PUT', '/api/admin/support-ai/settings', 'support_ai.edit', {}],
+  ['POST', '/api/admin/support-ai/personas', 'support_ai.edit', {}],
+  ['PUT', '/api/admin/support-ai/personas/999999', 'support_ai.edit', {}],
+  ['DELETE', '/api/admin/support-ai/personas/999999', 'support_ai.edit'],
+  ['POST', '/api/admin/support-ai/personas/999999/photo', 'support_ai.edit', {}],
+  ['DELETE', '/api/admin/support-ai/personas/999999/photo', 'support_ai.edit'],
+  ['PUT', '/api/admin/support-ai/personas/999999/face', 'support_ai.edit', { face: 'mia' }],
+  ['GET', '/api/admin/support-ai/workspaces', 'support_ai.test'],
+  ['POST', '/api/admin/support-ai/sandbox', 'support_ai.test', {}],
   ['GET', '/api/admin/emails', 'overview.view'],
   ['GET', '/api/admin/emails/nope', 'overview.view'],
   ['PUT', '/api/admin/emails/nope', 'emails.edit', {}],
@@ -234,12 +255,12 @@ describe('admin screens', () => {
     assert.equal((await marketing.put('/api/admin/settings/billing', { value: {} })).status, 403);
     const okT = await owner.put('/api/admin/settings/trial', { value: { days: 14, plan: 'scale', ai_writes: 50 } });
     assert.equal(okT.status, 200);
-    assert.deepEqual((await app.client().get('/api/public/config')).body.trial, { days: 14, plan: 'scale', ai_writes: 50 });
+    assert.deepEqual((await app.client().get('/api/public/config')).body.trial, { days: 14, plan: 'scale', ai_writes: 50, join_requests: 3000 });
     const nu = await app.loginByEmail('after-trial-change@example.com');
     const ws = await app.ws(nu);
     assert.equal(ws.plan_code, 'scale');
     assert.ok((new Date(ws.trial_ends_at) - Date.now()) / 86400000 > 13.9);
-    await owner.put('/api/admin/settings/trial', { value: { days: 7, plan: 'growth', ai_writes: 100 } });
+    await owner.put('/api/admin/settings/trial', { value: { days: 7, plan: 'growth', ai_writes: 50 } });
     const legal = await owner.put('/api/admin/settings/legal_updated', { value: '1 November 2026' });
     assert.equal(legal.status, 200);
     assert.match((await app.client().get('/legal/terms')).text, /1 November 2026/);

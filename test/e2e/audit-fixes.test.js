@@ -51,7 +51,8 @@ describe('billing', () => {
     await app.db.query("update workspaces set trial_ends_at = now() - interval '1 minute' where id = $1", [ws.id]);
     await app.jobs.billingTick();
     const after = await app.db.one('select * from workspaces where id = $1', [ws.id]);
-    assert.equal(after.plan_status, 'cancelled');
+    // The trial ends on the Free plan (not paused, not charged).
+    assert.deepEqual([after.plan_code, after.plan_status], ['free', 'active']);
     assert.equal(Number(after.wallet_cents), 10000, 'not charged');
     assert.equal((await app.db.one("select count(*)::int n from wallet_tx where workspace_id = $1 and kind = 'plan'", [ws.id])).n, 0);
     // Picking a plan again later works as usual.

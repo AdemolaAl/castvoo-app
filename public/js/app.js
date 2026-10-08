@@ -32,6 +32,7 @@ function onLoggedOut() {
   ME = { user: null, workspaces: [] };
   APP.booted = false; APP.state = null;
   clearPageTimers();
+  if (typeof closeVideoGuide === 'function') closeVideoGuide(true);
   if (location.hash.startsWith('#app')) store.sset('cv_back', location.hash);
   closeModal();
   toast('Please log in again.', { kind: 'info' });
@@ -75,6 +76,7 @@ async function refreshState() {
 
 async function renderPage(name, q) {
   clearPageTimers();
+  if (typeof closeVideoGuide === 'function') closeVideoGuide(true);
   const g = ++APP.gen;
   if (!PAGES[name]) name = 'overview';
   APP.page = name; APP.q = q || {};
@@ -96,7 +98,15 @@ async function renderPage(name, q) {
     el.innerHTML = errorBox(e, 'pgRetry');
     const r = $('[data-retry="pgRetry"]', el); if (r) r.onclick = () => renderPage(name, q);
   }
-  if (alive()) { paintAll(pg); applyFeatures(pg); }
+  if (alive()) { paintAll(pg); applyFeatures(pg); guideLinksOn(name, el); }
+}
+
+/* "Watch the guide" links at the top of pages that have a video guide (app-guides.js). Not inside the flow builder. */
+function guideLinksOn(name, el) {
+  if (typeof guideLinksFor !== 'function' || name === 'guides' || $('.vgls', el)) return;
+  if (name === 'flows' && (APP.q.id || APP.q.tpl)) return;
+  const html = guideLinksFor(name);
+  if (html) el.insertAdjacentHTML('afterbegin', html);
 }
 
 /* ---------- Shell ---------- */
@@ -116,6 +126,7 @@ function shellUI() {
   $('#navEarn').textContent = ref; $('#navEarn').hidden = !ref;
   appBanners();
   applyFeatures(document);
+  if (typeof vgNavTag === 'function') vgNavTag();
 }
 function roleName(r) { return { owner: 'Owner', sender: 'Can send', drafter: 'Drafts only' }[r] || r || ''; }
 const isOwner = () => APP.state && APP.state.workspace.role === 'owner';
@@ -124,6 +135,7 @@ const canSend = () => APP.state && APP.state.workspace.role !== 'drafter';
 function appBanners() {
   const s = APP.state, b = [];
   if (CFG.features.maintenance) b.push('<div class="abn warn"><span>🔧</span><span>' + esc(CFG.content.maintenance_message || 'Castvoo is getting an upgrade. Sending is paused for a few minutes.') + '</span></div>');
+  if (s && s.plan.join && s.plan.join.paused) b.push('<div class="abn warn"><span>⏸️</span><span><b>Welcomes are paused for this month.</b> People who ask to join are still let in, but they don\'t get your welcome.</span><button type="button" class="btn b-blue xs" data-go="flows">See why</button></div>');
   if (s && s.plan.status === 'paused') b.push('<div class="abn bad"><span>⏸️</span><span><b>Sending is paused.</b> Your wallet did not cover the plan. Top up to restart; nothing was deleted.</span><button type="button" class="btn b-blue xs" data-topup>Top up</button></div>');
   $('#appBanners').innerHTML = b.join('');
 }
@@ -161,9 +173,9 @@ function switchWorkspace() {
 
 /* Create sheet (the big + on phones) */
 function openCreate() {
-  const O = [['go:broadcast', '📨', '#FFF1E6', '#F76707', 'Send a message', 'Write once, send to a channel, group or the people who started your bot.'], ['connect:channel', '📣', '#EAF0FF', '#2F6BFF', 'Add a channel', 'Post to everyone who follows your channel.'], ['connect:group', '👥', '#E2F6EE', '#0E9F6E', 'Add a group', 'Send messages into a group chat.'], ['connect:bot', '🤖', '#F1ECFF', '#7048E8', 'Add a bot', 'Message people one-to-one and run follow-ups.'], ['go:drips', '🔁', '#E6FCF5', '#0CA678', 'New auto follow-up', 'Messages that send themselves after someone joins.']];
+  const O = [['go:flows', '👋', '#EAF0FF', '#2F6BFF', 'New welcome flow', 'Greet and let in everyone who asks to join your channel.'], ['go:broadcast', '📨', '#FFF1E6', '#F76707', 'Send a message', 'Write once, send to a channel, group or the people who started your bot.'], ['connect:channel', '📣', '#EAF0FF', '#2F6BFF', 'Add a channel', 'Post to everyone who follows your channel.'], ['connect:group', '👥', '#E2F6EE', '#0E9F6E', 'Add a group', 'Send messages into a group chat.'], ['connect:bot', '🤖', '#F1ECFF', '#7048E8', 'Add a bot', 'Message people one-to-one and run follow-ups.'], ['go:drips', '🔁', '#E6FCF5', '#0CA678', 'New auto follow-up', 'Messages that send themselves after someone joins.']];
   const h = sheet('What do you want to do?', '<span class="spk">' + icon('plus') + '</span>', '<div class="ckl">' + O.map((o) => '<button type="button" class="ckc" style="--c:' + o[3] + '" data-act="' + o[0] + '"><span class="ci" style="background:' + o[2] + '">' + o[1] + '</span><span class="ct"><b>' + o[4] + '</b><small>' + o[5] + '</small></span><svg class="chv"><use href="#i-chev"/></svg></button>').join('') + '</div>');
-  $('.ckl', h).onclick = (e) => { const b = e.target.closest('[data-act]'); if (!b) return; const [t, v] = b.dataset.act.split(':'); if (t === 'go') { closeModal(); appGo(v, v === 'drips' ? { new: '1' } : null); } else openConnect(v); };
+  $('.ckl', h).onclick = (e) => { const b = e.target.closest('[data-act]'); if (!b) return; const [t, v] = b.dataset.act.split(':'); if (t === 'go') { closeModal(); appGo(v, v === 'drips' || v === 'flows' ? { new: '1' } : null); } else openConnect(v); };
 }
 
 /* ---------- Shared UI pieces ---------- */
@@ -194,6 +206,18 @@ function btnBusy(b, on, text) {
   if (!b) return;
   if (on) { b.dataset.html = b.innerHTML; b.disabled = true; b.innerHTML = '<span class="spin' + (/b-blue|b-ink|b-bad/.test(b.className) ? ' wh' : '') + '"></span>' + esc(text || 'Working…'); }
   else { b.disabled = false; if (b.dataset.html) b.innerHTML = b.dataset.html; }
+}
+/* Run an async job with a loading button and always put the button back afterwards (success or error).
+   Pass the button ELEMENT, never e.currentTarget after an await: the browser sets currentTarget to null once
+   the click handler has returned, so it must be read before the first await. Usage:
+     $('#x').onclick = (e) => busy(e.currentTarget, 'Saving…', async () => { ... });
+   Returns what fn returns. Errors are re-thrown so callers can show them. */
+async function busy(b, text, fn) {
+  if (b && b.disabled && b.dataset.busy) return undefined; // already running: ignore double taps
+  if (b) b.dataset.busy = '1';
+  btnBusy(b, true, text);
+  try { return await fn(); }
+  finally { if (b) { delete b.dataset.busy; btnBusy(b, false); } }
 }
 
 /* 14-day line chart (this period vs previous). Values come from the API. */

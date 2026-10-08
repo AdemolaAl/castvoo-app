@@ -25,7 +25,29 @@ async function main() {
     log.error('setup problem', { problem: `Cannot save files in UPLOAD_DIR (${config.uploadDir}): ${e.code || e.message}. Mount a Railway volume at /data.` });
     process.exit(1);
   }
+  // ENG-23: in production on Railway the uploads must live on a volume (the image's own /data/uploads is wiped by deploys).
+  if (config.isProd && process.env.RAILWAY_ENVIRONMENT && !config.allowNoVolume) {
+    const path = require('node:path');
+    const mount = config.volumeMount ? path.resolve(config.volumeMount) : '';
+    const up = path.resolve(config.uploadDir);
+    if (!mount || !(up === mount || up.startsWith(mount + path.sep))) {
+      log.error('setup problem', { problem: `UPLOAD_DIR (${up}) is not on a Railway volume${mount ? ` (the volume is mounted at ${mount})` : ' (no volume attached)'}. Attach a volume at /data, or set ALLOW_NO_VOLUME=true to accept losing uploads on every deploy.` });
+      process.exit(1);
+    }
+  }
   db.init();
+  // ENG-23 / N-1: check the uploads volume BEFORE the migrations, so a refused start never leaves a migrated database
+  // behind. An existing volume without the marker (older versions never wrote it) is accepted when it holds files.
+  {
+    const v = await require('./lib/volume-check').checkVolume({
+      uploadDir: config.uploadDir, isProd: config.isProd, allowNoVolume: config.allowNoVolume, one: db.one, log,
+    });
+    if (!v.ok) {
+      log.error('setup problem', { problem: v.problem });
+      await db.end().catch(() => {});
+      process.exit(1);
+    }
+  }
   const ran = await db.migrate();
   if (ran.length) log.info('migrations applied', { ran });
   await require('./seed').run();
@@ -43,9 +65,11 @@ async function main() {
     if (stopping) return;
     stopping = true;
     log.info('shutting down', { sig });
+    // ENG-11: arm the safety exit first (Railway kills the process after drainingSeconds: 15), then stop the work.
+    setTimeout(() => process.exit(0), 12000).unref();
     server.close();
-    if (workers) await workers.stop();
-    setTimeout(() => process.exit(0), 8000).unref();
+    if (workers) await Promise.race([workers.stop(), new Promise((r) => setTimeout(r, 8000))]);
+    await require('./services/bot-updates').idle(3000).catch(() => {}); // join requests already acknowledged to Telegram
     await db.end().catch(() => {});
     process.exit(0);
   }

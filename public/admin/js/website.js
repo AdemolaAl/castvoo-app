@@ -27,9 +27,9 @@
         <div class="grid g2">
           ${box('hero', 'home', 'Top of the home page', 'The first thing visitors read.', html`
             <div class="hero-pv" id="hero-pv"><h2>${heroHtml(c.hero_title)}</h2><p>${c.hero_subtitle}</p><span class="fake">${c.hero_cta}</span></div>
-            ${inp('hero_title', 'Big title', html`Put stars around words to make them <span class="gtext" style="font-weight:800">blue</span>: <span class="mono">Turn your Telegram into a *sales machine.*</span>`)}
+            ${inp('hero_title', 'Big title', html`Put stars around words to make them <span class="gtext" style="font-weight:800">blue</span>: <span class="mono">Welcome. Broadcast. Follow up. *All on autopilot.*</span>`)}
             ${inp('hero_subtitle', 'Text under the title', '', { area: true })}
-            ${inp('hero_cta', 'Button text', 'Keep it short, like “Start free · 7 days on us”.')}`)}
+            ${inp('hero_cta', 'Button text', 'Keep it short, like “Start my 7-day free trial”.')}`)}
           ${box('ann', 'bell', 'Announcement bar', 'A thin strip across the very top of the website.', html`
             <div class="ann-pv" id="ann-pv"></div>
             <label class="check"><input type="checkbox" name="announcement_on" ${c.announcement_on === '1' ? raw('checked') : ''}${dis}> Show the announcement bar</label>

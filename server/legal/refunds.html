@@ -23,15 +23,15 @@
 </ul>
 
 <h2>2. Free trial</h2>
-<p><strong>The trial costs nothing.</strong> Your {{trial_days}}-day free trial does not need a card, and we do not charge you for it. When it ends, the plan you have chosen is paid from your wallet. If your wallet is short, sending pauses until you top up. Nothing is charged and nothing is owed.</p>
+<p><strong>The trial costs nothing.</strong> Your {{trial_days}}-day free trial does not need a card, and we do not charge you for it. When it ends, the plan you have chosen is paid from your wallet. If you have not chosen a plan, or your wallet is short, your workspace moves to the Free plan. Nothing is charged and nothing is owed. The Free plan itself costs nothing.</p>
 
 <h2>3. Renewals and low balances</h2>
-<p><strong>If your wallet is short, sending pauses. You never go into debt.</strong></p>
+<p><strong>If your wallet is short, you move to the Free plan. You never go into debt.</strong></p>
 <ul>
 <li>If your balance is too low for your next renewal, we email you {{renew_reminder_days}} days before the renewal date.</li>
-<li>If the wallet is still short on the renewal date, the renewal does not go through and sending pauses until you top up. Nothing is deleted.</li>
+<li>If the wallet is still short on the renewal date, the renewal does not go through and your workspace moves to the Free plan until you top up. Your first live Welcome Flow keeps welcoming people; everything else is paused. Nothing is deleted.</li>
 <li>We never take more than your wallet holds, and we never charge you for a period you did not pay for.</li>
-<li>When a plan ends, we keep your data for {{data_retention_days}} days. After that, it is deleted.</li>
+<li>While your workspace is on the Free plan and in use, we keep your data. A Free workspace that is not used for 12 months (no owner login, no join requests and no money in the wallet) is inactive: we email you first, then delete its content. If an account was paused under our earlier rules, we keep its data for {{data_retention_days}} days after the plan ended. After that, it is deleted.</li>
 </ul>
 
 <h2>4. Refunds of unused top-ups</h2>
@@ -55,7 +55,7 @@
 <h2>6. Plan payments</h2>
 <p><strong>Once a billing period starts, its payment is final.</strong></p>
 <p>Plan payments are not refundable once a billing period has started. This includes the unused part of a month or a year. When you cancel, your plan keeps running until the end of the period you already paid for, and it does not renew after that.</p>
-<p>You can cancel at any time in Settings.</p>
+<p>You can cancel at any time in <strong>Wallet and plan</strong>: switch off <strong>Renew automatically</strong>. When the paid period ends, your workspace moves to the Free plan.</p>
 
 <h2>7. Duplicate charges and billing errors</h2>
 <p><strong>If we got it wrong, you get it all back.</strong></p>
@@ -66,7 +66,14 @@
 <p>If we suspend or close your account for breaking our <a href="{{site_url}}/legal/acceptable-use">Acceptable Use Policy</a>, we refund your unused wallet balance, not including bonus credit, minus processor or network fees. Plan payments for a period that has already started are not refunded.</p>
 
 <h2>9. Chargebacks and payment disputes</h2>
-<p><strong>Please talk to us first.</strong> If something looks wrong with a payment, write to {{billing_email}} before contacting your bank or card provider. Most problems are quicker to fix directly. If a payment is reversed through a chargeback, the amount is removed from your wallet balance.</p>
+<p><strong>Please talk to us first.</strong> If something looks wrong with a payment, write to {{billing_email}} before contacting your bank or card provider. Most problems are quicker to fix directly.</p>
+<p>If a top-up is charged back or disputed with your bank or card provider:</p>
+<ul>
+<li>the disputed amount, and any bonus that came with that top-up and is still in your wallet, is taken out of your wallet straight away, even if this makes your balance negative;</li>
+<li>a paid plan then moves to the Free plan until a top-up covers the balance and the plan. Nothing is deleted;</li>
+<li>referral earnings that came from that payment and have not settled yet are cancelled; and</li>
+<li>if the dispute is decided in our favour, the money is put back in your wallet.</li>
+</ul>
 
 <h2>10. How to ask for a refund</h2>
 <p><strong>One email is all it takes.</strong> Write to {{billing_email}} from the email address on your Castvoo account and include:</p>

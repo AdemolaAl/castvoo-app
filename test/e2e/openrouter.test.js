@@ -163,12 +163,12 @@ describe('Cas on OpenRouter', () => {
     const u = await app.db.one("select * from ai_usage where workspace_id = $1 order by id desc limit 1", [ws.id]);
     assert.equal(u.provider, 'anthropic');
     assert.equal(u.input_tokens, 120);
-    app.fakes.ai.failNext = 1;
+    app.fakes.ai.failNext = config.ai.retries + 1;
     const before = app.fakes.ai.calls.length;
     const f = await c.post('/api/ai/write', { goal: 'Claude fails' });
     assert.equal(f.status, 502);
     assert.equal(f.body.code, 'ai_error');
-    assert.equal(app.fakes.ai.calls.length, before + 1, 'no retries added to the Claude path');
+    assert.equal(app.fakes.ai.calls.length, before + 1 + config.ai.retries, 'the Claude path retries 5xx like the others (ENG-12)');
   });
 
   it('plain OpenAI uses the same OpenAI-format path', async () => {
@@ -225,7 +225,7 @@ describe('Cas on OpenRouter', () => {
   });
 
   it('the AI allowance still applies on OpenRouter', async () => {
-    await app.db.query('update workspaces set ai_used = 99 where id = $1', [ws.id]);
+    await app.db.query('update workspaces set ai_used = 49 where id = $1', [ws.id]);
     const last = await c.post('/api/ai/write', { goal: 'The last one' });
     assert.equal(last.status, 200, last.text);
     assert.equal(last.body.ai_writes_left, 0);
@@ -233,5 +233,24 @@ describe('Cas on OpenRouter', () => {
     assert.equal(over.status, 402);
     assert.equal(over.body.code, 'ai_limit');
     assert.equal(mock.calls.length, 1, 'the refused write never reached OpenRouter');
+  });
+  it('tool calling works on OpenRouter and OpenAI too (Cas checks the workspace, the support AI answers)', async () => {
+    await app.connectBot(c, 'router_tools_bot');
+    const script = (body) => (body.messages.some((m) => m.role === 'tool') ? { text: 'Your bot @router_tools_bot is connected.' } : { tools: [{ name: 'get_connections', input: {} }] });
+    for (const provider of ['openrouter', 'openai']) {
+      mock.reset();
+      config.ai.provider = provider;
+      if (provider === 'openai') config.ai.openai.apiKey = 'sk-openai-test';
+      mock.script = script;
+      const r = await c.post('/api/ai/ask', { question: 'Is my bot ok?' });
+      assert.equal(r.status, 200, r.text);
+      assert.equal(r.body.answer, 'Your bot @router_tools_bot is connected.');
+      const [first, second] = mock.calls;
+      assert.equal(first.kind, provider);
+      assert.ok(first.body.tools.some((t) => t.type === 'function' && t.function.name === 'get_connections'));
+      const toolMsg = second.body.messages.find((m) => m.role === 'tool');
+      assert.ok(toolMsg && /router_tools_bot/.test(toolMsg.content));
+      assert.equal(second.body.messages.find((m) => m.tool_calls).tool_calls[0].function.name, 'get_connections');
+    }
   });
 });

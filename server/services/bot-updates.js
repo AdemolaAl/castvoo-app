@@ -5,15 +5,13 @@
  *  /stop or 🔕    → stops broadcasts to that person
  *  any message    → counted as a reply
  *  blocked bot    → marked blocked, follow-ups stop
- *  join request   → sends the join-request welcome within Telegram's 5-minute window
+ *  join request   → Welcome Flows (services/flows.js): welcome within Telegram's 5-minute window, approve, follow up
  */
 
 const db = require('../db');
 const tg = require('./telegram');
 const drips = require('./drips');
-const send = require('./send');
 const log = require('../lib/log');
-const settings = require('./settings');
 const { tokenOf } = require('./connections');
 
 const TAG_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -39,7 +37,9 @@ async function onMessage(conn, m) {
   const text = typeof m.text === 'string' ? m.text.trim() : '';
   if (text === '/start' || text.startsWith('/start ')) {
     const payload = text.split(/\s+/)[1] || '';
-    const tag = TAG_RE.test(payload) ? payload : null;
+    // j_<code> comes from a Welcome Flow's "Tap to start" / "Tap to join" button: not an ad tag.
+    const fromWelcome = payload.startsWith('j_');
+    const tag = !fromWelcome && TAG_RE.test(payload) ? payload : null;
     const before = await db.one('select status from subscribers where connection_id = $1 and tg_user_id = $2', [conn.id, m.from.id]);
     const sub = await upsertSubscriber(conn, m.from, { source: tag });
     const isNew = sub.inserted || (before && before.status !== 'active');
@@ -47,6 +47,7 @@ async function onMessage(conn, m) {
       await drips.start(sub, conn.id, 'start', '');
       if (tag) await drips.start(sub, conn.id, 'start_tag', tag);
     }
+    await require('./flows').onStart(conn, sub, m.from, payload);
     return;
   }
   const sub = await db.one('select * from subscribers where connection_id = $1 and tg_user_id = $2', [conn.id, m.from.id]);
@@ -75,40 +76,12 @@ async function onMyChatMember(conn, u) {
   }
 }
 
-async function onJoinRequest(conn, jr) {
-  if (!(await settings.feature('join_welcome')) || !(await settings.feature('drips'))) return;
-  const seq = await db.one(`select * from sequences where connection_id = $1 and active and trigger_type = 'join_request' and trigger_value = $2 order by id limit 1`, [conn.id, String(jr.chat.id)]);
-  if (!seq) return;
-  const steps = await db.many('select * from sequence_steps where sequence_id = $1 order by position', [seq.id]);
-  if (!steps.length) return;
-  const existing = await db.one('select * from subscribers where connection_id = $1 and tg_user_id = $2', [conn.id, jr.from.id]);
-  const sub = existing || (await upsertSubscriber(conn, jr.from, { status: 'joinreq' }));
-  const ws = await db.one('select * from workspaces where id = $1', [conn.workspace_id]);
-  const first = steps[0];
-  // Same rule as the follow-up job: no sending on a paused plan, an ended trial, or during maintenance.
-  const canSend = !['paused', 'cancelled'].includes(ws.plan_status)
-    && !(ws.plan_status === 'trial' && new Date(ws.trial_ends_at) < new Date())
-    && !(await settings.feature('maintenance'));
-  try {
-    if (canSend) {
-      const msg = await send.sendOne({ body: first.body, media_id: first.media_id, buttons: await stepButtons(first) },
-        { token: tokenOf(conn), botKey: 'bot:' + conn.id, chatId: jr.user_chat_id || jr.from.id, subscriberId: sub.id, includeStop: false, firstName: jr.from.first_name });
-      await db.query(`insert into deliveries(workspace_id, sender_key, step_id, subscriber_id, chat_id, status, message_id, sent_at, attempts)
-        values ($1,$2,$3,$4,$5,'sent',$6, now(), 1)`, [conn.workspace_id, 'bot:' + conn.id, first.id, sub.id, jr.user_chat_id || jr.from.id, msg.message_id]);
-    }
-  } catch (e) {
-    log.warn('join-request welcome failed', { conn: conn.id, err: e.message });
-  }
-  if (seq.approve_join) await tg.call(tokenOf(conn), 'approveChatJoinRequest', { chat_id: jr.chat.id, user_id: jr.from.id }).catch((e) => log.warn('approve join failed', { err: e.message }));
-  if (steps[1]) {
-    await db.query(`insert into sequence_runs(sequence_id, subscriber_id, next_position, due_at) values ($1,$2,$3, now() + make_interval(mins => $4))
-      on conflict (sequence_id, subscriber_id) do nothing`, [seq.id, sub.id, steps[1].position, steps[1].delay_minutes]);
-  }
-}
+/** Join requests are handled by Welcome Flows (services/flows.js). */
+async function onJoinRequest(conn, jr) { return require('./flows').onJoinRequest(conn, jr); }
 
 async function stepButtons(step) {
-  const links = await db.many('select code, label, url from links where step_id = $1 order by position, created_at, code', [step.id]);
-  return links.map((l) => ({ label: l.label, url: l.url, code: l.code }));
+  const links = await db.many('select code, label, url, row from links where step_id = $1 order by position, created_at, code', [step.id]);
+  return links.map((l) => ({ label: l.label, url: l.url, code: l.code, row: l.row }));
 }
 
 async function handleUpdate(conn, update) {
@@ -122,4 +95,25 @@ async function handleUpdate(conn, update) {
   }
 }
 
-module.exports = { handleUpdate, upsertSubscriber, stepButtons };
+/*
+ * ENG-10: a join request is acknowledged to Telegram at once and handled right after, in this process (the welcome,
+ * its retries and media upload, and the approval can take many seconds; Telegram would time out and resend).
+ * `inflight` lets shutdown (and tests) wait for that work to finish. At most MAX_INFLIGHT run at once; above that the
+ * webhook waits for its own update (back-pressure instead of an unbounded pile-up).
+ */
+const inflight = new Set();
+const MAX_INFLIGHT = 200;
+async function handleSoon(conn, update) {
+  if (!update.chat_join_request || inflight.size >= MAX_INFLIGHT) return handleUpdate(conn, update);
+  const p = handleUpdate(conn, update).finally(() => inflight.delete(p));
+  inflight.add(p);
+  return null;
+}
+/** Resolves when every join request handled in the background is done (or after `ms`). */
+async function idle(ms = 30000) {
+  const end = Date.now() + ms;
+  while (inflight.size && Date.now() < end) await Promise.race([Promise.allSettled([...inflight]), new Promise((r) => setTimeout(r, Math.max(1, end - Date.now())))]);
+  return inflight.size === 0;
+}
+
+module.exports = { handleUpdate, handleSoon, idle, upsertSubscriber, stepButtons };

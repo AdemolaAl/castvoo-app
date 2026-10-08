@@ -224,7 +224,7 @@ function paintMoney(root) {
       const bill = i % 3 !== 2;
       s += '<i class="' + (bill ? 'bill' : 'coin') + '" style="left:' + (4 + Math.random() * 90) + '%;--h:' + (+h + 80) + 'px;--r:' + (Math.random() > 0.5 ? '' : '-') + (200 + Math.random() * 300) + 'deg;animation-duration:' + (5 + Math.random() * 6) + 's;animation-delay:-' + (Math.random() * 9) + 's">$</i>';
     }
-    e.innerHTML = s; e.setAttribute('data-ok', '');
+    e.innerHTML = s; e.setAttribute('data-ok', ''); e.setAttribute('aria-hidden', 'true'); // decoration: no stray "$" for screen readers
   });
 }
 
@@ -450,4 +450,22 @@ function spark(vals, color) {
   const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
   const l = pts[pts.length - 1];
   return '<svg class="sp" viewBox="0 0 200 36" preserveAspectRatio="none" aria-hidden="true"><path d="' + d + ' L200 36 L0 36Z" fill="' + color + '" opacity=".1"/><path class="ln" d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2.2" vector-effect="non-scaling-stroke"/><circle cx="' + l[0] + '" cy="' + l[1] + '" r="3.2" fill="' + color + '"/></svg>';
+}
+
+/* ---------- Support chat helpers (Help page and the website chat) ---------- */
+/* The small "Powered by Replyvoo" line (Admin → Support AI). Replyvoo is Zedapex's AI support product. */
+function poweredBy(text) {
+  return text ? '<a class="pwr" href="https://replyvoo.com" target="_blank" rel="noopener"><span class="pwr-b" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M9.2 1.5 3.6 9h3.6l-.9 5.5L12.4 7H8.6z"/></svg></span>' + esc(text) + '</a>' : '';
+}
+/* Tap a chat image to see it big. Esc, tap or the close button closes it. */
+function openLightbox(src) {
+  const d = document.createElement('div');
+  d.className = 'lbx'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Image');
+  d.innerHTML = '<button type="button" class="ib lbx-x" aria-label="Close">' + icon('x') + '</button><img src="' + esc(src) + '" alt="Image">';
+  const close = () => { d.remove(); document.removeEventListener('keydown', key); };
+  const key = (e) => { if (e.key === 'Escape') close(); };
+  d.onclick = (e) => { if (e.target.tagName !== 'IMG') close(); };
+  document.addEventListener('keydown', key);
+  document.body.appendChild(d);
+  $('.lbx-x', d).focus();
 }

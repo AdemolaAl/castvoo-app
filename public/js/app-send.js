@@ -55,11 +55,12 @@ async function aiCall(path, body, btn) {
   try { const r = await POST(path, body); setAiLeft(r.ai_writes_left); return r; } catch (e) { apiErr(e); return null; } finally { if (btn) btnBusy(btn, false); }
 }
 /* onText(text) is called with the new message. hasMedia changes the length Cas aims for. */
-function openAIWrite(onText, hasMedia) {
+/* opts.kind: 'welcome' | 'followup' (Welcome Flows) so Cas knows what it is writing; opts.placeholder: example goal. */
+function openAIWrite(onText, hasMedia, opts = {}) {
   const tones = ['Friendly', 'Confident', 'Urgent', 'Fun', 'Professional'];
   const h = sheet('Ask Cas to write it', '<span class="spk">' + icon('spark') + '</span>',
     '<div class="mh"><div class="ca" data-cas="think"></div><div class="mt"><small class="muted">Uses 1 AI write · <span data-aileft>' + fmt(aiLeft()) + ' AI writes left</span></small></div></div>' +
-    '<div class="field"><label for="awP">What should this message do?</label><textarea class="inp" id="awP" rows="3" maxlength="1000" placeholder="For example: Remind people the sale ends tonight. Friendly but urgent. One button to the shop."></textarea></div>' +
+    '<div class="field"><label for="awP">What should this message do?</label><textarea class="inp" id="awP" rows="3" maxlength="1000" placeholder="' + esc(opts.placeholder || 'For example: Remind people the sale ends tonight. Friendly but urgent. One button to the shop.') + '"></textarea></div>' +
     '<div class="field"><label>Tone</label><div class="chips" id="awTone">' + tones.map((t, i) => '<button type="button" class="chb' + (i === 0 ? ' on' : '') + '">' + t + '</button>').join('') + '</div></div>' +
     '<div class="field"><label for="awL">Language <span class="hint">(optional)</span></label><input class="inp" id="awL" maxlength="40" placeholder="English"></div>' +
     '<div id="awOut" class="aio" hidden></div><p class="ferr" id="awErr" hidden></p>' +
@@ -72,7 +73,7 @@ function openAIWrite(onText, hasMedia) {
     const goal = $('#awP', h).value.trim();
     if (goal.length < 3) { $('#awErr', h).textContent = 'Tell Cas in a few words what the message is for.'; $('#awErr', h).hidden = false; return; }
     $('#awErr', h).hidden = true;
-    const r = await aiCall('/api/ai/write', { goal, tone: $('#awTone .on', h).textContent, language: $('#awL', h).value.trim() || undefined, has_media: !!hasMedia }, $('#awGo', h));
+    const r = await aiCall('/api/ai/write', { goal, tone: $('#awTone .on', h).textContent, language: $('#awL', h).value.trim() || undefined, has_media: !!hasMedia, kind: opts.kind || undefined }, $('#awGo', h));
     if (!r || !$('#awOut', h)) return;
     out = r.text;
     const o = $('#awOut', h); o.hidden = false; o.innerHTML = fmtMsg(out);
@@ -113,11 +114,35 @@ function fmtButtons(id) { return '<div class="fmt" id="' + id + '"><button type=
 function wireFmt(box, ta, onChange) {
   box.onclick = (e) => {
     const b = e.target.closest('button'); if (!b || b.hasAttribute('data-aiw')) return;
-    const s = ta.selectionStart, en = ta.selectionEnd;
+    const used = ta.dataset.caret === '1' || document.activeElement === ta;
+    const s = used ? ta.selectionStart : ta.value.length, en = used ? ta.selectionEnd : ta.value.length;
     if (b.dataset.f) { const f = b.dataset.f; const sel = ta.value.slice(s, en) || (f === '*' ? 'bold text' : 'italic text'); ta.value = ta.value.slice(0, s) + f + sel + f + ta.value.slice(en); ta.setSelectionRange(s + 1, s + 1 + sel.length); }
-    else if (b.dataset.e) { ta.value = ta.value.slice(0, s) + b.dataset.e + ta.value.slice(en); ta.setSelectionRange(s + b.dataset.e.length, s + b.dataset.e.length); }
+    else if (b.dataset.e) { insertAtCaret(ta, b.dataset.e, true); }
     ta.focus(); onChange();
   };
+}
+/* Remember which text boxes the user has clicked or typed in. A box that was never focused reports its caret at 0,
+   so "👤 Their name" would glue {name} to the start of the message. */
+document.addEventListener('focusin', (e) => { const t = e.target; if (t && t.tagName === 'TEXTAREA') t.dataset.caret = '1'; });
+/* Put text where the cursor is, or at the end if the box was never clicked into. {name} gets a space around it when
+   it would touch a word. quiet = don't fire an input event (the caller handles it). */
+function insertAtCaret(ta, text, quiet) {
+  if (!ta) return;
+  const used = ta.dataset.caret === '1' || document.activeElement === ta;
+  const v = ta.value;
+  const s = used ? ta.selectionStart : v.length, en = used ? ta.selectionEnd : v.length;
+  const before = v.slice(0, s), after = v.slice(en);
+  let ins = text;
+  if (text.startsWith('{')) {
+    if (before && !/[\s(\[]$/.test(before)) ins = ' ' + ins;
+    if (after && /^[\p{L}\p{N}]/u.test(after)) ins += ' ';
+  }
+  ta.value = before + ins + after;
+  ta.focus();
+  const at = before.length + ins.length;
+  ta.setSelectionRange(at, at);
+  ta.dataset.caret = '1';
+  if (!quiet) ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 function counterHtml(text, hasMedia) {
   const lim = hasMedia ? 1024 : 4096, n = visibleLength(text);
@@ -266,9 +291,15 @@ PAGES.broadcast = {
   async render(el, q, alive) {
     el.innerHTML = skel(1, 300);
     const s = APP.state;
+    if (!(s.plan.features || []).includes('broadcasts')) {
+      // Free plan: say so up front instead of showing the whole composer and refusing at Send.
+      el.innerHTML = emptyBox({ cas: 'wave', title: 'Broadcasts are on Starter and up', text: 'Your plan runs your welcome bot for people who ask to join. Upgrade to send messages to everyone who started your bot, or post to your channel.', action: '<div class="row2b" style="max-width:420px"><button type="button" class="btn b-blue" data-upgrade-bc>' + icon('up') + 'See plans</button><button type="button" class="btn b-ghost" data-go="flows">Welcome Flows</button></div>' });
+      $('[data-upgrade-bc]', el).onclick = () => openUpgrade({ title: 'Send broadcasts', text: 'Broadcasts, scheduling and 9am sending are on Starter and up.', feature: 'broadcasts' });
+      return;
+    }
     const conns = s.connections.filter((c) => c.status === 'active');
     if (!s.connections.length) {
-      el.innerHTML = emptyBox({ cas: 'wave', title: 'Connect Telegram first', text: 'Add a bot, channel or group, then you can send your first message from here.', action: '<div class="row2b" style="max-width:420px"><button type="button" class="btn b-blue" data-connect>' + icon('plus') + 'Connect Telegram</button><button type="button" class="btn b-ghost" data-guide>' + icon('play') + 'Watch how</button></div>' });
+      el.innerHTML = emptyBox({ cas: 'wave', title: 'Connect Telegram first', text: 'Add a bot, channel or group, then you can send your first message from here.', action: '<div class="row2b" style="max-width:420px"><button type="button" class="btn b-blue" data-connect>' + icon('plus') + 'Connect Telegram</button><button type="button" class="btn b-ghost" data-vguide="connect-bot">' + icon('play') + 'Watch how</button></div>' });
       return;
     }
     if (CFG.features.broadcasts === false) { el.innerHTML = emptyBox({ cas: 'think', title: 'Sending is switched off for a moment', text: 'The Castvoo team has paused broadcasts. Please check back soon.' }); return; }
@@ -418,7 +449,7 @@ PAGES.broadcast = {
         if (r.status === 'draft') toast('Saved as a draft.');
         else if (r.status === 'pending_approval') toast('Sent to the owner for approval.');
         else if (r.status === 'scheduled') toast('Scheduled for ' + fmtDate(body.send_at) + '.');
-        else if (body.send_mode === 'local9') toast('Scheduled. Each person gets it at 9am their time.');
+        else if (body.send_mode === 'local9') toast('Scheduled for the next 9am in your workspace time zone.');
         else if (r.status === 'sent' && !r.queued) toast('Nobody matched this audience yet, so nothing was sent.', { kind: 'info' });
         else sendProgress(r.id, r.queued);
         refreshState(); loadHist();
@@ -459,7 +490,9 @@ PAGES.calendar = {
     el.innerHTML = skel(1, 420);
     const r = await GET('/api/broadcasts');
     if (!alive()) return;
-    const items = (r.broadcasts || []).filter((b) => b.status !== 'draft' && b.status !== 'cancelled').map((b) => ({ b, at: new Date(b.status === 'scheduled' || (b.status === 'pending_approval' && b.send_at) ? b.send_at : (b.started_at || b.created_at)) })).filter((x) => !Number.isNaN(x.at.getTime()));
+    // "9am local time" broadcasts have no send_at; they show at their next (or first) 9am delivery, not at the time they were made.
+    const when = (b) => (b.status === 'scheduled' || (b.status === 'pending_approval' && b.send_at) ? b.send_at : b.send_mode === 'local9' && (b.next_due || b.first_due) ? (b.next_due || b.first_due) : (b.started_at || b.created_at));
+    const items = (r.broadcasts || []).filter((b) => b.status !== 'draft' && b.status !== 'cancelled').map((b) => ({ b, at: new Date(when(b)) })).filter((x) => !Number.isNaN(x.at.getTime()));
     if (!CAL) { const n = new Date(); CAL = new Date(n.getFullYear(), n.getMonth(), 1); }
     const draw = () => {
       const y = CAL.getFullYear(), m = CAL.getMonth();
@@ -475,7 +508,7 @@ PAGES.calendar = {
       }
       const tail = (7 - ((lead + days) % 7)) % 7;
       for (let i = 0; i < tail; i++) cells += '<div class="cd mute"></div>';
-      const upcoming = items.filter((x) => x.at > new Date() && ['scheduled', 'pending_approval'].includes(x.b.status)).sort((a, b) => a.at - b.at).slice(0, 8);
+      const upcoming = items.filter((x) => x.at > new Date() && (['scheduled', 'pending_approval'].includes(x.b.status) || (x.b.status === 'sending' && x.b.send_mode === 'local9'))).sort((a, b) => a.at - b.at).slice(0, 8);
       el.innerHTML = '<div class="box"><div class="bh"><div class="calnav"><button type="button" class="ib" data-cm="-1" aria-label="Previous month">' + icon('chev').replace('<svg', '<svg style="transform:rotate(180deg)"') + '</button><h3>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</h3><button type="button" class="ib" data-cm="1" aria-label="Next month">' + icon('chev') + '</button></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pill p-blue">Scheduled</span><span class="pill p-ok">Sent</span><span class="pill p-tg">Waiting</span><button type="button" class="btn b-blue xs" data-go="broadcast">' + icon('plus') + 'Schedule</button></div></div><div class="calg">' + cells + '</div></div>' +
         '<div class="box"><div class="bh"><h3>Coming up</h3></div>' + (upcoming.length ? upcoming.map((x) => '<button type="button" class="upr tlink" data-report="' + x.b.id + '"><span style="min-width:0;text-align:left"><b class="ell">' + esc(x.b.title) + '</b><small class="muted">' + fmtDate(x.at) + ' · ' + esc(x.b.kind === 'bot' ? '@' + (x.b.conn_username || '') : x.b.conn_title || '') + '</small></span>' + bPill(x.b.status) + '</button>').join('') : emptyBox({ plain: 1, emoji: '🗓️', title: 'Nothing scheduled', text: 'Schedule a message and it shows up here and on the calendar.', action: '<button type="button" class="btn b-blue sm" data-go="broadcast">Schedule a message</button>' })) + '<p class="hint">Auto follow-ups send by themselves when people join, so they are not shown on the calendar.</p></div>';
     };

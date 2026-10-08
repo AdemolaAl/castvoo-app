@@ -16,7 +16,8 @@ function defaultText(body) {
 async function startMockAi() {
   const calls = [];
   const queue = [];
-  const mock = { calls, queue, text: null, usage: { prompt_tokens: 50, completion_tokens: 20, total_tokens: 70, cost: 0.00042 }, base: '' };
+  // mock.script: (body, kind) => { text } | { tools: [{ name, input }], text? } | null; scripts tool calls in either format.
+  const mock = { calls, queue, text: null, script: null, usage: { prompt_tokens: 50, completion_tokens: 20, total_tokens: 70, cost: 0.00042 }, base: '' };
   const server = http.createServer((req, res) => {
     const chunks = [];
     req.on('data', c => chunks.push(c));
@@ -29,7 +30,13 @@ async function startMockAi() {
       const send = (status, obj, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(obj)); };
       if (kind === 'unknown' || req.method !== 'POST') return send(404, { error: { code: 404, message: 'Not found' } });
       if (queue.length) { const q = queue.shift(); return send(q.status, q.body || { error: { code: q.status, message: 'Mock error ' + q.status } }, q.headers); }
-      const text = typeof mock.text === 'function' ? mock.text(body, kind) : mock.text != null ? mock.text : defaultText(body);
+      const scripted = typeof mock.script === 'function' ? mock.script(body, kind) : null;
+      if (scripted && (scripted.tools || []).length) {
+        if (kind === 'anthropic') return send(200, { id: 'msg_mock', type: 'message', model: body.model, stop_reason: 'tool_use', content: [...(scripted.text ? [{ type: 'text', text: scripted.text }] : []), ...scripted.tools.map((t, i) => ({ type: 'tool_use', id: 'toolu_' + calls.length + '_' + i, name: t.name, input: t.input || {} }))], usage: { input_tokens: 120, output_tokens: 40 } });
+        const used = Array.isArray(body.models) && body.models.length ? body.models[0] : body.model;
+        return send(200, { id: 'gen-mock', object: 'chat.completion', model: used, choices: [{ index: 0, finish_reason: 'tool_calls', message: { role: 'assistant', content: scripted.text || null, tool_calls: scripted.tools.map((t, i) => ({ id: 'call_' + calls.length + '_' + i, type: 'function', function: { name: t.name, arguments: JSON.stringify(t.input || {}) } })) } }], usage: mock.usage });
+      }
+      const text = scripted && scripted.text != null ? scripted.text : typeof mock.text === 'function' ? mock.text(body, kind) : mock.text != null ? mock.text : defaultText(body);
       if (kind === 'anthropic') {
         if (!req.headers['x-api-key']) return send(401, { error: { message: 'no key' } });
         return send(200, { id: 'msg_mock', type: 'message', model: body.model, content: [{ type: 'text', text }], usage: { input_tokens: 120, output_tokens: 40 } });
@@ -47,7 +54,7 @@ async function startMockAi() {
   if (!port) throw new Error('No free mock AI port in ' + lo + '–' + hi);
   mock.base = 'http://127.0.0.1:' + port;
   mock.last = kind => [...calls].reverse().find(c => !kind || c.kind === kind);
-  mock.reset = () => { calls.length = 0; queue.length = 0; mock.text = null; };
+  mock.reset = () => { calls.length = 0; queue.length = 0; mock.text = null; mock.script = null; };
   mock.close = () => new Promise(r => { server.close(() => r()); server.closeAllConnections(); });
   return mock;
 }

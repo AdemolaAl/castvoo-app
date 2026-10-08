@@ -8,6 +8,9 @@ const db = require('../../db');
 const config = require('../../config');
 const perms = require('../../permissions');
 
+// A workspace on a plan with no price (the Free plan). Free workspaces have plan_status 'active', so they must not count as paying. `p` = plans.
+const FREE_SQL = '(coalesce(p.price_month_cents, 0) = 0 and coalesce(p.price_year_cents, 0) = 0)';
+
 module.exports = (r) => {
   r.get('/api/admin/me', async (ctx) => ({
     user: { id: ctx.user.id, name: ctx.user.name, email: ctx.user.email, role: ctx.user.staff_role },
@@ -20,10 +23,14 @@ module.exports = (r) => {
     const [users, ws, money, sending, support, queue, ai, signups, revenue, plans] = await Promise.all([
       one(`select count(*)::int total, count(*) filter (where created_at > now() - interval '1 day')::int today,
         count(*) filter (where created_at > now() - interval '7 days')::int week from users where status = 'active'`),
-      one(`select count(*) filter (where plan_status = 'trial')::int trials, count(*) filter (where plan_status = 'active')::int paying,
-        count(*) filter (where plan_status = 'paused')::int paused, count(*) filter (where plan_status = 'cancelled')::int cancelled from workspaces where purged_at is null`),
+      // The Free plan is plan_status 'active' too (billing.dropToFree), so "paying" means active on a plan with a price.
+      one(`select count(*) filter (where w.plan_status = 'trial')::int trials,
+        count(*) filter (where w.plan_status = 'active' and not ${FREE_SQL})::int paying,
+        count(*) filter (where w.plan_status = 'active' and ${FREE_SQL})::int free,
+        count(*) filter (where w.plan_status = 'paused')::int paused, count(*) filter (where w.plan_status = 'cancelled')::int cancelled
+        from workspaces w left join plans p on p.code = w.plan_code where w.purged_at is null`),
       one(`select coalesce(sum(amount_cents) filter (where status = 'paid' and paid_at > now() - interval '30 days'), 0)::bigint topups_30d,
-        count(*) filter (where status = 'pending' and provider = 'manual_crypto' and txid is not null)::int crypto_to_check from payments`),
+        count(*) filter (where status = 'pending' and ((provider = 'manual_crypto' and txid is not null) or (provider = 'manual' and submitted_at is not null)))::int crypto_to_check from payments`),
       one(`select count(*) filter (where status = 'sent' and sent_at > now() - interval '1 day')::int sent_24h,
         count(*) filter (where status in ('failed') and sent_at > now() - interval '1 day')::int failed_24h,
         count(*) filter (where status = 'blocked' and sent_at > now() - interval '1 day')::int blocked_24h from deliveries where created_at > now() - interval '2 days'`),
@@ -34,7 +41,7 @@ module.exports = (r) => {
         from generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') d order by d`),
       db.many(`select to_char(d, 'YYYY-MM-DD') as day, (select coalesce(sum(-amount_cents), 0)::bigint from wallet_tx t where t.kind = 'plan' and t.created_at >= d and t.created_at < d + interval '1 day') cents
         from generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') d order by d`),
-      db.many(`select w.plan_code, w.billing_cycle, count(*)::int n, max(p.price_month_cents) m, max(p.price_year_cents) y from workspaces w join plans p on p.code = w.plan_code where w.plan_status = 'active' group by 1, 2`),
+      db.many(`select w.plan_code, w.billing_cycle, count(*)::int n, max(p.price_month_cents) m, max(p.price_year_cents) y from workspaces w join plans p on p.code = w.plan_code where w.plan_status = 'active' and not ${FREE_SQL} and w.purged_at is null group by 1, 2`),
     ]);
     // Local-currency prices use rates the team types in. Flag any not touched for a week.
     const staleRates = await db.many(`select code, name, currency, rate_updated_at from countries
@@ -56,5 +63,6 @@ module.exports = (r) => {
   require('./money')(r);
   require('./catalog')(r);
   require('./comms')(r);
+  require('./support-ai')(r);
   require('./team')(r);
 };

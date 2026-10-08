@@ -1,7 +1,8 @@
 # Castvoo
 
-Telegram broadcasts, auto follow-ups, tracked clicks and Cas (the AI helper), with a wallet,
-referrals, a support inbox and an admin panel. Made by Zedapex.
+Telegram Welcome Flows (greet, let in and follow up everyone who asks to join a channel), broadcasts,
+auto follow-ups, tracked clicks and Cas (the AI helper), with a Free plan, a wallet, referrals, 24/7 AI support (the team takes over when needed)
+and an admin panel. Made by Zedapex.
 
 - Website, sign-up and customer dashboard: `/`, `/#signup`, `/#app`
 - Admin panel for the team: `/admin`
@@ -45,7 +46,7 @@ Already have a database? `DATABASE_URL=postgres://... APP_SECRET=$(openssl rand 
 
 ```bash
 npm run check      # 30 seconds: syntax, prices agree everywhere, no unfinished copy, every route protected, env documented
-npm test           # 3-4 minutes: 340+ tests against a real database and fake Telegram/Paystack/Flutterwave/Gatevoo/AI/email,
+npm test           # 3-4 minutes: 410+ tests against a real database and fake Telegram/Paystack/Flutterwave/Gatevoo/AI/email,
                    # plus the real VooSquare when its repo is next to this one (VOOSQUARE_DIR)
 ```
 Both must pass. (Tests need PostgreSQL 16 installed locally; they start and stop their own.)
@@ -93,13 +94,14 @@ server/
   features.js         feature switches shown in Admin → Features
   permissions.js      team roles, ranks and what each can do
   seed.js             starting prices, countries, payment methods, settings, website text
-  knowledge-defaults.js  Cas's starting knowledge (editable in Admin → Cas knowledge)
+  knowledge-defaults.js  starting knowledge for Cas, the AI support team and the website chat (editable in Admin → Cas knowledge)
   migrations/         database changes, run automatically in order (001, 002, ...)
   routes/             one file per area of the API (auth, broadcasts, wallet, admin/...)
-  services/           the logic: telegram, billing, email, ai (Cas), llm (Claude / OpenRouter / OpenAI), support, voosquare ...
-  payments/index.js   Paystack, Flutterwave, Gatevoo and manual crypto top-ups
+  services/           the logic: telegram, flows (Welcome Flows), billing (plans, limits, Free plan), email, ai (Cas),
+                      llm (Claude / OpenRouter / OpenAI), support, support-ai + support-tools (the 24/7 AI support team), voosquare ...
+  payments/index.js   Paystack, Flutterwave, Gatevoo, manual crypto and the team's own manual methods
   workers/            background loops: sending queue, follow-ups, billing, emails, cleanup
-  emails/             email layout + all 28 templates
+  emails/             email layout + all 35 templates
   legal/              the 6 policy pages
   lib/                small tools: our PostgreSQL client, router, helpers
 voo-connect/          VooSquare's Voo Connect kit, copied unchanged (login, affiliate hand-off, events). Never edit it.
@@ -119,6 +121,6 @@ docs/                 guides (start with DEVELOPER-GUIDE.md)
 | [docs/API.md](docs/API.md) | Every API endpoint |
 | [docs/DEPLOY-RAILWAY.md](docs/DEPLOY-RAILWAY.md) | Going live, scaling, backups |
 | [docs/LAUNCH-CHECKLIST.md](docs/LAUNCH-CHECKLIST.md) | What to check before opening to the public |
-| [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Telegram, Resend, Anthropic or OpenRouter, Paystack, Flutterwave, Gatevoo, Google, VooSquare (Voo Connect) |
+| [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Telegram, Resend, Anthropic or OpenRouter, Paystack, Flutterwave, Gatevoo, VooSquare (Voo Connect) |
 | [docs/PRODUCT-FACTS.md](docs/PRODUCT-FACTS.md) | What Castvoo promises. Copy, emails and policies must agree with it |
 | [docs/CHANGES-FROM-TESTS.md](docs/CHANGES-FROM-TESTS.md) | Bugs the tests caught and how they were fixed |

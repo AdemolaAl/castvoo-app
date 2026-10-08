@@ -18,7 +18,7 @@ The dashboard says so before they connect.)
 1. resend.com → add and verify your domain (DNS records).
 2. API Keys → create → `RESEND_API_KEY`.
 3. `EMAIL_FROM=Castvoo <hello@castvoo.com>` (must be on the verified domain), `EMAIL_REPLY_TO=support@castvoo.com`.
-All 28 emails (login codes, welcome, receipts, reminders, sales follow-ups) are edited in Admin → Emails.
+All 31 emails (login codes, welcome, receipts, reminders, sales follow-ups) are edited in Admin → Emails.
 
 ## AI: Anthropic (Cas)
 1. console.anthropic.com → API keys → `ANTHROPIC_API_KEY`. Add billing credit there.
@@ -99,10 +99,46 @@ payments that have a transaction ID; card and Gatevoo payments are only ever cre
 confirmation (use **Recheck**). Bitcoin is offered only through Gatevoo, because its price moves too much for
 exact-amount matching.
 
-## Google login (optional)
-console.cloud.google.com → APIs & Services → OAuth consent screen (External, app name Castvoo) →
-Credentials → Create OAuth client ID (Web application) → Authorized redirect URI
-`https://castvoo.com/api/auth/google/callback` → copy `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+## Your own payment methods (bank transfer, mobile money, a crypto wallet...)
+No keys and no code. In **Admin → Countries & payments → Your own payment methods → Add payment method**
+(Owner, Admin or Finance: permission `countries.edit`):
+- **Name, kind, short detail, icon and colour**: what customers see on the top-up screen. The key is made from the name.
+- **Instructions**: one thing per line, e.g. `Bank: GTBank`, `Account number: 0123456789`, `Account name: Zedapex Limited`.
+  Lines like `Label: value` get a copy button for the customer. Everything typed here is shown as plain text (never HTML).
+- **Currency** (empty = US dollars) and **per $1** rate (empty = the rate of the customer's country, set in the Countries list;
+  the method is then only offered in countries that use that currency). **Smallest / largest** top-up (optional, in USD).
+- **Proof**: transaction reference and/or screenshot, each off, optional or required. Screenshots: JPG, PNG or WEBP up to
+  10 MB, checked by file signature, stored in `UPLOAD_DIR/proofs/<workspace>/` and only visible to staff with `payments.view`.
+- **Where it is offered**: all countries, or the countries you tick. **Order** and an **on/off** switch.
+
+How it works: the customer picks the method → Castvoo creates a pending payment with an exact amount (the top-up plus
+1–99 unique cents, like manual USDT; in a local currency the cents are added to the local amount and the USD amount the
+customer asked for is credited) → they see your instructions and the amount, pay, add the reference and/or screenshot and
+press **I've paid** (email `topup_submitted`) → the payment shows in **Admin → Payments → To check** → Finance checks the
+account and presses **Approve** (wallet credited once with the usual top-up bonuses, email `topup_received`, VooSquare
+`wallet_topup`) or **Reject** with a reason (email `topup_rejected`). The customer can never change the amount; only the
+person approving can credit a different USD amount. Approving twice credits once. A reference can't be used for two top-ups
+with the same method.
+
+Editing and deleting: built-in methods (Paystack, Flutterwave, crypto) can be renamed and switched off, never deleted.
+Your own methods can be edited and deleted; one that payments already use is switched off and hidden instead, so payment
+history keeps its name. A method with open (pending) payments can't be deleted until they are approved or rejected.
+Every add, change and delete is in the audit log.
+
+## Adding a payment gateway (automatic, needs code)
+For a provider that confirms payments by itself (for example Stripe or another local gateway):
+1. `server/config.js`: read its keys, add `yourgateway: !!key` to `integrations()`, and document them in `.env.example`.
+2. A new migration: allow the provider name in `payment_methods_provider_check` and insert its method row(s)
+   (or add them to `METHODS` in `server/seed.js`).
+3. `server/payments/index.js`: write `startYourGateway(ctx, m, base)` (insert the payment with `insert()`, call the provider,
+   return `{ kind: 'redirect', url, reference }`) and `verifyYourGateway(reference)` (ask the provider server to server whether
+   it is paid, check the currency and amount, then call `credit(reference)`). Add both to `GATEWAYS`. The steps are also at the
+   top of that file.
+4. `server/services/settings.js` → `methodsFor()`: offer the method only when `integ.yourgateway` is true.
+5. `server/routes/payment-webhooks.js`: a webhook that checks the provider's signature and calls `payments.verify(reference)`.
+6. `test/helpers/fakes.js`: a fake of the provider, and tests in `test/e2e/payments.test.js` (paid, wrong amount, bad signature,
+   paid twice).
+Then pick the method per country in Admin → Countries & payments.
 
 ## VooSquare (the Zedapex account hub) · Voo Connect
 
@@ -137,7 +173,7 @@ Every line must say PASS. Add `--voo-id <your Voo ID>` to prove the API key and 
   (`/auth/voosquare?signup=1` → `prompt=signup`). The kit checks a signed state cookie (10 minutes), exchanges the code
   server side and verifies the `id_token` (HS256 with the client secret, `aud`, `iss`, expiry). VooSquare's launcher
   opens `/auth/voosquare?return_to=/dashboard`, which lands on the dashboard (`/#app`).
-- **Who is who.** A Castvoo account is found by its `voo_id`. The existing logins (email code, Telegram, Google) stay.
+- **Who is who.** A Castvoo account is found by its `voo_id`. The existing logins (email code, Telegram) stay.
   An existing Castvoo account is linked to a Voo ID when (a) the person presses **Settings → VooSquare → Connect**
   while logged in (a POST from our page; a link from another website cannot do it), or (b) owner's rule: the email is
   verified on **both** sides (VooSquare says `email_verified`, and Castvoo verified it with a code or a provider) and
@@ -185,6 +221,8 @@ Every line must say PASS. Add `--voo-id <your Voo ID>` to prove the API key and 
   POST /api/voosquare/support/tickets/:ref/update   {status, assignee_voo_id}
   GET/POST /api/voosquare/staff                      {voo_id, email, name, role: admin|support|finance|content|viewer, active}
   Header on every call: Authorization: Bearer <VOO_API_KEY>   (or VOO_SERVICE_KEY if you set one)
+  Staff sync (/api/voosquare/staff) accepts ONLY VOO_SERVICE_KEY (inbound-only), and never matches a staff member to an
+  existing customer account by email (the person links their Voo ID in Castvoo first). Every sync is in the audit log.
   ```
 - **Dashboard card**: `GET /api/voosquare/summary?voo_id=&period=1d|7d|30d` returns messages sent, broadcasts,
   active follow-ups, subscribers (and clicks).

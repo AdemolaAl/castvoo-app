@@ -53,8 +53,8 @@ async function contentFor(cache, d) {
   } else if (d.step_id) {
     const s = await db.one('select body, media_id from sequence_steps where id = $1', [d.step_id]);
     if (s) {
-      const links = await db.many('select code, label, url from links where step_id = $1 order by position, created_at, code', [d.step_id]);
-      v = { body: s.body, media_id: s.media_id, buttons: links.map((l) => ({ label: l.label, url: l.url, code: l.code })), include_stop: true };
+      const links = await db.many('select code, label, url, row from links where step_id = $1 order by position, created_at, code', [d.step_id]);
+      v = { body: s.body, media_id: s.media_id, buttons: links.map((l) => ({ label: l.label, url: l.url, code: l.code, row: l.row })), include_stop: true };
     }
   }
   cache.set(k, v);

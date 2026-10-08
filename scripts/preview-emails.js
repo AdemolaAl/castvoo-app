@@ -27,6 +27,7 @@ const GLOBALS = {
 
 const SAMPLE = {
   old_price: '$49.00', new_price: '$59.00', billing_period: 'month', start_date: '2 November 2026',
+  used: '412', limit: '500', reset_date: '1 November 2026', plans_url: 'https://castvoo.com/#app/wallet', welcomed: '238',
   code: '482913',
   trial_end_date: '10 October 2026',
   guide_url: 'https://castvoo.com/guide',
@@ -36,7 +37,7 @@ const SAMPLE = {
   role_name: 'Support agent',
   admin_url: 'https://castvoo.com/#admin',
   plan_name: 'Growth',
-  plan_price: '$49 per month',
+  plan_price: '$49.00',
   wallet_balance: '$12.00',
   topup_url: 'https://castvoo.com/#app/wallet/topup',
   amount: '$49.00',
@@ -50,6 +51,7 @@ const SAMPLE = {
   new_balance: '$61.00',
   wallet_url: 'https://castvoo.com/#app/wallet',
   coin: 'USDT (TRC20)',
+  reference: 'FT2610081234567',
   txid: '9f2c4b7a1e0d8c3b6a5f4e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b',
   reason: 'We could not find a transaction with this ID sent to the Castvoo address.',
   referral_name: 'Amaka',

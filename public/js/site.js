@@ -11,9 +11,9 @@
 const siteOn = () => !$('#v-site').hidden && !document.hidden;
 let siteGuide = null;
 
-/* "2 months free" (or "save 15%") worked out from the real plan prices. */
+/* "2 months free" (or "save 15%") worked out from the real plan prices (the first paid plan). */
 function yearSaveText() {
-  const p0 = (CFG.plans || [])[0];
+  const p0 = (CFG.plans || []).find((p) => p.price_month > 0);
   if (!p0 || !p0.price_month || !p0.price_year) return '';
   const free = Math.round((p0.price_month * 12 - p0.price_year) / p0.price_month * 10) / 10;
   if (free < 0.5) return '';
@@ -25,14 +25,14 @@ const emph = (s) => esc(s).replace(/\*([^*]+)\*/g, '<em class="gtext">$1</em>');
 /* ---------- Language switcher (marketing texts only) ---------- */
 const LANGS = { en: ['🇬🇧', 'English'], fr: ['🇫🇷', 'Français'], pt: ['🇵🇹', 'Português'], es: ['🇪🇸', 'Español'], ru: ['🇷🇺', 'Русский'] };
 const SITE_T = {
-  fr: { nf: 'Fonctionnalités', nh: 'Guide', na: 'IA', np: 'Tarifs', nq: 'FAQ', nl: 'Connexion', ns: 'Essai gratuit', hc: 'Diffusions, relances et IA au même endroit', h2c: 'Voir la mise en route en 40 s', t1: 'Sans carte bancaire', t2: 'Prêt en 5 minutes environ', t3: 'Annulable à tout moment',
-    h1: 'Faites de votre Telegram <em class="gtext">une machine à vendre.</em>', hs: 'Castvoo accueille chaque nouvel abonné, relance au bon moment et envoie à chaque groupe le message écrit pour lui. Vos bots et canaux vendent, même pendant que vous dormez.', cta: 'Essai gratuit · 7 jours offerts' },
-  pt: { nf: 'Recursos', nh: 'Guia', na: 'IA', np: 'Preços', nq: 'FAQ', nl: 'Entrar', ns: 'Começar grátis', hc: 'Transmissões, follow-ups e IA num só lugar', h2c: 'Ver a configuração em 40 s', t1: 'Sem cartão', t2: 'Pronto em cerca de 5 minutos', t3: 'Cancele quando quiser',
-    h1: 'Transforme seu Telegram <em class="gtext">numa máquina de vendas.</em>', hs: 'O Castvoo dá boas-vindas a cada novo inscrito, faz follow-up na hora certa e envia a cada grupo a mensagem feita para ele. Seus bots e canais vendem até enquanto você dorme.', cta: 'Grátis · 7 dias por nossa conta' },
-  es: { nf: 'Funciones', nh: 'Guía', na: 'IA', np: 'Precios', nq: 'FAQ', nl: 'Entrar', ns: 'Empezar gratis', hc: 'Difusiones, seguimientos e IA en un solo lugar', h2c: 'Ver la configuración en 40 s', t1: 'Sin tarjeta', t2: 'Listo en unos 5 minutos', t3: 'Cancela cuando quieras',
-    h1: 'Convierte tu Telegram <em class="gtext">en una máquina de ventas.</em>', hs: 'Castvoo da la bienvenida a cada nuevo suscriptor, hace seguimiento a tiempo y envía a cada grupo el mensaje escrito para él. Tus bots y canales venden incluso mientras duermes.', cta: 'Gratis · 7 días por nuestra cuenta' },
-  ru: { nf: 'Возможности', nh: 'Инструкция', na: 'ИИ', np: 'Цены', nq: 'FAQ', nl: 'Войти', ns: 'Начать бесплатно', hc: 'Рассылки, цепочки и ИИ в одном месте', h2c: 'Настройка за 40 секунд', t1: 'Без карты', t2: 'Запуск примерно за 5 минут', t3: 'Отмена в любой момент',
-    h1: 'Превратите Telegram <em class="gtext">в машину продаж.</em>', hs: 'Castvoo приветствует каждого нового подписчика, вовремя напоминает и отправляет каждой группе написанное для неё сообщение. Ваши боты и каналы продают, даже пока вы спите.', cta: 'Бесплатно · 7 дней' },
+  fr: { nf: 'Fonctionnalités', nh: 'Guide', na: 'IA', np: 'Tarifs', nq: 'FAQ', nl: 'Connexion', ns: 'Essai gratuit', hc: 'Accueil · Diffusions · Relances', hw: 'Voir comment ça marche', h2c: 'Voir la mise en route en 40 s', t1: 'Sans carte bancaire', t2: 'Offre gratuite pour 1 canal', t3: 'Prêt en 5 minutes environ',
+    h1: 'Accueillez. Diffusez. Relancez. <em class="gtext">Tout en pilote automatique.</em>', hs: 'Accueillez chaque personne qui demande à rejoindre, envoyez des diffusions à tous vos abonnés et créez des relances programmées avec boutons et liens dans un éditeur simple. Cas, l\'assistant IA, écrit les messages.', cta: 'Essai gratuit de 7 jours', f1: 'Bot d\'accueil', f2: 'Diffusions', f3: 'Relances programmées', f4: 'Éditeur de flux', f5: 'Rédacteur IA' },
+  pt: { nf: 'Recursos', nh: 'Guia', na: 'IA', np: 'Preços', nq: 'FAQ', nl: 'Entrar', ns: 'Começar grátis', hc: 'Boas-vindas · Transmissões · Follow-ups', hw: 'Ver como funciona', h2c: 'Ver a configuração em 40 s', t1: 'Sem cartão', t2: 'Plano grátis para 1 canal', t3: 'Pronto em cerca de 5 minutos',
+    h1: 'Dê boas-vindas. Transmita. Faça follow-up. <em class="gtext">Tudo no automático.</em>', hs: 'Dê boas-vindas a todos que pedem para entrar, envie transmissões para todos os seus inscritos e crie follow-ups programados com botões e links num editor simples. Cas, o assistente de IA, escreve as mensagens.', cta: 'Teste grátis de 7 dias', f1: 'Bot de boas-vindas', f2: 'Transmissões', f3: 'Follow-ups', f4: 'Editor de fluxos', f5: 'Redator IA' },
+  es: { nf: 'Funciones', nh: 'Guía', na: 'IA', np: 'Precios', nq: 'FAQ', nl: 'Entrar', ns: 'Empezar gratis', hc: 'Bienvenida · Difusiones · Seguimientos', hw: 'Ver cómo funciona', h2c: 'Ver la configuración en 40 s', t1: 'Sin tarjeta', t2: 'Plan gratis para 1 canal', t3: 'Listo en unos 5 minutos',
+    h1: 'Saluda. Difunde. Haz seguimiento. <em class="gtext">Todo en automático.</em>', hs: 'Da la bienvenida a quien pide unirse, envía difusiones a todos tus suscriptores y crea seguimientos programados con botones y enlaces en un editor sencillo. Cas, el asistente de IA, escribe los mensajes.', cta: 'Prueba gratis de 7 días', f1: 'Bot de bienvenida', f2: 'Difusiones', f3: 'Seguimientos', f4: 'Editor de flujos', f5: 'Redactor IA' },
+  ru: { nf: 'Возможности', nh: 'Инструкция', na: 'ИИ', np: 'Цены', nq: 'FAQ', nl: 'Войти', ns: 'Начать бесплатно', hc: 'Приветствие · Рассылки · Цепочки', hw: 'Как это работает', h2c: 'Настройка за 40 секунд', t1: 'Без карты', t2: 'Бесплатный план для 1 канала', t3: 'Запуск примерно за 5 минут',
+    h1: 'Приветствуйте. Рассылайте. Напоминайте. <em class="gtext">Всё на автопилоте.</em>', hs: 'Приветствуйте каждого, кто подал заявку, отправляйте рассылки всем подписчикам и собирайте цепочки сообщений по расписанию с кнопками и ссылками в простом конструкторе. Cas, ИИ-помощник, пишет тексты.', cta: '7 дней бесплатно', f1: 'Бот-приветствие', f2: 'Рассылки', f3: 'Цепочки', f4: 'Конструктор', f5: 'ИИ-копирайтер' },
 };
 const SITE_EN = {};
 let siteLang = 'en';
@@ -65,12 +65,22 @@ function siteHero() {
 
 let billYear = false;
 function planFacts(p) {
+  const lim = (v, one, many) => (v < 0 ? 'Unlimited ' + many : plural(v, one, many));
+  if (!p.price_month && !p.price_year) {
+    return [
+      plural(p.connections, 'channel or group', 'channels or groups') + ' + your welcome bot',
+      fmt(p.join_requests ?? 500) + ' join requests a month',
+      '1 welcome message, auto-approve',
+    ];
+  }
   return [
     plural(p.connections, 'bot, channel or group', 'bots, channels or groups'),
+    (p.join_requests < 0 ? 'Unlimited' : fmt(p.join_requests ?? 0)) + ' join requests a month',
+    p.flows != null ? lim(p.flows, 'Welcome Flow', 'Welcome Flows') + (p.flow_steps != null ? ', ' + (p.flow_steps < 0 ? 'unlimited' : fmt(p.flow_steps)) + ' steps each' : '') : '',
     fmt(p.subscribers) + ' bot subscribers (channel members free)',
     fmt(p.ai_writes) + ' AI writes a month',
     plural(p.seats, 'team seat'),
-  ];
+  ].filter(Boolean);
 }
 function sitePlans() {
   const plans = CFG.plans || [];
@@ -80,16 +90,19 @@ function sitePlans() {
   box.className = 'plans n' + Math.min(plans.length, 4);
   box.innerHTML = plans.map((p) => {
     const isHot = p.popular || p.code === hot;
+    const free = !p.price_month && !p.price_year;
     const price = billYear ? p.price_year : p.price_month;
     const perMonth = billYear && p.price_year ? usd(Math.round(p.price_year / 12 * 100) / 100) : '';
-    const extra = (p.bullets || []).filter((b) => !/^\d/.test(String(b).trim()) && !/AI writes|team seat/i.test(b));
-    return '<div class="plan' + (isHot ? ' hot' : '') + '">' + (isHot ? '<span class="pill badge">Most popular</span>' : '') +
+    const facts = planFacts(p);
+    const extra = (p.bullets || []).filter((b) => !/^\d/.test(String(b).trim()) && !/AI writes|team seat|join requests|welcome message|welcome bot|auto-approve|Welcome Flows/i.test(b));
+    if (free) extra.push('Ends with "Free welcome bot by Castvoo.com"');
+    return '<div class="plan' + (isHot ? ' hot' : '') + (free ? ' free' : '') + '">' + (isHot ? '<span class="pill badge">Most popular</span>' : '') +
       '<h3>' + esc(p.name) + '</h3><p class="desc">' + esc(p.tagline || '') + '</p>' +
-      '<div class="price"><b class="tnum">' + usd(price) + '</b><span>/' + (billYear ? 'year' : 'month') + '</span></div>' +
-      '<p class="note">' + (billYear ? 'Works out at ' + perMonth + ' a month' : '&nbsp;') + '</p>' +
-      '<ul>' + planFacts(p).map((f) => '<li><svg><use href="#i-check"/></svg><b>' + esc(f) + '</b></li>').join('') +
+      '<div class="price"><b class="tnum">' + usd(price) + '</b><span>' + (free ? ' forever' : '/' + (billYear ? 'year' : 'month')) + '</span></div>' +
+      '<p class="note">' + (free ? 'No card. No trial clock.' : billYear ? 'Works out at ' + perMonth + ' a month' : '&nbsp;') + '</p>' +
+      '<ul>' + facts.map((f) => '<li><svg><use href="#i-check"/></svg><b>' + esc(f) + '</b></li>').join('') +
       extra.map((b) => '<li><svg><use href="#i-check"/></svg>' + esc(b) + '</li>').join('') + '</ul>' +
-      (loggedIn ? '<a class="btn ' + (isHot ? 'b-blue' : 'b-ghost') + ' full" href="#app/wallet">Choose in my dashboard</a>' : '<a class="btn ' + (isHot ? 'b-blue' : 'b-ghost') + ' full" href="#signup">Start free trial</a>') + '</div>';
+      (loggedIn ? '<a class="btn ' + (isHot ? 'b-blue' : 'b-ghost') + ' full" href="#app/wallet">' + (free ? 'See my plan' : 'Choose in my dashboard') + '</a>' : '<a class="btn ' + (isHot ? 'b-blue' : 'b-ghost') + ' full" href="#signup">' + (free ? 'Start free' : 'Start free trial') + '</a>') + '</div>';
   }).join('');
   // Yearly toggle label from the real prices
   const ys = yearSaveText();
@@ -97,8 +110,10 @@ function sitePlans() {
   const trialPlan = (plans.find((p) => p.code === CFG.trial.plan) || {}).name || 'Growth';
   const bon = (CFG.topup_bonuses || []).filter((b) => b.bonus > 0);
   $('#prNotes').innerHTML =
-    '<div class="prn"><span class="prni">' + icon('check') + '</span><span><b>Every plan:</b> unlimited broadcasts, auto follow-ups, tracked clicks and Cas the AI helper. No add-on fees.</span></div>' +
-    '<div class="prn"><span class="prni">' + icon('gift') + '</span><span><b>' + fmt(CFG.trial.days) + '-day free trial of ' + esc(trialPlan) + '.</b> No card needed. Pick a plan any time.</span></div>' +
+    '<div class="prn"><span class="prni">' + icon('check') + '</span><span><b>Every paid plan:</b> Welcome Flows with follow-ups, unlimited broadcasts, tracked clicks and Cas the AI helper. No add-on fees.</span></div>' +
+    '<div class="prn"><span class="prni">' + icon('gift') + '</span><span><b>' + fmt(CFG.trial.days) + '-day free trial of ' + esc(trialPlan) + '.</b> No card needed. Pick a plan any time, or stay on Free when the trial ends: your welcome keeps running.</span></div>' +
+    '<div class="prn"><span class="prni">' + icon('chat') + '</span><span><b>24/7 customer support on every plan.</b> AI support agents answer in your dashboard in seconds, day and night, and our human team steps in whenever you need a person. The Free plan includes a few instant AI chats a month.</span></div>' +
+    '<div class="prn"><span class="prni">' + icon('clock') + '</span><span><b>Join requests reset every month.</b> Over your plan\'s number (plus a little extra), people are still let in, but your welcome pauses until next month or an upgrade.</span></div>' +
     '<div class="prn pay"><span class="prni">' + icon('wallet') + '</span><span><b>Pay from your Castvoo wallet</b> with the payment methods for your country' + (CFG.features.crypto !== false ? ', or crypto (USDT or Bitcoin)' : '') + '. Plans renew from the wallet.' +
       (bon.length ? '<span class="bonl">' + bon.map((b) => '<span class="pill p-ok">Top up ' + usd(b.min) + ', get ' + usd(b.bonus) + ' extra</span>').join('') + '</span>' : '') + '</span>' + (CFG.gatevoo ? gatevooBadge() : '') + '</div>';
 }
@@ -118,9 +133,9 @@ function siteReferral() {
   const rates = r.rates || [10, 20, 30];
   const sec = $('#refer');
   sec.hidden = CFG.features.referrals === false;
-  $('#refText').textContent = 'Earn ' + rates[0] + ' to ' + rates[rates.length - 1] + '% of every plan payment made by people you invite, every month, for as long as they pay. Use your earnings on your own plan, or withdraw from ' + usd(r.min_withdraw || 300) + ' in USDT or Bitcoin.';
+  $('#refText').textContent = 'Earn ' + rates[0] + ' to ' + rates[rates.length - 1] + '% of every plan payment made by people you invite, every month, for as long as they pay. Use it on your plan, or withdraw from ' + usd(r.min_withdraw || 300) + ' in USDT or Bitcoin.';
   const t2 = r.tier2_min || 5, t3 = r.tier3_min || 20;
-  const rows = [[(t2 > 2 ? '1 to ' + (t2 - 1) : '1') + ' paying referral' + (t2 > 2 ? 's' : ''), 'Starter partner', rates[0]], [t2 + ' to ' + (t3 - 1) + ' paying referrals', 'Pro partner', rates[1]], [t3 + ' or more paying referrals', 'Elite partner', rates[2]]];
+  const rows = [[(t2 > 2 ? '1 to ' + (t2 - 1) : '1') + ' paying referral' + (t2 > 2 ? 's' : ''), 'Bronze partner', rates[0]], [t2 + ' to ' + (t3 - 1) + ' paying referrals', 'Silver partner', rates[1]], [t3 + ' or more paying referrals', 'Gold partner', rates[2]]];
   $('#refTiers').innerHTML = rows.map((x) => '<div class="tier"><div><span>' + esc(x[0]) + '</span><small>' + x[1] + '</small></div><b>' + x[2] + '%</b></div>').join('');
 }
 
@@ -187,6 +202,7 @@ function vooLinks() {
 function vooWidget(show) {
   const v = CFG.voo;
   if (!v || !v.widget_src) return false;
+  if (window.__cvVsWidget === 'failed') return false; // blocked or down: fall back to our own help bubble
   if (!window.__cvVsWidget && show) {
     window.__cvVsWidget = true;
     const before = new Set(document.body.children);
@@ -195,7 +211,11 @@ function vooWidget(show) {
     sc.setAttribute('data-product', 'castvoo');
     sc.setAttribute('data-color', '#2F6BFF');
     if (ME && ME.user) { if (ME.user.email) sc.setAttribute('data-email', ME.user.email); if (ME.user.name) sc.setAttribute('data-name', ME.user.name); }
-    sc.onload = () => { for (const el of document.body.children) if (!before.has(el) && el.tagName === 'DIV' && el.shadowRoot && !el.id) { el.setAttribute('data-vs-widget', ''); el.hidden = VIEW !== 'site'; } };
+    const fail = () => { if (window.__cvVsWidget === 'failed') return; window.__cvVsWidget = 'failed'; renderHelp(VIEW); };
+    const tag = () => { let found = false; for (const el of document.body.children) if (!before.has(el) && el.tagName === 'DIV' && el.shadowRoot && !el.id) { el.setAttribute('data-vs-widget', ''); el.hidden = VIEW !== 'site'; found = true; } return found; };
+    // The widget may draw a moment after its script runs. If nothing appears, show our own bubble.
+    sc.onload = () => { if (!tag()) setTimeout(() => { if (!tag()) fail(); }, 4000); };
+    sc.onerror = fail;
     document.body.appendChild(sc);
   }
   $$('[data-vs-widget]').forEach((el) => { el.hidden = !show; });
@@ -207,15 +227,22 @@ function renderHelp(view) {
   const h = $('#helpHost');
   if (vooWidget(view === 'site')) { h.innerHTML = ''; return; }
   if (view !== 'site') { h.innerHTML = ''; return; }
-  if ($('#helpB')) return;
-  h.innerHTML = '<button type="button" class="help" id="helpB" aria-label="Help and support"><span class="mav hcas" data-cas="mini"></span><span class="hb"><svg><use href="#i-chat"/></svg></span></button>';
+  const ag = CFG.site_chat && CFG.site_chat.agent && CFG.site_chat.agent.avatar ? CFG.site_chat.agent : null;
+  if ($('#helpB')) {
+    // The site config may arrive after the button was drawn: show the agent's face once we know it.
+    const cas = $('#helpB .hcas');
+    if (ag && cas) { const im = document.createElement('img'); im.className = 'mav hface'; im.src = ag.avatar; im.alt = ''; im.width = 44; im.height = 44; cas.replaceWith(im); }
+    return;
+  }
+  h.innerHTML = '<button type="button" class="help" id="helpB" aria-label="Help and 24/7 support">' + (ag ? '<img class="mav hface" src="' + esc(ag.avatar) + '" alt="" width="44" height="44">' : '<span class="mav hcas" data-cas="mini"></span>') + '<span class="hb"><svg><use href="#i-chat"/></svg></span></button>';
   paintCas(h);
   $('#helpB').onclick = () => {
     const c = $('.helpc'); if (c) { c.remove(); return; }
+    if (CFG.site_chat) return openSiteChat();
     const s = CFG.support || {};
     const d = document.createElement('div');
     d.className = 'helpc'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Help');
-    d.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><span style="width:44px" data-cas="happy"></span><div style="flex:1"><b style="font-size:17px;letter-spacing:-.02em">Need a hand?</b><br><small class="muted">The Castvoo team is here to help.</small></div><button type="button" class="ib" data-hx aria-label="Close"><svg><use href="#i-x"/></svg></button></div>' +
+    d.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><span style="width:44px" data-cas="happy"></span><div style="flex:1"><b style="font-size:17px;letter-spacing:-.02em">Need a hand?</b><br><small class="muted">24/7 customer support, with our human team on call.</small></div><button type="button" class="ib" data-hx aria-label="Close"><svg><use href="#i-x"/></svg></button></div>' +
       '<p class="muted" style="font-size:14px">' + esc(s.reply_time || '') + '</p>' +
       (ME && ME.user ? '<a class="btn b-blue full" href="#app/help" data-hgo>' + icon('chat') + 'Chat with us</a>' : '') +
       '<a class="btn b-ghost full" href="mailto:' + esc(s.email) + '">' + icon('mail') + esc(s.email) + '</a>' +
@@ -227,36 +254,104 @@ function renderHelp(view) {
   };
 }
 
+/* ---------- Website chat (visitors): product and pricing answers, no account access ---------- */
+const SITECHAT = { msgs: [], busy: false };
+function openSiteChat() {
+  const s = CFG.support || {};
+  const ag = (CFG.site_chat && CFG.site_chat.agent) || { name: 'Castvoo', avatar: null };
+  const d = document.createElement('div');
+  d.className = 'helpc sitechat'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Chat with Castvoo');
+  const face = (cls) => ag.avatar ? '<img class="' + cls + '" src="' + esc(ag.avatar) + '" alt="" width="40" height="40">' : '<span class="' + cls + '" data-cas="mini"></span>';
+  d.innerHTML = '<div class="sc-h">' + face('sc-ava') + '<div style="flex:1;min-width:0"><b>' + esc(ag.name) + ' from Castvoo</b><small><span class="sdot"></span><span><b>24/7 customer support</b> · AI assistant · replies in seconds</span></small></div><button type="button" class="ib" data-hx aria-label="Close"><svg><use href="#i-x"/></svg></button></div>' +
+    '<div class="sc-l" id="scL" aria-live="polite"></div>' +
+    '<div class="sc-q" id="scQ">' + ['What does Castvoo do?', 'How much does it cost?', 'How do I pay from Nigeria?', 'Can I see who read my message?'].map((q) => '<button type="button" data-q>' + esc(q) + '</button>').join('') + '</div>' +
+    '<form class="sc-f" id="scF"><input class="inp" id="scI" maxlength="1000" placeholder="Ask about Castvoo…" aria-label="Your question" autocomplete="off"><button type="submit" class="btn b-blue" aria-label="Send"><svg><use href="#i-send"/></svg></button></form>' +
+    '<div class="sc-foot"><a class="btn b-blue sm" href="#signup" data-hgo>Start free</a>' + (ME && ME.user ? '<a href="#app/help" data-hgo>Account question? Open Help</a>' : '<a href="mailto:' + esc(s.email) + '">' + esc(s.email) + '</a>') + '</div>' +
+    (CFG.site_chat && CFG.site_chat.powered_by ? '<div class="sc-pwr">' + poweredBy(CFG.site_chat.powered_by) + '</div>' : '');
+  document.body.appendChild(d);
+  paintCas(d);
+  const L = $('#scL', d);
+  const draw = () => {
+    const intro = '<div class="scm a">' + '<div class="cb">Hi! I\'m ' + esc(ag.name) + '. Ask me anything about Castvoo: what it does, prices, payments or setup.</div></div>';
+    L.innerHTML = intro + SITECHAT.msgs.map((m) => '<div class="scm ' + (m.role === 'user' ? 'u' : 'a') + '"><div class="cb">' + esc(m.content).replace(/\n/g, '<br>') + '</div></div>').join('') +
+      (SITECHAT.busy ? '<div class="scm a"><div class="cb"><span class="tg-typing in"><i></i><i></i><i></i></span></div></div>' : '');
+    $('#scQ', d).hidden = SITECHAT.msgs.length > 0;
+    L.scrollTop = L.scrollHeight;
+  };
+  const ask = async (text) => {
+    const t = String(text || '').trim();
+    if (!t || SITECHAT.busy) return;
+    const history = SITECHAT.msgs.slice(-10);
+    SITECHAT.msgs.push({ role: 'user', content: t });
+    SITECHAT.busy = true; draw();
+    try {
+      const r = await POST('/api/public/chat', { message: t, history });
+      SITECHAT.busy = false;
+      for (const [i, b] of r.bubbles.entries()) {
+        if (i) { SITECHAT.busy = true; draw(); await new Promise((ok) => setTimeout(ok, Math.min(1800, 500 + b.length * 12))); SITECHAT.busy = false; }
+        SITECHAT.msgs.push({ role: 'assistant', content: b }); draw();
+      }
+    } catch (ex) {
+      SITECHAT.busy = false;
+      SITECHAT.msgs.push({ role: 'assistant', content: (ex && ex.message) || 'Sorry, chat is busy. Email us and we\'ll help.' });
+      draw();
+    }
+  };
+  draw();
+  $('#scF', d).onsubmit = (e) => { e.preventDefault(); const i = $('#scI', d); const v = i.value; i.value = ''; ask(v); };
+  d.onclick = (e) => {
+    if (e.target.closest('[data-hx]') || e.target.closest('[data-hgo]')) { d.remove(); return; }
+    const q = e.target.closest('[data-q]'); if (q) ask(q.textContent);
+  };
+  setTimeout(() => { const i = $('#scI', d); if (i && window.matchMedia('(pointer:fine)').matches) i.focus(); }, 50);
+}
+
 /* ---------- Example animations ---------- */
-const HP = [
-  { img: '🔥 NEW IN', sub: 'New collection', t: '*The new collection is live* 🔥\nTap below to see it before anyone else.', b: ['See the collection', 'Best sellers'] },
-  { img: '🎓 MODULE 4', sub: 'New lesson', t: '*New lesson is live* 🎓\nModule 4 is up. Start it in 2 minutes.', b: ['Start lesson', 'All modules'] },
-  { img: '☀️ 3 TIPS', sub: 'Good morning', t: '*Good morning, family* ☀️\nToday\'s 3 tips are inside.', b: ['Read today\'s tips', 'Join the bot'] },
-];
-let hpi = 0;
-function heroPhone() {
-  const p = HP[hpi % HP.length];
-  $('#heroScr').innerHTML = '<div class="tg-top"><span class="bk">‹</span><div class="tt"><b>Brand Updates ' + VF + '</b><small>channel</small></div><span class="tg-ava" style="background:var(--grad)"><svg viewBox="0 0 40 40"><use href="#logo"/></svg></span></div><div class="tg-bg" id="hpBg"><div class="tm in" style="opacity:.55"><b>Brand Updates</b><br>Yesterday\'s recap is pinned 📌<span class="ti">Yesterday</span></div></div><div class="tg-in"><span class="pc0">🔇</span><span class="fld" style="text-align:center">Mute</span></div>';
-  setTimeout(() => {
-    const bg = $('#hpBg'); if (!bg) return;
-    const d = document.createElement('div'); d.className = 'tm in';
-    d.innerHTML = '<div class="img shn"><div>' + p.img + '<small>' + p.sub + '</small></div></div>' + fmtMsg(p.t) + '<div class="meta"><span>Sent by Castvoo</span><span>09:00</span></div>';
-    bg.appendChild(d);
-    const bt = document.createElement('div'); bt.className = 'tbtns'; bt.innerHTML = p.b.map((x) => '<span>' + esc(x) + ' ↗</span>').join(''); bg.appendChild(bt);
-    $('#heroSay').textContent = 'Posted at 9:00 ✅';
-  }, 700);
-  hpi++;
+/* Hero phone: join request -> welcome -> "Tap to start" -> let in, then a broadcast and a Day 2 follow-up.
+   The three floating cards and the dark bubble follow the same timeline. Clearly labelled "Example". */
+const HJ = [['tunde', 'Tunde', 'meta_ad14'], ['wanjiku', 'Wanjiku', 'tiktok_ad5'], ['thandi', 'Thandi', 'meta_ad9'], ['kwame', 'Kwame', 'ads_gh2']];
+let hji = 0, hjT = [];
+function heroJoin() {
+  hjT.forEach(clearTimeout); hjT = [];
+  const scr = $('#heroScr'); if (!scr) return;
+  const [face, name, src] = HJ[hji++ % HJ.length];
+  const card = (id, html) => { const el = $('#' + id); el.innerHTML = mav(face) + '<div>' + html + '</div>'; el.classList.add('on'); };
+  const say = (t) => { $('#heroSay').textContent = t; };
+  ['pc1', 'pc2', 'pc3'].forEach((id) => $('#' + id).classList.remove('on'));
+  scr.innerHTML = '<div class="tg-top"><span class="bk">‹</span><div class="tt"><b>Brand Updates</b><small>bot</small></div><span class="tg-ava lg"><svg viewBox="0 0 40 40"><use href="#logo"/></svg></span></div>' +
+    '<div class="tg-bg" id="hpBg"></div><div class="tg-start" id="hpStart">START</div>';
+  const bg = $('#hpBg', scr);
+  const add = (html, cls) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; bg.appendChild(d); return d; };
+  const steps = [
+    [250, () => { add('👤 <b>' + esc(name) + '</b> asked to join Brand Updates', 'tg-sys'); card('pc1', '<b>' + esc(name) + ' asked to join</b><small>Join request · from ' + src + '</small>'); say('New join request 🔔'); }],
+    [900, () => { add('<i></i><i></i><i></i>', 'tg-typing'); }],
+    [1700, () => {
+      const ty = $('.tg-typing', bg); if (ty) ty.remove();
+      add('Hi ' + esc(name) + ' 👋 Welcome to <b>Brand Updates</b>! Tap below and I\'ll send you today\'s free tips.<span class="ti">09:41</span>', 'tm in');
+      add('▶ Tap to start', 'tkb');
+      card('pc2', '<b>Welcome sent</b><small>In 1 second · by your bot</small>'); say('Welcome sent in 1s ⚡');
+    }],
+    [3100, () => { const k = $('.tkb', bg); if (!k) return; k.classList.add('tap'); const t = document.createElement('i'); t.className = 'touch'; k.appendChild(t); }],
+    [3600, () => { const k = $('.tkb', bg); if (k) k.classList.remove('tap'); const st = $('#hpStart', scr); if (st) st.outerHTML = '<div class="tg-in"><span class="pc0">📎</span><span class="fld">Message</span><span class="sb">➤</span></div>'; add('/start<span class="ti">09:41 ✓✓</span>', 'tm out'); }],
+    [4300, () => { add('✓ <b>' + esc(name) + '</b> was let in', 'tg-sys ok'); card('pc3', '<b>' + esc(name) + ' is now a subscriber</b><small>Tapped Start · ready for broadcasts</small>'); say('Let in · now a subscriber ✅'); }],
+    // Then the rest of the story: a broadcast to everyone, and a timed follow-up.
+    [5900, () => {
+      add('<div class="img sm shn"><div>📣 TODAY\'S TIPS<small>Broadcast</small></div></div><b>Today\'s tips are live</b> 📣 Three quick wins inside.<span class="ti">10:00</span>', 'tm in');
+      add('Read today\'s tips ↗', 'tkb');
+      card('pc2', '<b>Broadcast sent</b><small>To all 1,240 subscribers · example</small>'); say('Broadcast sent 📣');
+    }],
+    [7900, () => {
+      add('Day 2 · 09:00', 'tg-sys day');
+      add('Quick win for day 2 💡 The one tip members save most.<span class="ti">09:00</span>', 'tm in');
+      add('See the tip ↗', 'tkb');
+      card('pc3', '<b>Day 2 follow-up sent</b><small>Auto follow-up · on time</small>'); say('Day 2 follow-up ✅');
+    }],
+  ];
+  if (RM) { steps.forEach((x) => x[1]()); const k = $('.tkb', bg); if (k) k.classList.remove('tap'); bg.querySelectorAll('.touch').forEach((t) => t.remove()); return; }
+  steps.forEach(([ms, fn]) => hjT.push(setTimeout(fn, ms)));
+  hjT.push(setTimeout(() => { if (siteOn()) heroJoin(); else hjT.push(setTimeout(heroJoin, 2000)); }, 11500));
 }
-const HC = [['tunde', 'Tunde started your bot', 'Welcome sent instantly'], ['wanjiku', 'Wanjiku tapped a button', '"See the collection" · tracked'], ['thandi', 'Thandi came from your ad', 'Start link meta_ad14 · tagged'], ['kwame', 'Kwame got day 3', 'Auto follow-up · sent'], ['zainab', 'Zainab tapped a button', '"Best sellers" · tracked']];
-let hci = 0;
-function heroCards() {
-  ['pc1', 'pc2', 'pc3'].forEach((id, j) => {
-    const el = $('#' + id); el.classList.remove('on');
-    setTimeout(() => { const c = HC[(hci + j) % HC.length]; el.innerHTML = mav(c[0]) + '<div><b>' + c[1] + '</b><small>' + c[2] + '</small></div>'; el.classList.add('on'); }, 350 + j * 500);
-  });
-  hci++;
-}
-const NC = [['tunde', 'Welcome sent to Tunde', '02:14 · <b>delivered</b>'], ['wanjiku', 'Day 3 follow-up sent', '03:00 · <b>delivered</b>'], ['kwame', 'Kwame tapped "See the collection"', '03:12 · <b>tracked click</b>'], ['thandi', 'Thandi started your bot', '04:40 · <b>welcome sent</b>'], ['zainab', 'Morning post scheduled', '06:00 · <b>9am local time</b>']];
+const NC = [['tunde', 'Welcome sent to Tunde', '02:14 · <b>delivered</b>'], ['wanjiku', 'Day 3 follow-up sent', '03:00 · <b>delivered</b>'], ['kwame', 'Kwame tapped "See the collection"', '03:12 · <b>tracked click</b>'], ['thandi', 'Thandi started your bot', '04:40 · <b>welcome sent</b>'], ['zainab', 'Zainab asked to join', '05:52 · <b>welcome sent in 1s</b>']];
 let nci = 0;
 function nightTick() {
   ['nc1', 'nc2'].forEach((id, j) => {
@@ -297,6 +392,23 @@ function aiShow(i) {
   aiT = setInterval(() => { k += 3; o.textContent = full.slice(0, k); if (k >= full.length) { clearInterval(aiT); o.classList.remove('typing'); } }, 22);
 }
 
+/* Scroll reveal: only blocks that start below the fold are hidden, and only when motion is allowed (css: .rv-w / .rv-in). */
+function siteReveal() {
+  if (RM || !('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting && e.boundingClientRect.top > 0) return;
+    e.target.classList.remove('rv-w'); e.target.classList.add('rv-in'); io.unobserve(e.target);
+  }), { rootMargin: '0px 0px -6% 0px' });
+  $$('#v-site .rv').forEach((el) => { if (el.getBoundingClientRect().top > innerHeight) { el.classList.add('rv-w'); io.observe(el); } });
+}
+/* Phones: the sticky "Log in / Start" bar appears once the hero button has scrolled out of view. */
+function siteStickyBar() {
+  const bar = $('#mbar'), cta = $('#heroCta');
+  if (!bar) return;
+  if (!cta || !('IntersectionObserver' in window)) { bar.classList.add('show'); return; }
+  new IntersectionObserver(([e]) => bar.classList.toggle('show', !e.isIntersecting && e.boundingClientRect.top < 0)).observe(cta);
+}
+
 function siteInit() {
   $$('[data-k]').forEach((e) => { SITE_EN[e.dataset.k] = e.innerHTML; });
   const s = store.get('cv_lang'); if (LANGS[s]) siteLang = s;
@@ -304,7 +416,17 @@ function siteInit() {
   siteApplyConfig();
   paintAll($('#v-site'));
 
-  addEventListener('scroll', () => { $('#hdr').classList.toggle('sc', scrollY > 8); const hb = $('#helpB'); if (hb) hb.classList.toggle('show', scrollY > 600); }, { passive: true });
+  // Scroll can happen on the window or on <body> (some embedded/iOS web views), so read every source.
+  const scrolledBy = () => Math.max(window.scrollY || 0, (document.scrollingElement && document.scrollingElement.scrollTop) || 0, document.documentElement.scrollTop || 0, document.body.scrollTop || 0);
+  const onScroll = () => { const y = scrolledBy(); $('#hdr').classList.toggle('sc', y > 8); const hb = $('#helpB'); if (hb) hb.classList.toggle('show', y > 600); };
+  document.addEventListener('scroll', onScroll, { passive: true, capture: true });
+  addEventListener('scroll', onScroll, { passive: true });
+  if ('IntersectionObserver' in window) {
+    const top = document.createElement('div'); top.setAttribute('aria-hidden', 'true'); top.style.cssText = 'height:8px;margin-bottom:-8px;pointer-events:none';
+    const hdr = $('#hdr'); hdr.parentNode.insertBefore(top, hdr);
+    new IntersectionObserver((es) => { $('#hdr').classList.toggle('sc', !es[0].isIntersecting); }).observe(top);
+  }
+  onScroll();
   $('#burger').onclick = () => $('#mnav').classList.add('open');
   $('#mnav').addEventListener('click', (e) => { if (e.target.closest('[data-close]')) $('#mnav').classList.remove('open'); });
   document.addEventListener('click', () => { const m = $('#lsw .lsw-m'); if (m) m.hidden = true; });
@@ -312,10 +434,10 @@ function siteInit() {
   $('#billTog').onclick = (e) => { const b = e.target.closest('[data-b]'); if (!b) return; $$('#billTog button').forEach((x) => x.classList.toggle('on', x === b)); billYear = b.dataset.b === 'y'; sitePlans(); };
   $('#aiTabs').onclick = (e) => { const b = e.target.closest('[data-i]'); if (b) { aiAuto = +b.dataset.i; aiShow(aiAuto); } };
 
+  siteReveal();
+  siteStickyBar();
   // Example animations (they pause when the site is hidden)
-  heroPhone(); heroCards(); nightTick();
-  setInterval(() => { if (siteOn()) heroCards(); }, 3200);
-  setInterval(() => { if (siteOn()) { $('#heroSay').textContent = 'Posting to your channel 📣'; heroPhone(); } }, 9600);
+  heroJoin(); nightTick();
   setInterval(() => { if (siteOn()) nightTick(); }, 4000);
   $('#bcList').innerHTML = [['tunde', 'Tunde'], ['wanjiku', 'Wanjiku'], ['kwame', 'Kwame'], ['thandi', 'Thandi']].map((x) => '<div class="bc-row">' + mav(x[0]) + x[1] + '<span class="ck">✓✓</span></div>').join('');
   let bi = 0; const bcRows = $$('#bcList .bc-row');
@@ -323,11 +445,9 @@ function siteInit() {
   const sgSets = [[0, 1], [2], [3], [4], [5]], sgCounts = [3912, 1806, 1288, 964, 2140]; let sk = 0; const sgEls = $$('#sgx span');
   const sgTick = () => { sgEls.forEach((e, i) => e.classList.toggle('on', sgSets[sk].includes(i))); countTo($('#sgN'), sgCounts[sk], 700); sk = (sk + 1) % sgSets.length; };
   sgTick(); setInterval(() => { if (siteOn()) sgTick(); }, 2200);
-  $('#clks').innerHTML = ['Lagos shop', 'Nairobi shop', 'Joburg shop'].map((c, i) => '<div class="clk"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2.5"/><line class="hh" x1="24" y1="24" x2="24" y2="13" stroke="#fff" stroke-width="3" stroke-linecap="round" style="animation-delay:-' + (i * 12) + 's"/><line class="hm" x1="24" y1="24" x2="24" y2="8" stroke="#CFE0FF" stroke-width="2" stroke-linecap="round" style="animation-delay:-' + (i * 2) + 's"/><circle cx="24" cy="24" r="2.5" fill="#fff"/></svg>' + c + '<small>09:00</small></div>').join('');
+  $('#clks').innerHTML = ['Mon', 'Tue', 'Wed'].map((c, i) => '<div class="clk"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2.5"/><line class="hh" x1="24" y1="24" x2="24" y2="13" stroke="#fff" stroke-width="3" stroke-linecap="round" style="animation-delay:-' + (i * 12) + 's"/><line class="hm" x1="24" y1="24" x2="24" y2="8" stroke="#CFE0FF" stroke-width="2" stroke-linecap="round" style="animation-delay:-' + (i * 2) + 's"/><circle cx="24" cy="24" r="2.5" fill="#fff"/></svg>' + c + '<small>09:00</small></div>').join('');
   bAiTick(); setInterval(() => { if (siteOn()) bAiTick(); }, 8000);
-  $('#teamStack').innerHTML = mav('ejiro', 36) + mav('zainab', 36) + mav('emeka', 36);
-  $('#teamRq').innerHTML = mav('zainab', 34) + '<div><b>Zainab</b><br><span class="muted">wants to send "New collection"</span></div><span class="act"><span class="apb">Approve</span></span>';
-  setInterval(() => { if (!siteOn()) return; const a = $('#teamRq .act'); a.innerHTML = '<span class="pill p-ok" style="animation:pop .4s var(--ease)">✓ Approved</span>'; setTimeout(() => { a.innerHTML = '<span class="apb">Approve</span>'; }, 2200); }, 5000);
+  $('#teamStack').innerHTML = mav('ejiro', 36) + mav('zainab', 36) + mav('emeka', 36) + mav('wanjiku', 36) + '<span class="more">+6</span>';
   aiShow(0); setInterval(() => { if (!siteOn()) return; aiAuto = (aiAuto + 1) % AIX.length; aiShow(aiAuto); }, 9500);
   siteGuide = guide($('#siteGuide'));
 }

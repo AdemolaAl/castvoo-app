@@ -7,13 +7,18 @@ const { audit } = require('../../services/audit');
 const { balances } = require('../../services/referrals');
 const { int, str, oneOf, cents, badRequest, notFound, forbidden } = require('../../lib/util');
 
+// The Free plan has plan_status 'active' too (billing.dropToFree). "Paying" = active on a plan with a price. `p` = plans.
+const FREE_SQL = '(coalesce(p.price_month_cents, 0) = 0 and coalesce(p.price_year_cents, 0) = 0)';
+const FREE_OF_W = `exists (select 1 from plans p where p.code = w.plan_code and ${FREE_SQL})`;
+
 module.exports = (r) => {
   r.get('/api/admin/users', async (ctx) => {
     const q = ctx.query;
     const params = [];
     let where = "u.status <> 'deleted'";
     if (q.q) { params.push('%' + String(q.q).replace(/[%_]/g, '').slice(0, 80) + '%'); where += ` and (u.email ilike $${params.length} or u.name ilike $${params.length} or u.tg_username ilike $${params.length} or u.ref_code ilike $${params.length} or w.name ilike $${params.length})`; }
-    if (q.status && ['trial', 'active', 'paused', 'cancelled'].includes(q.status)) { params.push(q.status); where += ` and w.plan_status = $${params.length}`; }
+    if (q.status === 'free') where += ` and w.plan_status = 'active' and ${FREE_OF_W}`;
+    else if (q.status && ['trial', 'active', 'paused', 'cancelled'].includes(q.status)) { params.push(q.status); where += ` and w.plan_status = $${params.length}` + (q.status === 'active' ? ` and not ${FREE_OF_W}` : ''); }
     if (q.plan) { params.push(String(q.plan)); where += ` and w.plan_code = $${params.length}`; }
     if (q.suspended === '1') where += " and u.status = 'suspended'";
     if (q.staff === '1') where += ' and u.staff_role is not null';
@@ -23,7 +28,7 @@ module.exports = (r) => {
     // Total spent = money this person really paid us (confirmed top-ups) minus refunds we sent back.
     const order = q.sort === 'spent' ? 'spent_cents desc, u.id desc' : 'u.id desc';
     const rows = await db.many(`select * from (select u.id, u.name, u.email, u.tg_username, u.country, u.status, u.staff_role, u.created_at, u.last_login_at,
-        w.id as workspace_id, w.name as workspace_name, w.plan_code, w.plan_status, w.trial_ends_at, w.period_end, w.wallet_cents, w.bonus_cents,
+        w.id as workspace_id, w.name as workspace_name, w.plan_code, w.plan_status, (w.plan_code is not null and ${FREE_OF_W}) as plan_free, w.trial_ends_at, w.period_end, w.wallet_cents, w.bonus_cents,
         (select count(*)::int from connections c where c.workspace_id = w.id and c.status <> 'removed') as connections,
         (select coalesce(sum(p.amount_cents), 0) from payments p where p.user_id = u.id and p.status = 'paid')
           - (select coalesce(sum(-t.amount_cents), 0) from wallet_tx t join workspaces ow on ow.id = t.workspace_id where ow.owner_user_id = u.id and t.kind = 'refund' and t.amount_cents < 0) as spent_cents
@@ -33,18 +38,22 @@ module.exports = (r) => {
 
   r.get('/api/admin/users/:id', async (ctx) => {
     const id = int(ctx.params.id, 'User');
-    const user = await db.one('select id, name, email, email_verified, tg_user_id, tg_username, google_sub is not null as google, voo_id, country, staff_role, status, ref_code, referred_by, marketing_opt_out, created_at, last_login_at from users where id = $1', [id]);
+    const user = await db.one('select id, name, email, email_verified, tg_user_id, tg_username, voo_id, country, staff_role, status, ref_code, referred_by, marketing_opt_out, created_at, last_login_at from users where id = $1', [id]);
     if (!user) throw notFound('That user');
-    const workspaces = await db.many('select w.*, m.role from workspaces w join members m on m.workspace_id = w.id where m.user_id = $1 order by w.id', [id]);
+    const workspaces = await db.many(`select w.*, m.role, ${FREE_OF_W} as plan_free from workspaces w join members m on m.workspace_id = w.id where m.user_id = $1 order by w.id`, [id]);
     const wsIds = workspaces.map((w) => w.id);
-    const [connections, payments, tx, threads, referredBy, referred, usage] = await Promise.all([
+    const [connections, payments, tx, threads, referredBy, referred, usage, links] = await Promise.all([
       db.many("select id, workspace_id, kind, username, title, member_count, status, last_error, created_at from connections where workspace_id = any($1) and status <> 'removed'", [wsIds]),
-      db.many('select reference, provider, method_key, amount_cents, bonus_cents, currency, amount_local, coin, txid, status, reason, created_at, paid_at from payments where user_id = $1 order by id desc limit 30', [id]),
+      db.many("select p.reference, p.provider, p.method_key, p.amount_cents, p.bonus_cents, p.currency, p.amount_local, p.coin, p.txid, p.proof_ref, p.status, p.reason, p.created_at, p.paid_at, pm.label as method_label from payments p left join payment_methods pm on pm.key = p.method_key and p.provider = 'manual' where p.user_id = $1 order by p.id desc limit 30", [id]),
       db.many('select * from wallet_tx where workspace_id = any($1) order by id desc limit 40', [wsIds]),
       db.many('select id, subject, status, last_message_at from support_threads where user_id = $1 order by id desc limit 10', [id]),
       user.referred_by ? db.one('select id, name, email from users where id = $1', [user.referred_by]) : null,
       db.one('select count(*)::int n from users where referred_by = $1', [id]),
       wsIds.length ? require('../../services/billing').usage(wsIds[0]) : null,
+      // SEC-7: their tracked button links, newest first, so staff can switch one off (phishing, scam pages).
+      db.many(`select l.code, l.workspace_id, l.label, l.url, l.created_at, l.disabled_at, l.disabled_reason,
+          (select count(*)::int from clicks k where k.code = l.code) as clicks
+        from links l where l.workspace_id = any($1) order by l.disabled_at desc nulls last, l.created_at desc limit 50`, [wsIds]),
     ]);
     // Money, all time: what they paid in, what plans cost them, what we refunded, and what's left in their wallets.
     const owned = workspaces.filter((w) => w.role === 'owner').map((w) => w.id);
@@ -58,7 +67,7 @@ module.exports = (r) => {
         (select coalesce(sum(-amount_cents), 0) from wallet_tx where workspace_id = any($2) and kind = 'refund' and amount_cents < 0)::bigint as refunded,
         (select coalesce(sum(wallet_cents + bonus_cents), 0) from workspaces where id = any($2))::bigint as wallet`, [id, owned]);
     const money = { paid: Number(m.paid) / 100, payments: m.payments, first_paid: m.first_paid, last_paid: m.last_paid, plans: Number(m.plans) / 100, plans_cash: Number(m.plans_cash) / 100, refunded: Number(m.refunded) / 100, spent: Math.max(0, Number(m.paid) - Number(m.refunded)) / 100, wallet: Number(m.wallet) / 100 };
-    return { user, workspaces, connections, payments, wallet_tx: tx, threads, referred_by: referredBy, referred_count: referred.n, referral_balance: await balances(id), usage, money };
+    return { user, workspaces, connections, payments, wallet_tx: tx, threads, referred_by: referredBy, referred_count: referred.n, referral_balance: await balances(id), usage, money, links };
   }, { staff: 'users.view' });
 
   r.post('/api/admin/users/:id/status', async (ctx) => {
@@ -126,4 +135,18 @@ module.exports = (r) => {
     await audit(ctx, asRefund ? 'wallet.refund' : 'wallet.adjust', 'workspace:' + id, { amount_cents: amount, kind, reason, referral_reversed_cents: clawed });
     return { ok: true, referral_reversed: clawed / 100 };
   }, { staff: 'wallet.adjust' });
+
+  /**
+   * Switch a tracked link (castvoo.com/l/<code>) off or on again, e.g. when it points at a phishing page (SEC-7).
+   * A disabled link shows a short notice instead of redirecting. Body: { disabled: true|false, reason }.
+   */
+  r.post('/api/admin/links/:code/disable', async (ctx) => {
+    const code = String(ctx.params.code || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+    const off = ctx.body.disabled !== false;
+    const reason = off ? str(ctx.body.reason, 'Reason', { min: 3, max: 300 }) : null;
+    const row = await db.one('update links set disabled_at = case when $2 then now() else null end, disabled_reason = $3 where code = $1 returning code, url, workspace_id', [code, off, reason]);
+    if (!row) throw notFound('That link');
+    await audit(ctx, off ? 'link.disable' : 'link.enable', 'link:' + code, { url: row.url, workspace_id: row.workspace_id, reason });
+    return { ok: true, disabled: off };
+  }, { staff: 'users.edit' });
 };

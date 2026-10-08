@@ -1,5 +1,5 @@
 'use strict';
-/* Logging in and out: email code, Telegram, Google, VooSquare. Plus "me" (the logged-in person). */
+/* Logging in and out: email code, Telegram, VooSquare. Plus "me" (the logged-in person). */
 
 const crypto = require('node:crypto');
 const db = require('../db');
@@ -7,15 +7,16 @@ const config = require('../config');
 const auth = require('../services/auth');
 const settings = require('../services/settings');
 const email = require('../services/email');
-const oidc = require('../lib/oidc');
 const rl = require('../lib/ratelimit');
 const perms = require('../permissions');
-const { str, email: vEmail, randomDigits, sha256, safeEqual, httpError, badRequest, randomToken, addDays } = require('../lib/util');
+const { str, email: vEmail, randomDigits, sha256, safeEqual, httpError, badRequest, randomToken, addDays, cleanName } = require('../lib/util');
 
 const codeHash = (mail, code) => sha256(`${config.appSecret}:${mail}:${code}`);
 
 async function sendCode(ctx, mail, purpose) {
-  if (!rl.hit('code-mail:' + mail, 5, 3600)) throw httpError(429, 'Too many codes for this email. Please wait an hour or use another way to log in.', 'rate_limited');
+  // Shared by every instance (SEC-17): with two servers an attacker no longer gets 2 × 5 codes an hour per email.
+  const lim = await rl.hitShared('code-mail:' + mail, 5, 3600);
+  if (!lim.ok) throw httpError(429, 'Too many codes for this email. Please wait an hour or use another way to log in.', 'rate_limited', { retry_after: lim.retryAfter });
   const code = randomDigits(6);
   await db.query("insert into login_codes(email, code_hash, expires_at) values ($1,$2, now() + interval '10 minutes')", [mail, codeHash(mail, code)]);
   const existing = await db.one('select * from users where email = $1', [mail]);
@@ -57,7 +58,7 @@ async function meResponse(ctx) {
   return {
     user: {
       id: u.id, name: u.name, email: u.email, email_verified: u.email_verified, country: u.country, tg_linked: !!u.tg_user_id, tg_username: u.tg_username,
-      google_linked: !!u.google_sub, voo_linked: !!u.voo_id, ref_code: u.ref_code, staff_role: u.staff_role, marketing_opt_out: u.marketing_opt_out,
+      voo_linked: !!u.voo_id, ref_code: u.ref_code, staff_role: u.staff_role, marketing_opt_out: u.marketing_opt_out,
       perms: u.staff_role ? perms.permsFor(u.staff_role) : [],
     },
     workspaces,
@@ -66,17 +67,17 @@ async function meResponse(ctx) {
 
 module.exports = (r) => {
   r.post('/api/auth/email/start', async (ctx) => {
-    if (!(await settings.feature('login_email'))) throw httpError(403, 'Email login is switched off. Use Telegram or Google.', 'off');
+    if (!(await settings.feature('login_email'))) throw httpError(403, 'Email login is switched off. Use Telegram or VooSquare.', 'off');
     return sendCode(ctx, vEmail(ctx.body.email), 'login');
-  }, { rate: [150, 600], csrf: true }); // per IP: mobile networks put many people behind one IP; the per-email limit stops spam
+  }, { rate: [150, 600], shared: true, csrf: true }); // per IP: mobile networks put many people behind one IP; the per-email limit stops spam
 
   r.post('/api/auth/email/verify', async (ctx) => {
     const mail = vEmail(ctx.body.email);
     await checkCode(mail, ctx.body.code);
-    const { user, created } = await auth.loginWith({ email: mail }, { name: str(ctx.body.name, 'Name', { max: 80, required: false }) || '', country: ctx.body.country, ref: ctx.body.ref || ctx.cookies.cv_ref });
+    const { user, created } = await auth.loginWith({ email: mail }, { name: cleanName(str(ctx.body.name, 'Name', { max: 200, required: false }) || ''), country: ctx.body.country, ref: ctx.body.ref || ctx.cookies.cv_ref });
     await auth.createSession(ctx, user);
     return { ok: true, created };
-  }, { rate: [300, 600], csrf: true });
+  }, { rate: [300, 600], shared: true, csrf: true });
 
   r.post('/api/auth/telegram', async (ctx) => {
     if (!(await settings.feature('login_telegram'))) throw httpError(403, 'Telegram login is switched off.', 'off');
@@ -87,32 +88,6 @@ module.exports = (r) => {
   }, { rate: [300, 600], csrf: true });
 
   // VooSquare ("Continue with Voo ID") is in routes/voo-connect.js, through the Voo Connect kit.
-  for (const provider of ['google']) {
-    r.get(`/api/auth/${provider}/start`, async (ctx) => {
-      const flag = 'login_google';
-      if (!(await settings.feature(flag))) throw httpError(403, 'This login method is switched off.', 'off');
-      const url = await oidc.start(provider, { ref: ctx.query.ref || ctx.cookies.cv_ref || null, country: ctx.query.country || null, signup: ctx.query.signup === '1' });
-      // Tie the login to THIS browser: the callback must come back with the same state in a cookie.
-      // Otherwise a callback link made in an attacker's browser could log a victim into the attacker's account.
-      ctx.setCookie('cv_oauth', new URL(url).searchParams.get('state'), { httpOnly: true, sameSite: 'Lax', secure: config.appUrl.startsWith('https://'), maxAge: 15 * 60, path: '/api/auth/' });
-      ctx.redirect(url);
-    }, { rate: [300, 600] });
-
-    r.get(`/api/auth/${provider}/callback`, async (ctx) => {
-      try {
-        const mine = ctx.cookies.cv_oauth;
-        ctx.setCookie('cv_oauth', '', { httpOnly: true, sameSite: 'Lax', maxAge: 0, path: '/api/auth/' });
-        if (!mine || !safeEqual(mine, String(ctx.query.state || ''))) throw httpError(400, 'This login link expired. Please try again.', 'oidc_state');
-        const info = await oidc.finish(provider, ctx.query);
-        const identity = { google_sub: info.sub, email: info.email };
-        const { user, created } = await auth.loginWith(identity, { name: info.name, country: info.data.country || info.country, ref: info.data.ref });
-        await auth.createSession(ctx, user);
-        ctx.redirect(created ? '/#signup/country' : '/#app');
-      } catch (e) {
-        ctx.redirect('/#signup?error=' + encodeURIComponent(e.message || 'Login failed'));
-      }
-    });
-  }
 
   /** Log out. People who signed in with VooSquare also get VooSquare's logout address, so one logout ends both. */
   r.post('/api/auth/logout', async (ctx) => {
@@ -125,7 +100,13 @@ module.exports = (r) => {
   r.get('/api/me', async (ctx) => meResponse(ctx), { auth: 'optional' });
 
   r.post('/api/me', async (ctx) => {
-    const name = ctx.body.name !== undefined ? str(ctx.body.name, 'Name', { min: 1, max: 80 }) : ctx.user.name;
+    // SEC-4: no newlines, control characters or odd spaces in names (they reach emails and the support AI's prompt).
+    let name = ctx.user.name;
+    if (ctx.body.name !== undefined) {
+      name = cleanName(str(ctx.body.name, 'Name', { min: 1, max: 200 }), 200);
+      if (!name) throw badRequest('Name is required.');
+      if (name.length > 80) throw badRequest('Name must be 80 characters or fewer.');
+    }
     let country = ctx.user.country;
     if (ctx.body.country !== undefined) {
       const c = await db.one('select code from countries where code = $1 and active', [String(ctx.body.country)]);
@@ -147,7 +128,7 @@ module.exports = (r) => {
     const other = await db.one('select id from users where email = $1 and id <> $2', [mail, ctx.user.id]);
     if (other) throw httpError(409, 'That email already belongs to another Castvoo account.', 'email_taken');
     return sendCode(ctx, mail, 'add_email');
-  }, { auth: 'user', rate: [10, 600] });
+  }, { auth: 'user', rate: [10, 600], shared: true });
 
   r.post('/api/me/email/verify', async (ctx) => {
     const mail = vEmail(ctx.body.email);
@@ -162,7 +143,7 @@ module.exports = (r) => {
     ctx.user = await db.one('select * from users where id = $1', [ctx.user.id]);
     if (config.ownerEmail && mail === config.ownerEmail) await db.query("update users set staff_role = 'owner' where id = $1", [ctx.user.id]);
     return meResponse(ctx);
-  }, { auth: 'user', rate: [20, 600] });
+  }, { auth: 'user', rate: [20, 600], shared: true });
 
   r.post('/api/me/telegram', async (ctx) => {
     const t = verifyTelegram(ctx.body);
@@ -215,6 +196,8 @@ module.exports = (r) => {
       await c.query('delete from segments where workspace_id = any($1)', [wsIds]);
       await c.query('delete from media where workspace_id = any($1)', [wsIds]);
       await c.query("update workspaces set name = 'Deleted workspace', ai_profile = '{}', plan_status = 'cancelled' where id = any($1)", [wsIds]);
+      // Join requests, links, clicks, replies, the AI tool log and every teammate's access (SEC-8, SEC-9).
+      await require('../services/purge').purgeRows(c, wsIds, { userId: u.id, members: true });
       await c.query('delete from support_threads where user_id = $1', [u.id]);
       await c.query('delete from members where user_id = $1', [u.id]);
       await c.query('delete from sessions where user_id = $1', [u.id]);
@@ -226,3 +209,4 @@ module.exports = (r) => {
 };
 
 module.exports.verifyTelegram = verifyTelegram;
+module.exports.sendCode = sendCode;

@@ -161,7 +161,6 @@ PAGES.bots = {
     const p = APP.state.plan;
     const owner = isOwner();
     el.innerHTML = '<div class="addrow">' + ['channel', 'group', 'bot'].map((t) => { const k = KIND[t]; return '<button type="button" class="addc" style="--c:' + k.c + '" data-connect="' + t + '"><span class="ci" style="background:' + k.b + '">' + k.e + '<span class="tb"><svg><use href="#i-tg"/></svg></span></span><b>Add a ' + t + '</b><small>' + KIND_TXT[t][1] + '</small><span class="go">Connect →</span></button>'; }).join('') + '</div>' +
-      '<div class="insight"><svg width="44" height="44" style="flex:none"><use href="#i-tg"/></svg><p style="flex:1"><b>New here?</b> Watch the 40-second guide: from @BotFather to a connected bot and channel.</p><button type="button" class="btn b-blue sm" data-guide>' + icon('play') + 'Play guide</button></div>' +
       (!d.tg_linked && CFG.bot_username ? '<div class="note2"><span>' + icon('tg') + '</span><span style="flex:1"><b>Link your Telegram</b> to add channels and groups in one tap and get test messages.</span><button type="button" class="btn b-ghost xs" id="bLk">Link Telegram</button></div>' : '') +
       '<div class="bh"><h3 style="font-size:18px">Connected</h3><span class="hint">' + fmt(p.usage.connections) + ' of ' + fmt(p.limits.connections) + ' on your ' + esc(p.plan_name) + ' plan</span></div>' +
       (d.connections.length ? '<div class="dg">' + d.connections.map((c) => {
@@ -201,9 +200,10 @@ async function startLinks(host, bots, alive, selId) {
   $('#slAdd').onclick = async (e) => {
     const v = $('#slN').value.trim().replace(/\s+/g, '_'), err = $('#slE');
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(v)) { err.textContent = 'Use only letters, numbers, _ and - (no spaces), like meta_ad14.'; err.hidden = false; return; }
-    err.hidden = true; btnBusy(e.currentTarget, true, 'Creating…');
+    const btn = e.currentTarget; // currentTarget is null after an await
+    err.hidden = true; btnBusy(btn, true, 'Creating…');
     try { const r = await POST('/api/connections/' + bot.id + '/start-links', { tag: v }); $('#slN').value = ''; copyText(r.url, 'Start link created and copied'); await load(); } catch (ex) { err.textContent = ex.message; err.hidden = false; }
-    btnBusy(e.currentTarget, false);
+    btnBusy(btn, false);
   };
   $('#slL').onclick = async (e) => {
     const d = e.target.closest('[data-sld]'); if (!d) return;

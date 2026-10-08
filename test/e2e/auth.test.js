@@ -1,5 +1,5 @@
 'use strict';
-/* Logging in: email code, Telegram widget, Google (OIDC), profile, adding an email, linking Telegram. */
+/* Logging in: email code, Telegram widget, profile, adding an email, linking Telegram. Google sign-in is gone (404). */
 
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -39,7 +39,8 @@ describe('email login', () => {
     const state = await c.get('/api/app/state');
     assert.equal(state.status, 200);
     assert.equal(state.body.plan.status, 'trial');
-    assert.equal(state.body.plan.limits.ai_writes, 100);
+    assert.equal(state.body.plan.limits.ai_writes, 50);
+    assert.equal(state.body.plan.limits.join_requests, 3000);
 
     // Logging in again does not create anything new.
     const again = await app.loginByEmail('newbie@example.com');
@@ -232,79 +233,26 @@ describe('Telegram login', () => {
   });
 });
 
-describe('Google login (OIDC)', () => {
-  async function googleLogin(client, user) {
-    app.fakes.oidc.nextUser = user;
-    const s = await client.get('/api/auth/google/start?ref=&country=GH');
-    assert.equal(s.status, 302, s.text);
-    const auth = s.headers.get('location');
-    assert.ok(auth.startsWith(app.fakes.base + '/oidc/authorize'));
-    const u = new URL(auth);
-    assert.equal(u.searchParams.get('code_challenge_method'), 'S256');
-    assert.equal(u.searchParams.get('redirect_uri'), app.url + '/api/auth/google/callback');
-    const back = await fetch(auth, { redirect: 'manual' });
-    const cb = new URL(back.headers.get('location'));
-    return client.get(cb.pathname + cb.search);
-  }
-
-  it('first login creates the account, the second just logs in', async () => {
+describe('Google login is gone', () => {
+  it('the old Google routes answer 404 and the website no longer offers Google', async () => {
     const c = app.client();
-    const r = await googleLogin(c, { sub: 'g-100', email: 'GUser@Example.com', email_verified: true, name: 'Goo User' });
-    assert.equal(r.status, 302);
-    assert.equal(r.headers.get('location'), '/#signup/country');
-    const me = await c.get('/api/me');
-    assert.equal(me.body.user.email, 'guser@example.com');
-    assert.equal(me.body.user.google_linked, true);
-    assert.equal(me.body.user.country, 'GH');
-    const c2 = app.client();
-    const r2 = await googleLogin(c2, { sub: 'g-100', email: 'guser@example.com', email_verified: true, name: 'Goo User' });
-    assert.equal(r2.headers.get('location'), '/#app');
+    for (const path of ['/api/auth/google/start', '/api/auth/google/start?ref=&country=GH', '/api/auth/google/callback?code=abc&state=x']) {
+      const r = await c.get(path);
+      assert.equal(r.status, 404, path);
+    }
+    const cfg = (await c.get('/api/public/config')).body;
+    assert.equal('google' in cfg.login, false);
+    assert.equal('login_google' in cfg.features, false);
+    assert.ok(!JSON.stringify(cfg).toLowerCase().includes('google'));
   });
 
-  it('a verified Google email joins the existing email account', async () => {
-    const e = await app.loginByEmail('joiner@example.com');
-    const c = app.client();
-    const r = await googleLogin(c, { sub: 'g-200', email: 'joiner@example.com', email_verified: true, name: 'J' });
-    assert.equal(r.headers.get('location'), '/#app');
-    const me = await c.get('/api/me');
-    assert.equal(me.body.user.id, e.user.id);
-    assert.equal(me.body.user.google_linked, true);
-  });
-
-  it('an unverified Google email does not take over an email account', async () => {
-    const e = await app.loginByEmail('victim@example.com');
-    const c = app.client();
-    await googleLogin(c, { sub: 'g-300', email: 'victim@example.com', email_verified: false, name: 'Mallory' });
-    const me = await c.get('/api/me');
-    assert.notEqual(me.body.user.id, e.user.id);
-    assert.equal(me.body.user.email, null);
-    // Google must say "verified" explicitly: a missing flag counts as not verified.
-    const c2 = app.client();
-    await googleLogin(c2, { sub: 'g-301', email: 'victim@example.com', name: 'Mallory 2' });
-    const me2 = await c2.get('/api/me');
-    assert.notEqual(me2.body.user.id, e.user.id);
-    assert.equal(me2.body.user.email, null);
-  });
-
-  it('a callback link opened in another browser does not log that browser in (login CSRF)', async () => {
-    const attacker = app.client();
-    app.fakes.oidc.nextUser = { sub: 'g-attacker', email: 'attacker@example.com', email_verified: true, name: 'Attacker' };
-    const s = await attacker.get('/api/auth/google/start');
-    const back = await fetch(s.headers.get('location'), { redirect: 'manual' });
-    const cb = new URL(back.headers.get('location'));
-    const victim = app.client();
-    const r = await victim.get(cb.pathname + cb.search);
-    assert.match(r.headers.get('location'), /^\/#signup\?error=/);
-    assert.equal((await victim.get('/api/me')).body.user, null, 'victim not logged in as the attacker');
-    assert.equal(await app.db.one("select 1 from users where google_sub = 'g-attacker'"), null);
-  });
-
-  it('a forged or reused state is refused', async () => {
-    const c = app.client();
-    const r = await c.get('/api/auth/google/callback?code=abc&state=forged');
-    assert.equal(r.status, 302);
-    assert.match(r.headers.get('location'), /^\/#signup\?error=/);
-    assert.equal((await c.get('/api/me')).body.user, null);
+  it('someone who signed up with Google logs in to the same account with an email code', async () => {
+    const u = await app.db.one("insert into users(email, email_verified, name, google_sub, ref_code) values ('oldgoogle@example.com', true, 'Old G', 'g-legacy-1', 'oldgoogle1') returning id");
+    const c = await app.loginByEmail('oldgoogle@example.com');
+    assert.equal(c.created, false);
+    assert.equal(c.user.id, u.id);
+    assert.equal(c.user.email, 'oldgoogle@example.com');
+    assert.equal('google_linked' in c.user, false);
   });
 });
 

@@ -30,7 +30,10 @@ module.exports = (r) => {
     const rows = await db.many(`select b.id, b.title, b.body, b.status, b.send_mode, b.send_at, b.total, b.sent, b.failed, b.created_at, b.started_at, b.finished_at,
         b.media_id, b.buttons, b.include_stop, b.segment_id, b.connection_id, c.kind, c.title as conn_title, c.username as conn_username, s.name as segment_name,
         (select count(*)::int from clicks k join links l on l.code = k.code where l.broadcast_id = b.id) as clicks,
-        (select count(distinct k.subscriber_id)::int from clicks k join links l on l.code = k.code where l.broadcast_id = b.id) as clickers
+        (select count(distinct k.subscriber_id)::int from clicks k join links l on l.code = k.code where l.broadcast_id = b.id) as clickers,
+        -- "9am local time" broadcasts have no send_at: their deliveries are queued for each time zone's 9am. The calendar uses these.
+        case when b.send_mode = 'local9' then (select min(d.due_at) from deliveries d where d.broadcast_id = b.id and d.action = 'send') end as first_due,
+        case when b.send_mode = 'local9' and b.status = 'sending' then (select min(d.due_at) from deliveries d where d.broadcast_id = b.id and d.action = 'send' and d.status = 'queued') end as next_due
       from broadcasts b join connections c on c.id = b.connection_id left join segments s on s.id = b.segment_id
       where b.workspace_id = $1 order by b.id desc limit 100`, [ctx.workspace.id]);
     return { broadcasts: rows };
@@ -70,6 +73,9 @@ module.exports = (r) => {
     await settings.requireFeature('broadcasts');
     const ws = ctx.workspace;
     const b = ctx.body;
+    // An ended trial says so first (it is about to become Free, which has no broadcasts).
+    if (ws.plan_status === 'trial' && new Date(ws.trial_ends_at) < new Date() && !b.draft) await billing.assertCanSend(ws);
+    await billing.requirePlanFeature(ws, 'broadcasts');
     const conn = await db.one("select * from connections where id = $1 and workspace_id = $2 and status = 'active'", [int(b.connection_id, 'Where to send'), ws.id]);
     if (!conn) throw badRequest('Pick a connected bot, channel or group to send from.');
     const msg = await B.checkMessage(ws.id, b);
@@ -78,6 +84,7 @@ module.exports = (r) => {
     if (b.segment_id) {
       if (conn.kind !== 'bot') throw badRequest('Audiences only work for bots. A channel or group post goes to everyone in it.');
       await settings.requireFeature('segments');
+      await billing.requirePlanFeature(ws, 'audiences');
       const s = await db.one('select id from segments where id = $1 and workspace_id = $2', [Number(b.segment_id), ws.id]);
       if (!s) throw badRequest('That audience was not found.');
       segmentId = s.id;
@@ -87,6 +94,7 @@ module.exports = (r) => {
       await settings.requireFeature('local_time');
       if (conn.kind !== 'bot') throw badRequest('Local-time sending works for bots. For a channel, pick a time instead.');
     }
+    if (mode !== 'now') await billing.requirePlanFeature(ws, 'schedule');
     let sendAt = null;
     if (mode === 'at') {
       sendAt = new Date(b.send_at);

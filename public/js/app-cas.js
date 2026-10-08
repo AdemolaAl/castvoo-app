@@ -23,10 +23,11 @@ PAGES.ai = {
     const tab = q.tab === 'train' ? 'train' : 'chat';
     const p = APP.state.plan;
     const left = aiLeft();
+    const planAi = (p.features || []).includes('ai');
     el.innerHTML = '<div class="box hello"><div class="mesh" style="width:300px;height:300px;right:20%;top:-40%;background:rgba(110,195,255,.5)"></div><div style="display:flex;flex-direction:column;gap:10px;min-width:0;padding-bottom:20px">' +
-      '<span class="pill" style="background:rgba(255,255,255,.16);color:#fff;align-self:flex-start" data-aileft>' + fmt(left) + ' AI writes left</span>' +
+      (planAi ? '<span class="pill" style="background:rgba(255,255,255,.16);color:#fff;align-self:flex-start" data-aileft>' + fmt(left) + ' AI writes left</span>' : '') +
       '<h2>Hi' + ((ME.user && ME.user.name) ? ' ' + esc(ME.user.name.split(' ')[0]) : '') + ', I\'m Cas.</h2><p>Ask me to write or translate a message, or ask how your messages are doing. I look at your real numbers in Castvoo. Teach me about your business and everything I write sounds like you.</p>' +
-      '<p class="hsmall">' + fmt(p.usage.ai_writes) + ' of ' + fmt(p.limits.ai_writes) + ' AI writes used this month. ' + (p.ai_refill_at ? 'They refill on ' + fmtDate(p.ai_refill_at, false) + '. If they run out, I rest until then. ' : p.status === 'trial' ? 'Your plan\'s full amount starts when the trial ends. ' : '') + 'There is never an extra charge.</p></div><div class="hart" data-cas="think"></div></div>' +
+      '<p class="hsmall">' + (!planAi ? 'Cas writes, rewrites and answers on Starter and up.' : fmt(p.usage.ai_writes) + ' of ' + fmt(p.limits.ai_writes) + ' AI writes used this month. ' + (p.ai_refill_at ? 'They refill on ' + fmtDate(p.ai_refill_at, false) + '. If they run out, I rest until then. ' : p.status === 'trial' ? 'Your plan\'s full amount starts when the trial ends. ' : '') + 'There is never an extra charge.') + '</p></div><div class="hart" data-cas="think"></div></div>' +
       '<div class="seg2 tabs" id="aiTab"><button type="button" data-t="chat" class="' + (tab === 'chat' ? 'on' : '') + '">' + icon('chat') + 'Ask Cas</button><button type="button" data-t="train" class="' + (tab === 'train' ? 'on' : '') + '">' + icon('spark') + 'Train Cas</button></div><div id="aiBody"></div>';
     $('#aiTab').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) appGo('ai', b.dataset.t === 'train' ? { tab: 'train' } : null); };
     if (tab === 'train') return trainCas($('#aiBody'), alive);
@@ -35,6 +36,11 @@ PAGES.ai = {
 };
 
 function chatCas(box, autoAsk) {
+  if (!((APP.state.plan.features || []).includes('ai'))) {
+    box.innerHTML = emptyBox({ cas: 'wave', title: 'Cas is on Starter and up', text: 'On a paid plan Cas writes, rewrites and translates your messages, and answers questions about your numbers. You can teach Cas about your business now, so it is ready when you upgrade.', action: '<div class="row2b" style="max-width:420px"><button type="button" class="btn b-blue" data-upgrade-ai>' + icon('up') + 'See plans</button><button type="button" class="btn b-ghost" data-go="ai" data-q="tab=train">Train Cas</button></div>' });
+    $('[data-upgrade-ai]', box).onclick = () => openUpgrade({ title: 'Let Cas write for you', text: 'Cas, the AI helper, is on Starter and up.', feature: 'ai' });
+    return;
+  }
   if (!aiOn()) {
     box.innerHTML = emptyBox({ cas: 'think', title: 'Cas is being switched on', text: 'The AI helper isn\'t available just yet. You can already teach Cas about your business on the Train Cas tab, so it\'s ready when it switches on.', action: '<button type="button" class="btn b-blue sm" data-go="ai" data-q="tab=train">Train Cas</button>' });
     return;
@@ -47,7 +53,7 @@ function chatCas(box, autoAsk) {
   const list = $('#chL');
   const draw = () => {
     list.innerHTML = (CHAT.length ? '' : '<div class="cmsg a"><span class="cav" data-cas="mini"></span><div class="cb">Hi! Ask me anything about your messages, your subscribers or how to use Castvoo. I can also write messages for you.</div></div>') +
-      CHAT.map((m) => '<div class="cmsg ' + (m.role === 'user' ? 'u' : 'a') + '">' + (m.role === 'user' ? '' : '<span class="cav" data-cas="mini"></span>') + '<div class="cb">' + (m.pending ? '<span class="tg-typing in"><i></i><i></i><i></i></span>' : fmtMsg(m.content)) + '</div>' + (m.role === 'assistant' && !m.pending ? '<button type="button" class="cpy" data-copy="' + esc(m.content) + '" data-msg="Copied" aria-label="Copy answer">' + icon('copy') + '</button>' : '') + '</div>').join('');
+      CHAT.map((m) => '<div class="cmsg ' + (m.role === 'user' ? 'u' : 'a') + '">' + (m.role === 'user' ? '' : '<span class="cav" data-cas="mini"></span>') + '<div class="cb">' + (m.pending ? '<span class="tg-typing in"><i></i><i></i><i></i></span>' : fmtMsg(m.content) + (m.checked && m.checked.length ? '<small class="cchk">' + icon('check') + 'Checked your ' + esc(m.checked.join(', ')) + '</small>' : '')) + '</div>' + (m.role === 'assistant' && !m.pending ? '<button type="button" class="cpy" data-copy="' + esc(m.content) + '" data-msg="Copied" aria-label="Copy answer">' + icon('copy') + '</button>' : '') + '</div>').join('');
     paintCas(list);
     list.scrollTop = list.scrollHeight;
   };
@@ -62,6 +68,7 @@ function chatCas(box, autoAsk) {
     try {
       const r = await POST('/api/ai/ask', { question, history });
       wait.content = r.answer; wait.pending = false; setAiLeft(r.ai_writes_left);
+      wait.checked = (r.checked || []).map((t) => ({ get_connections: 'channels & bots', get_broadcasts: 'messages', get_flows: 'follow-ups', get_usage: 'plan usage', get_recent_errors: 'recent errors', get_subscribers_summary: 'subscribers', search_knowledge: 'help articles' }[t])).filter(Boolean);
     } catch (e) {
       CHAT.splice(CHAT.indexOf(wait), 1);
       CHAT.push({ role: 'assistant', content: '⚠️ ' + e.message });

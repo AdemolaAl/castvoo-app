@@ -105,13 +105,28 @@ module.exports = (r) => {
   });
 
   /** Log out everywhere: our session, then VooSquare's (people who use a Voo ID), then back to our home page. */
-  r.get('/logout', async (ctx) => {
+  // SEC-13: another website must not be able to log people out with a hidden link or image. A GET from another
+  // site (Sec-Fetch-Site: cross-site / same-site) gets a small "Log out?" page whose button POSTs here; our own pages,
+  // typed addresses and VooSquare's launcher (no or same-origin / none Sec-Fetch-Site) log out straight away.
+  const logout = async (ctx) => {
     const s = await auth.loadSession(ctx);
     const vooUser = !!(s && s.user.voo_id);
     await auth.destroySession(ctx);
     const k = voo.kit();
     ctx.redirect(vooUser && k && config.vooConnectOn() ? k.logoutUrl(voo.homeUrl()) : '/');
+  };
+  r.get('/logout', async (ctx) => {
+    const site = String(ctx.req.headers['sec-fetch-site'] || '');
+    if (site && site !== 'same-origin' && site !== 'none') {
+      return ctx.html(200, '<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Log out · Castvoo</title>'
+        + '<body style="font-family:system-ui;padding:40px;text-align:center;color:#0B1430"><h2>Log out of Castvoo?</h2>'
+        + '<form method="post" action="/logout"><button type="submit" style="font:inherit;padding:10px 22px;border-radius:10px;border:0;background:#2F6BFF;color:#fff;cursor:pointer">Log out</button></form>'
+        + '<p><a href="/#app" style="color:#2F6BFF">Back to Castvoo</a></p>');
+    }
+    return logout(ctx);
   });
+  // The form above. A cross-site POST carries no session cookie (SameSite=Lax), so it can't log anyone out.
+  r.post('/logout', logout);
 
   r.get('/dashboard', async (ctx) => ctx.redirect('/#app'));
 

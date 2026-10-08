@@ -142,10 +142,12 @@ describe('scale', () => {
     const r = await c.post('/api/broadcasts', { connection_id: bot.connId, body: 'Capped', segment_id: seg.body.segment.id });
     assert.equal(r.status, 200, r.text);
     assert.equal(r.body.queued, 5000);
-    assert.ok(Date.now() - t < 8000, `queueing took ${Date.now() - t} ms`);
+    // These limits catch a missing index (that takes minutes), not a slow machine. 8 s was flaky on a busy box (QA-23).
+    const LIMIT = Number(process.env.THROUGHPUT_LIMIT_MS) || 20000;
+    assert.ok(Date.now() - t < LIMIT, `queueing took ${Date.now() - t} ms`);
     await app.db.query("update deliveries set status = 'skipped' where broadcast_id = $1", [r.body.id]);
     t = Date.now();
     await app.db.query('delete from subscribers where connection_id = $1', [bot.connId]);
-    assert.ok(Date.now() - t < 8000, `deleting 20,000 subscribers took ${Date.now() - t} ms`);
+    assert.ok(Date.now() - t < LIMIT, `deleting 20,000 subscribers took ${Date.now() - t} ms`);
   });
 });

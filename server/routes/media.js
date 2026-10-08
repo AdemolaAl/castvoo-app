@@ -64,8 +64,19 @@ module.exports = (r) => {
       await fs.promises.unlink(file).catch(() => {});
       throw e;
     }
-    const row = await db.one('insert into media(workspace_id, kind, filename, mime, size_bytes, path) values ($1,$2,$3,$4,$5,$6) returning id, kind, filename, size_bytes',
-      [ctx.workspace.id, t.kind, name, mime, size, file]);
+    // SEC-18: the quota is checked again with the real size, under a per-workspace lock, so many uploads at the same
+    // moment can't all pass a nearly full quota (the first check above only used the declared length).
+    const row = await db.tx(async (c) => {
+      await c.query('select pg_advisory_xact_lock(7101, $1::int)', [ctx.workspace.id]);
+      const now = (await c.query('select count(*)::int n, coalesce(sum(size_bytes), 0)::bigint bytes from media where workspace_id = $1', [ctx.workspace.id])).rows[0];
+      if (now.n >= STORAGE.files || Number(now.bytes) + size > STORAGE.bytes) return null;
+      return (await c.query('insert into media(workspace_id, kind, filename, mime, size_bytes, path) values ($1,$2,$3,$4,$5,$6) returning id, kind, filename, size_bytes',
+        [ctx.workspace.id, t.kind, name, mime, size, file])).rows[0];
+    });
+    if (!row) {
+      await fs.promises.unlink(file).catch(() => {});
+      throw httpError(413, 'Your workspace has no room for more photos and videos right now. Files you have not used in a message are cleared after 3 days; try again then, or reuse a file you already uploaded.', 'storage_full');
+    }
     return { media: row };
   }, { auth: 'workspace', stream: true, rate: [60, 600] });
 
@@ -75,9 +86,10 @@ module.exports = (r) => {
     let st;
     try { st = await fs.promises.stat(m.path); } catch { throw notFound('That file'); }
     ctx.res.writeHead(200, { 'Content-Type': m.mime, 'Content-Length': st.size, 'Cache-Control': 'private, max-age=86400' });
-    fs.createReadStream(m.path).pipe(ctx.res);
+    require('../app').sendFile(m.path, ctx.res); // ENG-1: pipeline closes the file on abort
     ctx.sent = true;
   }, { auth: 'workspace' });
 };
 
 module.exports.STORAGE = STORAGE;
+module.exports.TYPES = TYPES;

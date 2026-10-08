@@ -1,0 +1,73 @@
+WEBVTT
+
+1
+00:00:03.700 --> 00:00:08.317
+Start links show you which ad or post brought each subscriber to your bot.
+
+2
+00:00:08.618 --> 00:00:10.750
+Give every ad its own link.
+
+3
+00:00:10.880 --> 00:00:14.665
+Type a name, like tiktok_ad6, and tap Create link.
+
+4
+00:00:14.966 --> 00:00:17.269
+It's copied, ready for your ad.
+
+5
+00:00:17.399 --> 00:00:21.131
+Everyone who starts your bot through it is tagged with that name.
+
+6
+00:00:21.430 --> 00:00:24.565
+Here you see how many people each link brought in.
+
+7
+00:00:24.695 --> 00:00:27.605
+The meta_ad14 link is doing best.
+
+8
+00:00:27.905 --> 00:00:29.888
+Now open Audiences.
+
+9
+00:00:30.018 --> 00:00:33.691
+An audience is a saved group of your bot subscribers.
+
+10
+00:00:33.992 --> 00:00:36.316
+Give it a name, then add a rule.
+
+11
+00:00:36.446 --> 00:00:39.778
+Let's pick everyone who came from the Meta ad link.
+
+12
+00:00:40.077 --> 00:00:43.484
+The live count shows how many people match right now.
+
+13
+00:00:43.614 --> 00:00:47.388
+You can add more rules, like clicked in the last 7 days.
+
+14
+00:00:47.689 --> 00:00:48.962
+Save it.
+
+15
+00:00:49.092 --> 00:00:53.448
+Then tap Message them, or pick this audience when you send a message.
+
+16
+00:00:53.747 --> 00:00:56.946
+Audiences are for people who started your bot.
+
+17
+00:00:57.076 --> 00:01:00.728
+A channel or group post always reaches everyone in it.
+
+18
+00:01:00.858 --> 00:01:04.627
+Audiences and start links come with the Growth plan and up.

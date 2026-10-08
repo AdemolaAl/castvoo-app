@@ -71,7 +71,8 @@ async function gatevooOn() {
 /**
  * The payment methods a person in `countryCode` can use right now.
  * A method shows only when its provider has keys set and the method is active.
- * 'crypto' becomes one Gatevoo option, or two manual options (USDT / BTC) when Gatevoo is off.
+ * 'crypto' becomes one Gatevoo option, or a manual USDT option when Gatevoo is off.
+ * After those come the team's own manual methods (provider 'manual') offered in this country or in all countries.
  */
 async function methodsFor(countryCode) {
   const all = await load();
@@ -92,6 +93,17 @@ async function methodsFor(countryCode) {
         if (crypto.usdt_address) out.push({ key: 'usdt', provider: 'crypto', coin: 'USDT', label: 'USDT · TRC20', detail: 'Send the exact amount, then paste the transaction ID', color: '#26A17B', icon: '₮', currency: 'USD', usd_rate: 1 });
       }
     }
+  }
+  // The team's own methods (Admin → Countries & payments → Add payment method). They need no provider keys.
+  const code = country.code || 'XX';
+  for (const m of all.methods) {
+    if (m.provider !== 'manual' || !m.active || m.deleted_at) continue;
+    if (!m.all_countries && !(m.countries || []).includes(code)) continue;
+    const cur = m.currency && m.currency !== 'USD' ? m.currency : 'USD';
+    // A local-currency method uses its own rate, or the country's when the country uses that currency.
+    const rate = cur === 'USD' ? 1 : m.usd_rate != null ? Number(m.usd_rate) : country.currency === cur ? Number(country.usd_rate) : null;
+    if (!(rate > 0)) continue; // no rate to work out the amount: not offered here
+    out.push({ ...m, currency: cur, usd_rate: rate, manual: true });
   }
   return out;
 }

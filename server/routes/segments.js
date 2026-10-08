@@ -4,6 +4,7 @@
 const db = require('../db');
 const seg = require('../services/segments');
 const settings = require('../services/settings');
+const billing = require('../services/billing');
 const { str, int, notFound, forbidden } = require('../lib/util');
 
 async function count(wsId, rules, connectionId) {
@@ -30,6 +31,7 @@ module.exports = (r) => {
 
   r.post('/api/segments', async (ctx) => {
     await settings.requireFeature('segments');
+    await billing.requirePlanFeature(ctx.workspace, 'audiences');
     const name = str(ctx.body.name, 'Audience name', { min: 1, max: 60 });
     const rules = seg.cleanRules(ctx.body.rules || []);
     const row = await db.one('insert into segments(workspace_id, name, rules) values ($1,$2,$3) returning *', [ctx.workspace.id, name, JSON.stringify(rules)]);

@@ -15,13 +15,29 @@ const shell = (title, body) => `<!doctype html><html lang="en"><head><meta chars
 <body><header class="lh"><a class="lg" href="/"><span class="lm">C</span><b>Cast<i>voo</i></b></a><a class="bk" href="/">Back to Castvoo</a></header><main class="lw">${body}</main>
 <footer class="lf"><nav>${LEGAL.map((l) => `<a href="/legal/${l.slug}">${escHtml(l.title)}</a>`).join('')}</nav><p>Castvoo is not affiliated with Telegram.${config.vooConnectOn() ? ` <a href="${escHtml(config.voosquare.base)}/app" target="_blank" rel="noopener">Part of VooSquare</a>` : ''}</p></footer><script src="/voo-connect-browser.js" defer></script></body></html>`;
 
+// Hosts tracked links may always go to straight away.
+const SAFE_HOSTS = ['t.me', 'telegram.me', 'telegram.org', 'telegram.dog'];
+async function needsInterstitial(link) {
+  if (!config.linkWarnNewDays) return false;
+  let u;
+  try { u = new URL(link.url); } catch { return true; }
+  if (u.protocol === 'tg:') return false;
+  const host = u.hostname.toLowerCase();
+  const own = [config.appUrl, config.voosquare.base].map((x) => { try { return new URL(x).hostname.toLowerCase(); } catch { return ''; } }).filter(Boolean);
+  if ([...SAFE_HOSTS, ...own].some((h) => host === h || host.endsWith('.' + h))) return false;
+  const ws = await db.one('select created_at, paid_ever from workspaces where id = $1', [link.workspace_id]);
+  return !!(ws && !ws.paid_ever && new Date(ws.created_at) > new Date(Date.now() - config.linkWarnNewDays * 86400000));
+}
+
 module.exports = (r) => {
   r.get('/legal', async (ctx) => ctx.redirect('/legal/terms'));
   r.get('/legal/:slug', async (ctx) => {
     const page = LEGAL.find((l) => l.slug === ctx.params.slug);
     if (!page) throw notFound('That page');
     const raw = fs.readFileSync(path.join(LEGAL_DIR, page.slug + '.html'), 'utf8');
-    ctx.html(200, shell(page.title, fill(raw, await settings.publicVars())));
+    // Values from admin settings are escaped before they go into the page (SEC-19).
+    const vars = Object.fromEntries(Object.entries(await settings.publicVars()).map(([k, v]) => [k, escHtml(v)]));
+    ctx.html(200, shell(page.title, fill(raw, vars)));
   });
 
   /** Referral link: remember who sent the visitor, then open sign-up. */
@@ -44,8 +60,17 @@ module.exports = (r) => {
       const [id, sig] = String(ctx.query.s).split('.');
       if (/^\d+$/.test(id) && checkSig(`click:${link.code}:${id}`, sig, 10)) sid = Number(id);
     }
+    // Switched off by the team (phishing or abuse): no redirect (SEC-7).
+    if (link.disabled_at) return ctx.html(410, shell('Link switched off', '<h1>This link was switched off</h1><p>The Castvoo team switched this link off because it may not be safe. If you were sent here by someone you know, ask them for a new link.</p>'));
     db.query('insert into clicks(code, workspace_id, subscriber_id) values ($1,$2,$3)', [link.code, link.workspace_id, sid]).catch(() => {});
     if (sid) db.query('update subscribers set last_seen_at = now() where id = $1', [sid]).catch(() => {});
+    // Links from new accounts that have never paid, to sites outside Telegram and Castvoo, get a "you are leaving
+    // Castvoo" page first, so castvoo.com links can't be used as a free, trusted-looking bounce to phishing (SEC-7).
+    if (await needsInterstitial(link)) {
+      let host = '';
+      try { host = new URL(link.url).host; } catch { /* not a URL: shown as is */ }
+      return ctx.html(200, shell('Leaving Castvoo', `<h1>You are leaving Castvoo</h1><p>This link was added by a Castvoo customer and goes to <b>${escHtml(host || link.url)}</b>. Castvoo did not write or check that page.</p><p>Never type your Castvoo login code or password on another site.</p><p><a href="${escHtml(link.url)}" rel="nofollow noopener noreferrer">Continue to ${escHtml(host || 'the link')}</a></p><p><a href="/">Back to Castvoo</a></p>`));
+    }
     ctx.redirect(link.url);
   });
 

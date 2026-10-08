@@ -6,7 +6,7 @@
   /* =================== FEATURES =================== */
   // Which connection each switch depends on. any: one of them is enough.
   const NEEDS = {
-    login_email: { all: ['email'] }, login_telegram: { all: ['telegram'] }, login_google: { all: ['google'] }, login_voosquare: { all: ['voosquare_login'] },
+    login_email: { all: ['email'] }, login_telegram: { all: ['telegram'] }, login_voosquare: { all: ['voosquare_login'] },
     ai: { all: ['ai'] }, sales_emails: { all: ['email'] }, topups: { any: ['paystack', 'flutterwave', 'gatevoo'], soft: 'Crypto by hand still works without them.' },
     crypto: { any: ['gatevoo'], soft: 'Without Gatevoo, customers pay to the manual addresses in Settings.' },
   };
@@ -58,11 +58,12 @@
     { key: 'paystack', name: 'Paystack', ic: 'card', c: '#0BA4DB', env: ['PAYSTACK_SECRET_KEY'], test: 'paystack', urls: [['Webhook URL — paste in Paystack → Settings → API Keys & Webhooks', '/pay/paystack']], about: 'Card, bank transfer and mobile money in Nigeria, Ghana and South Africa.' },
     { key: 'flutterwave', name: 'Flutterwave', ic: 'card', c: '#F5A623', env: ['FLW_SECRET_KEY', 'FLW_WEBHOOK_HASH'], test: 'flutterwave', urls: [['Webhook URL — paste in Flutterwave → Settings → Webhooks (use the same secret hash as FLW_WEBHOOK_HASH)', '/pay/flutterwave']], about: 'Cards everywhere, M-Pesa in Kenya, MTN and Orange money in Cameroon.' },
     { key: 'gatevoo', name: 'Gatevoo', ic: 'wallet', c: '#111111', gv: true, env: ['GATEVOO_URL', 'GATEVOO_KEY', 'GATEVOO_WEBHOOK_SECRET'], test: 'gatevoo', urls: [['Webhook URL — paste in Gatevoo → Connect', '/pay/gatevoo']], about: 'Our own crypto checkout for USDT and Bitcoin. Payments are confirmed automatically.' },
-    { key: 'google', name: 'Google login', ic: 'user', c: '#EA4335', env: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'], urls: [['Authorized redirect URI — paste in Google Cloud → Credentials → OAuth client', '/api/auth/google/callback']], about: '“Continue with Google” on the login page.' },
     { key: 'voosquare', name: 'VooSquare', ic: 'home', c: '#5B3DF5', status: (i) => i.voosquare_login && i.voosquare_api, partial: (i) => i.voosquare_login || i.voosquare_api, env: ['VOO_BASE', 'VOO_CLIENT_ID', 'VOO_CLIENT_SECRET', 'VOO_API_KEY'], urls: [['Redirect URI — paste in VooSquare → Admin → Products → Castvoo', '/api/auth/voosquare/callback'], ['Support webhook — paste in VooSquare → Admin → Products → Castvoo', '/api/voosquare/support/webhook'], ['Summary URL — paste in VooSquare → Admin → Products → Castvoo', '/api/voosquare/summary']], about: 'Log in with a VooSquare account. Castvoo support chats also appear in the VooSquare HQ inbox, and replies written there come back here. Activity events feed the VooSquare dashboard.' },
   ];
   const MONEY_KEYS = ['crypto', 'referral', 'billing'];
-  const canSet = (key) => (key === 'crypto' ? CV.role() === 'owner' : MONEY_KEYS.includes(key) ? ['owner', 'admin', 'finance'].includes(CV.role()) : can('settings.edit'));
+  // Same rules as PUT /api/admin/settings/:key: crypto Owner only; referral rules Owner or Admin (SEC-14: Finance pays
+  // withdrawals, so it does not set the rules); billing Owner, Admin or Finance.
+  const canSet = (key) => (key === 'crypto' ? CV.role() === 'owner' : key === 'referral' ? ['owner', 'admin'].includes(CV.role()) : MONEY_KEYS.includes(key) ? ['owner', 'admin', 'finance'].includes(CV.role()) : can('settings.edit'));
   const TABS = [['connections', 'Connections', 'plug'], ['crypto', 'Crypto & Gatevoo', 'wallet'], ['business', 'Company & trial', 'home'], ['money', 'Billing & referrals', 'card'], ['support', 'Support & legal', 'chat']];
 
   const sform = (key, title, ic, about, fields) => {
@@ -130,15 +131,18 @@
           { name: 'days', label: 'Trial length (days)', type: 'number', min: 0, max: 60, value: t.days },
           { name: 'plan', label: 'Trial plan', type: 'select', value: t.plan, options: plans.filter((p) => p.active || p.code === t.plan).map((p) => ({ value: p.code, label: p.name })) },
           { name: 'ai_writes', label: 'AI writes during the trial', type: 'number', min: 0, value: t.ai_writes },
-        ])}`;
+          { name: 'join_requests', label: 'Join requests during the trial (-1 = no limit)', type: 'number', min: -1, value: t.join_requests ?? 3000 },
+        ])}<div class="note">${icon('info')}<span>When a trial ends without a paid plan, the workspace moves to the Free plan: its first live Welcome Flow keeps welcoming people; everything else is paused and kept.</span></div>`;
       } else if (tab === 'money') {
         const b = st.billing, r = st.referral;
         body = html`${sform('billing', 'Billing', 'card', 'Top-up limits, refunds and reminders.', [
           { name: 'min_topup', label: 'Smallest top-up', type: 'number', step: '0.01', prefix: '$', value: b.min_topup_cents / 100 },
           { name: 'max_topup', label: 'Biggest top-up', type: 'number', step: '0.01', prefix: '$', value: b.max_topup_cents / 100 },
           { name: 'refund_days', label: 'Refund window (days)', type: 'number', min: 0, max: 90, value: b.refund_days },
-          { name: 'data_retention_days', label: 'Keep data after a plan ends (days)', type: 'number', min: 7, value: b.data_retention_days },
+          { name: 'data_retention_days', label: 'Keep data after a plan ends (days)', type: 'number', min: 7, value: b.data_retention_days, hint: 'Only used if the Free plan is switched off. While it is on, an ended plan moves to Free and the data is kept.' },
           { name: 'renew_reminder_days', label: 'Low-balance reminder (days before renewal)', type: 'number', min: 1, max: 14, value: b.renew_reminder_days },
+          { name: 'limit_grace_pct', label: 'Extra join requests before welcomes pause (% of the plan)', type: 'number', min: 0, max: 100, value: b.limit_grace_pct ?? 10 },
+          { name: 'inactive_free_days', label: 'Clear unused Free workspaces after (days)', type: 'number', min: 90, max: 3650, value: b.inactive_free_days ?? 365, hint: 'No owner login or visit, no join requests and no money in the wallet for this long. The owner is emailed 30 and 7 days before; logging in keeps everything. The legal pages say 12 months, so change them too if you change this.' },
         ])}
         ${sform('referral', 'Referral program', 'users', 'How much people earn for bringing paying customers.', [
           { name: 'rate_1', label: 'Tier 1 share (%)', type: 'number', min: 0, max: 60, value: r.rates[0], hint: 'From the first paying referral.' },
@@ -149,7 +153,12 @@
           { name: 'settle_days', label: 'Earnings settle after (days)', type: 'number', min: 0, max: 120, value: r.settle_days, hint: 'Covers refunds and chargebacks.' },
           { name: 'min_withdraw', label: 'Smallest withdrawal', type: 'number', step: '0.01', prefix: '$', value: r.min_withdraw_cents / 100 },
           { name: 'cookie_days', label: 'Referral link remembered for (days)', type: 'number', min: 1, max: 365, value: r.cookie_days },
-        ])}`;
+          { name: 'commission_cap_pct', label: 'Highest commission on a payment (%)', type: 'number', min: 0, max: 50, value: r.commission_cap_pct ?? 50, hint: 'Never above 50%. Tier shares can not be higher than this.' },
+          { name: 'yearly_cap_pct', label: 'Highest commission on a yearly payment (%)', type: 'number', min: 0, max: 50, value: r.yearly_cap_pct ?? 35, hint: 'Never above the cap above.' },
+          { name: 'first_attribution', label: 'When a Castvoo referral and a VooSquare affiliate both brought the customer', type: 'select', value: r.first_attribution === false ? 'false' : 'true', options: [{ value: 'true', label: 'The one that came first earns' }, { value: 'false', label: 'The Castvoo referral always earns' }] },
+          { name: 'net_of_fees', label: 'Pay commission on the payment minus the processor fee (when the provider reports it)', type: 'checkbox', value: r.net_of_fees !== false },
+        ])}
+        <div class="note">${icon('info')}<span><b>One commission per payment, always.</b> A plan payment pays the Castvoo referrer or the VooSquare affiliate, never both. Bonus credit never earns commission. Earnings that look like a self-referral wait in Withdrawals → Held earnings.</span></div>`;
       } else {
         body = html`${sform('support', 'Support', 'chat', 'What customers see in the help chat.', [
           { name: 'reply_time', label: 'Reply time text', type: 'textarea', rows: 2, value: st.support.reply_time },
@@ -182,7 +191,7 @@
             else value = v;
             if (key === 'referral' && !(await confirm('Change the referral program?', 'New earnings use the new numbers. The referral terms page updates too.', { okText: 'Save' }))) return;
             if (key === 'crypto' && (value.usdt_address !== st.crypto.usdt_address || value.btc_address !== st.crypto.btc_address) && !(await confirm('Change the crypto addresses?', 'Customers will send money to these addresses. A wrong letter means the money is lost forever. Check them twice.', { danger: true, okText: 'Yes, they are correct' }))) return;
-            if (await act($('button[type=submit]', f), () => putj('/api/admin/settings/' + key, { value }), 'Saved.')) { if (key === 'crypto') CV.reload(); else if (st[key] !== undefined) st[key] = value; }
+            if (await act($('button[type=submit]', f), () => putj('/api/admin/settings/' + key, { value }), 'Saved.')) { if (['crypto', 'referral', 'billing'].includes(key)) CV.reload(); else if (st[key] !== undefined) st[key] = value; }
           });
         },
       };
@@ -192,7 +201,7 @@
   /* =================== TEAM =================== */
   const PERM_LABEL = {
     'overview.view': 'See the overview', 'users.view': 'See users, prices and offers', 'users.edit': 'Change plans, suspend people', 'wallet.adjust': 'Wallet corrections and refunds',
-    'support.view': 'Read support chats', 'support.reply': 'Reply to customers', 'payments.view': 'See payments and withdrawals', 'payments.review': 'Approve or reject crypto payments',
+    'support.view': 'Read support chats', 'support.reply': 'Reply to customers', 'payments.view': 'See payments and withdrawals', 'payments.review': 'Approve or reject manual payments',
     'withdrawals.review': 'Pay or reject withdrawals', 'pricing.edit': 'Change prices and plans', 'offers.edit': 'Offers, coupons, banners', 'countries.edit': 'Countries, rates, payment methods',
     'content.edit': 'Website text', 'emails.edit': 'Email templates', 'knowledge.edit': 'Cas knowledge (and Try Cas)', 'ai.edit': 'AI settings', 'features.edit': 'Turn features on and off',
     'settings.edit': 'Settings and connections', 'team.manage': 'Add and change teammates', 'audit.view': 'See the audit log', 'system.view': 'System health and connection tests',
@@ -222,7 +231,7 @@
         <div class="card"><div class="ch"><h3>${icon('lock')} Roles and what they can do</h3></div>
           <div class="grid g3">${ordered.map((r) => html`<div class="row" style="align-items:flex-start;gap:10px;flex-wrap:nowrap"><span class="bd role-${r.key}">${r.name}</span><span class="small mut">${r.about}</span></div>`)}</div>
           <div class="mx-wrap"><table class="mx"><thead><tr><th>Can…</th>${ordered.map((r) => html`<th>${r.name}</th>`)}</tr></thead><tbody>${Object.keys(t.matrix).map((p) => html`<tr><td>${PERM_LABEL[p] || p}</td>${ordered.map((r) => (t.matrix[p].includes(r.key) ? html`<td class="y" aria-label="yes">✓</td>` : html`<td class="n" aria-label="no">—</td>`))}</tr>`)}</tbody></table></div>
-          <p class="hint">Money settings (crypto addresses, billing, referrals) can also be changed by Finance.</p>
+          <p class="hint">Billing settings can also be changed by Finance. Referral rules: Owner and Admin only. Crypto addresses: Owner only.</p>
         </div>`;
       return {
         html: page,
@@ -259,7 +268,7 @@
     'user.suspended': ['Suspended a user', 'lock'], 'user.active': ['Unsuspended a user', 'check'], 'workspace.plan': ['Changed a plan', 'edit'], 'wallet.adjust': ['Corrected a wallet', 'wallet'], 'wallet.refund': ['Recorded a refund', 'wallet'],
     'payment.approve': ['Approved a payment', 'check'], 'payment.reject': ['Rejected a payment', 'x'], 'payment.recheck': ['Rechecked a payment', 'refresh'], 'withdrawal.paid': ['Paid a withdrawal', 'out'], 'withdrawal.reject': ['Rejected a withdrawal', 'x'],
     'plan.create': ['Created a plan', 'tag'], 'plan.update': ['Changed a plan', 'tag'], 'offer.create': ['Created an offer', 'gift'], 'offer.update': ['Changed an offer', 'gift'], 'offer.on': ['Switched an offer on', 'toggle'], 'offer.off': ['Switched an offer off', 'toggle'], 'offer.delete': ['Deleted an offer', 'trash'],
-    'country.save': ['Changed a country', 'globe'], 'method.save': ['Changed a payment method', 'card'], 'feature.on': ['Switched a feature on', 'toggle'], 'feature.off': ['Switched a feature off', 'toggle'], 'content.save': ['Changed website text', 'text'],
+    'country.save': ['Changed a country', 'globe'], 'method.create': ['Added a payment method', 'card'], 'method.save': ['Changed a payment method', 'card'], 'method.delete': ['Deleted a payment method', 'card'], 'feature.on': ['Switched a feature on', 'toggle'], 'feature.off': ['Switched a feature off', 'toggle'], 'content.save': ['Changed website text', 'text'],
     'email.save': ['Changed an email', 'mail'], 'email.reset': ['Reset an email', 'mail'], 'knowledge.create': ['Added Cas knowledge', 'book'], 'knowledge.update': ['Changed Cas knowledge', 'book'], 'knowledge.delete': ['Deleted Cas knowledge', 'trash'],
     'team.add': ['Added a teammate', 'shield'], 'team.role': ['Changed a role', 'shield'], 'team.remove': ['Removed a teammate', 'shield'], 'integration.test': ['Tested a connection', 'plug'],
   };

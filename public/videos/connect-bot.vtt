@@ -1,0 +1,85 @@
+WEBVTT
+
+1
+00:00:03.699 --> 00:00:07.762
+In this guide, you will connect your own Telegram bot to Castvoo.
+
+2
+00:00:07.892 --> 00:00:09.773
+It takes about a minute.
+
+3
+00:00:10.074 --> 00:00:13.235
+Go to Channels and bots, and tap Add a bot.
+
+4
+00:00:13.612 --> 00:00:16.341
+Now open BotFather in Telegram.
+
+5
+00:00:16.471 --> 00:00:19.937
+It is Telegram's official tool for making bots.
+
+6
+00:00:20.243 --> 00:00:22.498
+Send it the command /newbot.
+
+7
+00:00:22.628 --> 00:00:26.296
+Then pick a name, and a username that ends in "bot".
+
+8
+00:00:26.596 --> 00:00:29.091
+BotFather replies with a token.
+
+9
+00:00:29.221 --> 00:00:32.163
+It is a long code with a colon in the middle.
+
+10
+00:00:32.293 --> 00:00:34.532
+Copy it, and keep it private.
+
+11
+00:00:34.832 --> 00:00:38.324
+Back in Castvoo, paste the token into this box.
+
+12
+00:00:38.622 --> 00:00:39.965
+One tip.
+
+13
+00:00:40.095 --> 00:00:45.453
+If this bot already runs another service, connecting it here takes over its updates.
+
+14
+00:00:45.754 --> 00:00:47.555
+Tap Connect bot.
+
+15
+00:00:47.685 --> 00:00:50.825
+Castvoo checks it with Telegram in a few seconds.
+
+16
+00:00:51.126 --> 00:00:52.863
+And you are connected.
+
+17
+00:00:52.993 --> 00:00:54.779
+Your bot is live.
+
+18
+00:00:55.079 --> 00:00:58.352
+Share your bot's link, so people can press Start.
+
+19
+00:00:58.482 --> 00:01:02.278
+Everyone who does becomes a subscriber you can message.
+
+20
+00:01:02.578 --> 00:01:06.241
+Your bot now shows here, with how many people it can reach.
+
+21
+00:01:06.371 --> 00:01:08.801
+Next, add your channel or group.

@@ -3,34 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Castvoo · Telegram broadcasts and auto follow-ups</title>
-<meta name="description" content="Send Telegram broadcasts, welcome every new subscriber and run auto follow-ups for your bots, channels and groups. Cas, the AI helper, writes with you. 7 days free.">
+<title>Castvoo · Telegram welcome bot, broadcasts and follow-ups on autopilot</title>
+<meta name="description" content="Welcome everyone who asks to join your Telegram channel or group, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links. Cas, the AI helper, writes the messages. Free plan for 1 channel, 7-day free trial, no card.">
 <meta name="theme-color" content="#2F6BFF">
-<meta property="og:title" content="Castvoo · Telegram broadcasts and auto follow-ups">
-<meta property="og:description" content="Broadcasts, auto follow-ups and an AI helper for your Telegram bots, channels and groups.">
+<meta property="og:title" content="Castvoo · Welcome. Broadcast. Follow up. All on autopilot.">
+<meta property="og:description" content="A Telegram welcome bot, broadcasts to all your subscribers and timed follow-up flows in a simple builder. Cas, the AI helper, writes the messages.">
 <meta property="og:type" content="website">
 <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/css/castvoo.css?v=1">
-<script defer src="/js/core.js?v=1"></script>
-<script defer src="/js/api.js?v=1"></script>
+<link rel="stylesheet" href="/css/castvoo.css?v=8">
+<script defer src="/js/core.js?v=4"></script>
+<script defer src="/js/api.js?v=5"></script>
 <script defer src="/js/qr.js?v=1"></script>
-<script defer src="/js/site.js?v=1"></script>
+<script defer src="/js/site.js?v=6"></script>
 <script defer src="/js/site-story.js?v=1"></script>
-<script defer src="/js/signup.js?v=1"></script>
-<script defer src="/js/app.js?v=1"></script>
-<script defer src="/js/app-home.js?v=1"></script>
-<script defer src="/js/app-send.js?v=1"></script>
-<script defer src="/js/app-drips.js?v=1"></script>
-<script defer src="/js/app-people.js?v=1"></script>
-<script defer src="/js/app-connect.js?v=1"></script>
-<script defer src="/js/app-cas.js?v=1"></script>
-<script defer src="/js/app-money.js?v=1"></script>
-<script defer src="/js/app-account.js?v=1"></script>
+<script defer src="/js/signup.js?v=2"></script>
+<script defer src="/js/app.js?v=3"></script>
+<script defer src="/js/app-home.js?v=3"></script>
+<script defer src="/js/app-send.js?v=3"></script>
+<script defer src="/js/app-drips.js?v=3"></script>
+<script defer src="/js/app-flows.js?v=2"></script>
+<script defer src="/js/app-people.js?v=2"></script>
+<script defer src="/js/app-connect.js?v=2"></script>
+<script defer src="/js/app-cas.js?v=2"></script>
+<script defer src="/js/app-money.js?v=4"></script>
+<script defer src="/js/app-account.js?v=4"></script>
 <script defer src="/js/app-zedapex.js?v=1"></script>
-<script defer src="/js/main.js?v=1"></script>
+<script defer src="/js/app-guides.js?v=3"></script>
+<script defer src="/js/main.js?v=3"></script>
 <script defer src="/voo-connect-browser.js"></script>
 </head>
 <body>
@@ -62,6 +64,7 @@
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
     <symbol id="i-tap" viewBox="0 0 24 24"><path d="M9 11V5a2 2 0 0 1 4 0v6l4.5 1a2 2 0 0 1 1.5 2.3L18 20H9l-3.5-5a1.8 1.8 0 0 1 2.8-2.2L9 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-join" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 20c.6-3.6 3.3-5.6 6.5-5.6 1.4 0 2.7.4 3.8 1.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15.5 17.2l2.3 2.3 4-4.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
@@ -96,7 +99,7 @@
 
 <!-- ================= WEBSITE ================= -->
 <div id="v-site">
-  <div class="strip" id="annBar" hidden><div class="wrap"><span class="nw">NEW</span><span id="annText"></span><a id="annLink" href="#guide" hidden>Learn more →</a></div></div>
+  <div class="strip" id="annBar" hidden><div class="wrap"><span class="nw">NEW</span><span id="annText"></span><a id="annLink" href="#how" hidden>See how →</a></div></div>
   <header class="hdr" id="hdr">
     <div class="wrap hdr-in">
       <a class="logo" href="#top" aria-label="Castvoo home"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></a>
@@ -123,18 +126,22 @@
     <div class="gridbg"></div>
     <div class="wrap hero-in">
       <div class="hc">
-        <span class="chip"><span class="cb"><svg><use href="#i-tg"/></svg>Telegram</span><span data-k="hc">Broadcasts, follow-ups and AI in one place</span></span>
-        <h1 class="h1" id="heroTitle">Turn your Telegram into a <em class="gtext">sales machine.</em></h1>
-        <p class="lead" id="heroSub">Castvoo welcomes every new subscriber, follows up at the right time and sends each group the message written for them. Your bots and channels keep selling while you sleep.</p>
-        <div class="hctas"><a class="btn b-blue" href="#signup" id="heroCta"><span id="heroCtaT">Start free · 7 days on us</span><svg><use href="#i-arrow"/></svg></a><a class="btn b-ghost" href="#guide"><svg><use href="#i-play"/></svg><span data-k="h2c">Watch the 40-second setup</span></a></div>
-        <div class="trust"><span><svg><use href="#i-check"/></svg><span data-k="t1">No card needed</span></span><span><svg><use href="#i-check"/></svg><span data-k="t2">Set up in about 5 minutes</span></span><span><svg><use href="#i-check"/></svg><span data-k="t3">Cancel any time</span></span></div>
+        <span class="chip"><span class="cb"><svg><use href="#i-tg"/></svg>Telegram</span><span class="ct" data-k="hc">Welcome bot · Broadcasts · Follow-ups</span></span>
+        <h1 class="h1" id="heroTitle">Welcome. Broadcast. Follow up. <em class="gtext">All on autopilot.</em></h1>
+        <p class="lead" id="heroSub">Greet everyone who asks to join, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links in a simple builder. Cas, the AI helper, writes the messages.</p>
+        <div class="hctas">
+          <a class="btn b-blue hcta" href="#signup" id="heroCta"><span id="heroCtaT">Start my 7-day free trial</span><svg><use href="#i-arrow"/></svg></a>
+          <div class="hsec"><a class="btn b-ghost hwatch" href="#how" id="heroWatch"><span class="hw-p"><svg><use href="#i-play"/></svg></span><span data-k="hw">Watch how it works</span></a><a class="hsetup" href="#guide"><span data-k="h2c">Watch the 40-second setup</span><svg><use href="#i-arrow"/></svg></a></div>
+        </div>
+        <p class="trust"><span><svg><use href="#i-check"/></svg><span data-k="t1">No card needed</span></span><span><svg><use href="#i-check"/></svg><span data-k="t2">Free plan for 1 channel</span></span><span><svg><use href="#i-check"/></svg><span data-k="t3">Set up in about 5 minutes</span></span></p>
+        <nav class="hfeat" aria-label="What Castvoo does"><a href="#f-welcome"><svg><use href="#i-join"/></svg><span data-k="f1">Welcome bot</span></a><a href="#f-broadcasts"><svg><use href="#i-send"/></svg><span data-k="f2">Broadcasts</span></a><a href="#f-followups"><svg><use href="#i-clock"/></svg><span data-k="f3">Follow-up flows</span></a><a href="#how"><svg><use href="#i-drip"/></svg><span data-k="f4">Flow builder</span></a><a href="#ai"><svg><use href="#i-pencil"/></svg><span data-k="f5">AI writer</span></a></nav>
       </div>
       <div class="stage" aria-hidden="true">
         <div class="halo"></div>
         <div class="orb"><i style="left:-21px;top:40%"><svg><use href="#i-tg"/></svg></i><i style="right:6%;top:4%;color:var(--blue)"><svg style="width:20px;height:20px"><use href="#i-spark"/></svg></i><i style="right:-14px;top:64%;font-size:20px">💬</i><i style="left:16%;bottom:2%;font-size:20px">📣</i></div>
         <div class="phone"><div class="notch"></div><div class="scr" id="heroScr"></div></div>
         <div class="peeps"><div class="pc pc1" id="pc1"></div><div class="pc pc2" id="pc2"></div><div class="pc pc3" id="pc3"></div></div>
-        <div class="say" id="heroSay">Posting to your channel 📣</div>
+        <div class="say" id="heroSay">Join request · answered in 1s ⚡</div>
         <div class="cas-st" data-cas="wave"></div>
         <span class="exl" style="left:4%;top:0">Example</span>
       </div>
@@ -142,26 +149,46 @@
     <div class="wrap"><div class="sendsto"><span style="color:var(--mut2)">Works with</span><span><span class="bx" style="background:var(--tg-s)"><svg width="22" height="22"><use href="#i-tg"/></svg></span>Telegram bots</span><span><span class="bx" style="background:var(--tg-s)"><svg width="22" height="22"><use href="#i-tg"/></svg></span>Channels</span><span><span class="bx" style="background:var(--tg-s)"><svg width="22" height="22"><use href="#i-tg"/></svg></span>Groups</span></div></div>
   </section>
 
+  <!-- "See how it works": the real guide videos. Posters only until someone taps; js/app-guides.js opens its player (data-vset="site"). Styles: "How it works" block in css/castvoo.css -->
+  <section class="sec how" id="how" aria-labelledby="howT">
+    <div class="wrap">
+      <div class="center rv"><span class="kick">See it work</span><h2 class="h2" id="howT">Watch a join get <em class="gtext">greeted live.</em></h2><p class="lead">Real dashboard recordings with voice and captions. Start with the Welcome Flow. It takes under 2 minutes to watch.</p></div>
+      <div class="how-g">
+        <button type="button" class="how-f rv" data-vguide="welcome-flow" data-vset="site" aria-label="Play video: Build a Welcome Flow (1:44)">
+          <span class="how-fr"><img src="/videos/welcome-flow.jpg?v=1" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl big"><i></i><svg><use href="#i-play"/></svg></span></span>
+          <span class="how-fb"><span class="how-tag">Start here</span><span class="how-ft"><b>Build a Welcome Flow</b><small>Greet, let in and follow up everyone who asks to join.</small></span><span class="how-len"><span data-len>1:44</span><small>Voice + captions</small></span></span>
+        </button>
+        <div class="how-l">
+          <button type="button" class="how-c rv" data-vguide="connect-bot" data-vset="site" aria-label="Play video: Connect your Telegram bot (1:15)"><span class="how-th"><img src="/videos/connect-bot.jpg?v=1" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl"><svg><use href="#i-play"/></svg></span><span class="how-d" data-len>1:15</span></span><span class="how-cb"><b>Connect your Telegram bot</b><small>Make a bot with @BotFather and paste its token.</small><span class="how-go"><svg><use href="#i-play"/></svg>Play video</span></span></button>
+          <button type="button" class="how-c rv" data-vguide="send-broadcast" data-vset="site" aria-label="Play video: Send a broadcast (1:19)"><span class="how-th"><img src="/videos/send-broadcast.jpg?v=1" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl"><svg><use href="#i-play"/></svg></span><span class="how-d" data-len>1:19</span></span><span class="how-cb"><b>Send a broadcast</b><small>One personal message to all your subscribers, now or scheduled.</small><span class="how-go"><svg><use href="#i-play"/></svg>Play video</span></span></button>
+          <button type="button" class="how-c rv" data-vguide="wallet-plans" data-vset="site" aria-label="Play video: Wallet, plans and Free (1:24)"><span class="how-th"><img src="/videos/wallet-plans.jpg?v=1" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl"><svg><use href="#i-play"/></svg></span><span class="how-d" data-len>1:24</span></span><span class="how-cb"><b>Wallet, plans and Free</b><small>Top up, pick a plan, and see what Free includes.</small><span class="how-go"><svg><use href="#i-play"/></svg>Play video</span></span></button>
+          <p class="how-n"><svg><use href="#i-check"/></svg>All 8 guides are waiting in your dashboard.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- "Automate your Telegram" story: art and chat live in js/site-story.js, styles in the "Story" block of css/castvoo.css -->
   <section class="sec story" id="story">
     <div class="wrap">
       <div class="center rv">
-        <span class="kick">Your time back</span>
-        <h2 class="h2">Automate your Telegram.<br><em class="gtext">Focus on the things you love.</em></h2>
-        <p class="lead">Castvoo sends your welcomes, follow-ups and promos on time, day and night. You stop copying the same message into every chat, and you get your evenings back.</p>
+        <span class="kick">The leak</span>
+        <h2 class="h2">You paid for that join. <em class="gtext">Then it went quiet.</em></h2>
+        <p class="lead">Someone taps your ad, asks to join, and gets silence. Telegram doesn't let you DM channel members, so after that first moment they're hard to reach. Castvoo speaks first, while you still can.</p>
       </div>
 
       <div class="st-pair">
         <figure class="st-card st-before rv">
           <div class="st-stage">
             <div class="st-art" data-art="tired"></div>
-            <div class="st-pop p1">Send promo to 1,240 people 😩</div>
-            <div class="st-pop p2">Welcome 37 new members</div>
+            <div class="st-pop p1">40 join requests waiting 😩</div>
+            <div class="st-pop p2">Say hi to 37 new members</div>
             <div class="st-pop p3">Post the 9am deal</div>
             <div class="st-pop p4">Follow up yesterday's leads</div>
             <div class="st-fwd"><span>Forwarding by hand</span><b data-st-fwd>214 / 1,240</b><i></i></div>
+            <span class="exl dark" style="right:12px;top:12px">Example</span>
           </div>
-          <figcaption><span class="st-tag bad">Without Castvoo</span><p><b>3:12 AM.</b> Still sending the same promo, one chat at a time.</p></figcaption>
+          <figcaption><span class="st-tag bad">Without Castvoo</span><p><b>3:12 AM.</b> Forty join requests waiting. Nobody has said hello.</p></figcaption>
         </figure>
 
         <div class="st-arrow" aria-hidden="true"><span class="st-arr-l"><svg width="30" height="30"><use href="#logo"/></svg></span><small>Castvoo takes over</small></div>
@@ -171,10 +198,11 @@
             <div class="st-art" data-art="chill"></div>
             <div class="st-pop q1"><i class="ok">✓</i>Welcome sent to Tunde</div>
             <div class="st-pop q2"><i class="ok">✓</i>Day 3 follow-up sent</div>
-            <div class="st-pop q3"><i>👆</i>Kwame tapped “Shop now”</div>
+            <div class="st-pop q3"><i>👆</i>Kwame tapped Start</div>
             <div class="st-sent"><small>Sent today</small><b data-st-sent>0</b></div>
+            <span class="exl" style="right:12px;top:12px">Example</span>
           </div>
-          <figcaption><span class="st-tag ok">With Castvoo</span><p><b>Saturday, 11:00.</b> Everything went out on time. He's on his second juice.</p></figcaption>
+          <figcaption><span class="st-tag ok">With Castvoo</span><p><b>Saturday, 11:00.</b> Every request got a welcome and a link. He's on his second juice.</p></figcaption>
         </figure>
       </div>
 
@@ -190,60 +218,64 @@
         </div>
         <div class="st-copy rv">
           <span class="kick">People notice</span>
-          <h3 class="st-h">“Who's running your Telegram?”<br><span>You are. Castvoo does the sending.</span></h3>
-          <p class="lead">Your channel posts on time, every new subscriber gets a warm welcome, and follow-ups go out while you're out living. It looks like you hired a team. You didn't.</p>
+          <h3 class="st-h">“Who's handling your Telegram?”<br><span>You are. Castvoo does the sending.</span></h3>
+          <p class="lead">Set it up once. Every join request gets a welcome, people who tap Start get your follow-ups, and your posts go out on time. Check the numbers when you like.</p>
           <ul class="st-list">
-            <li><svg width="20" height="20"><use href="#i-check"/></svg>Welcome every new subscriber in seconds</li>
-            <li><svg width="20" height="20"><use href="#i-check"/></svg>Follow-ups that send themselves, on day 1, 3 and 7</li>
-            <li><svg width="20" height="20"><use href="#i-check"/></svg>One promo to thousands, no copy and paste</li>
+            <li><svg width="20" height="20"><use href="#i-check"/></svg>Welcome every join request the moment it arrives</li>
+            <li><svg width="20" height="20"><use href="#i-check"/></svg>Follow-ups on day 1, 3 and 7 for people who tapped Start</li>
+            <li><svg width="20" height="20"><use href="#i-check"/></svg>One broadcast to every subscriber, no copy and paste</li>
           </ul>
-          <a class="btn b-blue" href="#signup">Start free · 7 days on us<svg><use href="#i-arrow"/></svg></a>
+          <a class="btn b-blue" href="#signup" data-ctat>Start my 7-day free trial<svg><use href="#i-arrow"/></svg></a>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="sec" style="padding-top:20px">
+  <section class="sec" style="padding-top:20px" data-shot="night">
     <div class="wrap">
       <div class="night rv">
         <div class="mesh" style="width:420px;height:420px;left:-10%;top:-20%;background:rgba(47,107,255,.35)"></div>
         <div class="mesh" style="width:360px;height:360px;right:-10%;bottom:-20%;background:rgba(110,195,255,.25);animation-delay:-9s"></div>
-        <div class="center" style="position:relative"><span class="kick">Works around the clock</span><h2 class="h2">Your Telegram keeps selling <span style="color:var(--sky)">while you sleep.</span></h2><p class="lead">Welcome messages at 2am. Day-three follow-ups at breakfast. Your morning post at 9am in your audience's time zone. Castvoo sends it all on time, so you don't have to be awake.</p></div>
+        <div class="center" style="position:relative"><span class="kick">Works while you sleep</span><h2 class="h2">Your ads run all night. <em class="sky">So does Castvoo.</em></h2><p class="lead">A welcome at 2am. A day-three follow-up at breakfast. Your 9am post goes out on time in your workspace time zone. Telegram only gives the bot 5 minutes after a join request, so Castvoo answers at once.</p></div>
         <div class="nscene"><div data-art="sleeper"></div><div class="ncard nc1" id="nc1"></div><div class="ncard nc2" id="nc2"></div><span class="exl dark" style="right:2%;top:0">Example</span></div>
-        <div class="sto"><span><svg width="20" height="20"><use href="#i-tg"/></svg>Bots</span><span><svg width="20" height="20"><use href="#i-tg"/></svg>Channels and groups</span><span>⏰ Local time sending</span><span>🧹 Blocked users removed for you</span></div>
+        <div class="sto"><span><svg width="20" height="20"><use href="#i-tg"/></svg>Bots</span><span><svg width="20" height="20"><use href="#i-tg"/></svg>Channels and groups</span><span>⏰ 9am sending</span><span>🧹 Skips people who blocked your bot</span></div>
       </div>
     </div>
   </section>
 
   <section class="sec" id="features" style="padding-top:20px">
     <div class="wrap">
-      <div class="center rv"><span class="kick">Everything in the box</span><h2 class="h2">One home for every message <span class="gtext">your Telegram sends.</span></h2><p class="lead">Built for creators, communities, shops and media buyers who sell through Telegram.</p></div>
+      <div class="center rv"><span class="kick">What you get</span><h2 class="h2">Greet. Capture. <em class="gtext">Follow up.</em></h2><p class="lead">For media buyers, affiliates and channel owners who sell through Telegram, whether that's trading, betting, courses or shops.</p></div>
       <div class="bento">
-        <div class="bx s4 rv"><span class="k"><svg class="tgi"><use href="#i-tg"/></svg>Broadcasts</span><h3>Write once. Land in every Telegram inbox.</h3><p>Text, a photo or video and buttons, sent to the people who started your bot or posted to your channel or group. Preview exactly what people will see, and send yourself a test first.</p>
+        <div class="bx s2 lead3 wfx rv" id="f-welcome"><span class="k"><svg class="tgi"><use href="#i-tg"/></svg>Welcome Flows <i class="nw">New</i></span><h3>Every join request, answered.</h3><p>Your own bot sends a welcome the moment someone asks to join, then lets them in. Add buttons, waits and follow-ups.</p>
+          <div class="st wfl" aria-hidden="true"><div class="wfs"><span class="wfi"><svg><use href="#i-join"/></svg></span><b>Join request</b><small>0s</small></div><div class="wfs"><span class="wfi"><svg><use href="#i-chat"/></svg></span><b>Welcome sent</b><small>1s</small></div><div class="wfs"><span class="wfi"><svg><use href="#i-tap"/></svg></span><b>Tap to start</b><small>button</small></div><div class="wfs"><span class="wfi"><svg><use href="#i-check"/></svg></span><b>Let in</b><small>auto</small></div><i class="wfrun"></i></div></div>
+        <div class="bx s2 lead3 rv" id="f-broadcasts"><span class="k">Broadcasts</span><h3>Write once. Reach every subscriber.</h3><p>Text, photo or video with buttons, to everyone who started your bot or everyone in your channel. Send yourself a test first.</p>
           <div class="st bc"><div class="bc-msg"><div class="in"><div class="img shn"></div><b style="display:block;font-size:13.5px">New collection is live 🔥</b><span class="muted" style="font-size:12.5px">Tap below to see it first.</span></div></div><div class="bc-list" id="bcList"></div></div></div>
-        <div class="bx s2 rv"><span class="k">Auto follow-ups</span><h3>Follow-ups that run themselves.</h3>
+        <div class="bx s2 lead3 rv" id="f-followups"><span class="k">Auto follow-ups</span><h3>Follow-ups that send themselves.</h3><p>Welcome → Day 1 → Day 3 → Day 7. Timed messages with buttons and links.</p>
           <div class="st dv"><span class="run"></span><div>Welcome<small>Instantly</small></div><div>Quick win<small>Day 1</small></div><div>Proof<small>Day 3</small></div><div>The offer<small>Day 7</small></div></div></div>
-        <div class="bx s2 rv"><span class="k">Audiences</span><h3>The right message for each group.</h3>
-          <div class="st"><div class="sgx" id="sgx"><span>Joined this week</span><span>From ad_14</span><span>Clicked recently</span><span>French</span><span>Tag: buyer</span><span>Quiet 14 days</span></div><div class="sgn"><b class="tnum" id="sgN">3,912</b><small>people match · example</small></div></div></div>
-        <div class="bx s2 bl rv"><span class="k">Local time</span><h3>Morning posts at 9am in your audience's time zone.</h3>
-          <div class="st clks" id="clks"></div></div>
-        <div class="bx s2 rv"><span class="k">Start links</span><h3>Know which ad brought each person.</h3>
+        <div class="bx s2 rv"><span class="k">Tap to start</span><h3>Turn joiners into subscribers.</h3><p>A "Tap to start" button opens your bot. One tap and they're a subscriber you can message again.</p>
+          <div class="st tts" aria-hidden="true"><div class="tts-m">Welcome in 👋 Tap below for today's free tips.<span class="tts-b">▶ Tap to start</span><i class="tts-t"></i></div><span class="pill p-ok tts-n">+1 subscriber</span></div></div>
+        <div class="bx s2 rv"><span class="k">Start links</span><h3>Know which ad brought each person.</h3><p>Give every ad its own start link. Each new subscriber is tagged with the ad they came from.</p>
           <div class="st sll"><code>t.me/yourbot?start=<b>tiktok_ad5</b></code><code>t.me/yourbot?start=<b>meta_ad14</b></code><span class="pill p-blue">Each new subscriber is tagged</span></div></div>
-        <div class="bx s2 rv"><span class="k">Tracked clicks</span><h3>Know which message got the clicks.</h3>
+        <div class="bx s2 rv"><span class="k">Tracked clicks</span><h3>See which message got the click.</h3><p>Every button is tracked. Know who clicked in your bot, and how many clicked in your channel.</p>
           <div class="st lkw lkc"><svg viewBox="0 0 220 80" preserveAspectRatio="none"><defs><linearGradient id="lkg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F6BFF" stop-opacity=".22"/><stop offset="1" stop-color="#2F6BFF" stop-opacity="0"/></linearGradient></defs><path d="M0 70 L30 60 L60 64 L90 44 L120 48 L150 30 L180 34 L220 10 L220 80 L0 80Z" fill="url(#lkg)"/><path class="ln" d="M0 70 L30 60 L60 64 L90 44 L120 48 L150 30 L180 34 L220 10" fill="none" stroke="#2F6BFF" stroke-width="3" stroke-linejoin="round"/></svg><span class="p1" style="right:8%;top:0">+1 click</span><span class="p1" style="right:40%;top:20px;animation-delay:1s">+1 click</span><span class="p1" style="right:70%;top:30px;animation-delay:2s">+1 click</span></div></div>
-        <div class="bx s4 nt rv"><span class="k">Cas, the AI helper</span><h3 style="color:#fff">Meet Cas. A copywriter that never sleeps.</h3><p>Writes and rewrites your messages, builds whole follow-up sequences from one sentence, translates, and answers questions about your own workspace.</p>
+        <div class="bx s4 nt rv" id="f-ai"><span class="k">Cas, the AI helper</span><h3 style="color:#fff">Meet Cas. Your copywriter on call.</h3><p>Writes and rewrites messages, builds follow-up sequences from one sentence, translates, and answers questions about your workspace.</p>
           <div class="st aib"><div data-cas="think" style="width:120px"></div><div class="tb"><div class="q" id="bAiQ"></div><span id="bAiT"></span></div></div></div>
-        <div class="bx s3 rv"><span class="k">Safe delivery</span><h3>Fast sends that keep your bot healthy.</h3>
-          <div class="st gauge"><svg viewBox="0 0 150 90"><defs><linearGradient id="gg"><stop offset="0" stop-color="#6EC3FF"/><stop offset="1" stop-color="#2F6BFF"/></linearGradient></defs><path d="M15 80 A60 60 0 0 1 135 80" fill="none" stroke="#E9EEF9" stroke-width="14" stroke-linecap="round"/><path d="M15 80 A60 60 0 0 1 115 37" fill="none" stroke="url(#gg)" stroke-width="14" stroke-linecap="round"/><g class="ndl"><line x1="75" y1="80" x2="75" y2="30" stroke="#0B1430" stroke-width="4" stroke-linecap="round"/></g><circle cx="75" cy="80" r="7" fill="#0B1430"/></svg><div><b>Within limits</b><p>About 25 messages a second per bot, inside Telegram's rules. People who block your bot are removed for you.</p></div></div></div>
-        <div class="bx s3 rv"><span class="k">Team</span><h3>Your team writes. You approve.</h3>
-          <div class="st appr"><div class="stack" id="teamStack"></div><div class="rq" id="teamRq"></div></div></div>
+        <div class="bx s2 rv"><span class="k">Audiences</span><h3>The right message for each group.</h3><p>Target subscribers by start link, tag or clicks.</p>
+          <div class="st"><div class="sgx" id="sgx"><span>Joined this week</span><span>From ad_14</span><span>Clicked recently</span><span>Tag: vip</span><span>Tag: buyer</span><span>From tiktok_ad5</span></div><div class="sgn"><b class="tnum" id="sgN">3,912</b><small>people match · example</small></div></div></div>
+        <div class="bx s2 bl rv"><span class="k">9am sending</span><h3>Post at 9am, every time.</h3><p>Schedule a message or send it at the next 9am in your workspace time zone.</p>
+          <div class="st clks" id="clks"></div></div>
+        <div class="bx s2 rv"><span class="k">Safe delivery</span><h3>Fast sends, healthy bot.</h3>
+          <div class="st gauge"><svg viewBox="0 0 150 90"><defs><linearGradient id="gg"><stop offset="0" stop-color="#6EC3FF"/><stop offset="1" stop-color="#2F6BFF"/></linearGradient></defs><path d="M15 80 A60 60 0 0 1 135 80" fill="none" stroke="#E9EEF9" stroke-width="14" stroke-linecap="round"/><path d="M15 80 A60 60 0 0 1 115 37" fill="none" stroke="url(#gg)" stroke-width="14" stroke-linecap="round"/><g class="ndl"><line x1="75" y1="80" x2="75" y2="30" stroke="#0B1430" stroke-width="4" stroke-linecap="round"/></g><circle cx="75" cy="80" r="7" fill="#0B1430"/></svg><div><b>Within limits</b><p>About 25 messages a second per bot, inside Telegram's limits. People who block your bot are never messaged again.</p></div></div></div>
+        <div class="bx s2 rv"><span class="k">Team</span><h3>Bring your team.</h3><p>Add teammates to your workspace: 3 seats on Growth, 10 on Scale.</p>
+          <div class="st seats"><div class="stack" id="teamStack"></div><div class="seatr"><span><b>Growth</b>3 seats</span><span><b>Scale</b>10 seats</span></div></div></div>
       </div>
     </div>
   </section>
 
   <section class="sec" id="guide" style="background:#fff;border-block:1px solid var(--line)">
     <div class="wrap">
-      <div class="center rv" style="margin-bottom:40px"><span class="kick">Setup guide</span><h2 class="h2">Connect Telegram <span class="gtext">in 40 seconds.</span></h2><p class="lead">Watch the whole setup play out on a Telegram screen: from @BotFather to your first connected bot and channel.</p></div>
+      <div class="center rv" style="margin-bottom:40px"><span class="kick">Setup guide</span><h2 class="h2">Connect Telegram <em class="gtext">in 40 seconds.</em></h2><p class="lead">Watch the whole setup on a Telegram screen, from @BotFather to your first connected bot and channel.</p></div>
       <div id="siteGuide"></div>
     </div>
   </section>
@@ -252,13 +284,13 @@
     <div class="wrap aisec">
       <div style="display:flex;flex-direction:column;gap:18px;min-width:0" class="rv">
         <span class="kick">Cas, the AI helper</span>
-        <h2 class="h2">Tell Cas the goal. <span class="gtext">Cas writes the week.</span></h2>
-        <p class="lead">Describe your offer in one sentence. Cas writes the broadcast, builds the follow-up sequence and translates it for every language you sell in. Teach Cas about your business once, and every message sounds like you.</p>
+        <h2 class="h2">Tell Cas the offer. <em class="gtext">Cas writes the week.</em></h2>
+        <p class="lead">Describe your offer in one sentence. Cas writes the welcome, the follow-ups and the broadcast, then translates them for every market you run in. Teach Cas your business once on the "Train Cas" page.</p>
         <div class="aibul">
-          <div><span class="spk"><svg><use href="#i-spark"/></svg></span><div><b>Message writer</b><p>Hooks, body and button text in your tone. Shorter, clearer, friendlier or more urgent with one tap.</p></div></div>
-          <div><span class="spk"><svg><use href="#i-drip"/></svg></span><div><b>Follow-up builder</b><p>"A welcome for my fitness channel" becomes a set of timed messages you can check, edit and switch on.</p></div></div>
-          <div><span class="spk"><svg><use href="#i-globe"/></svg></span><div><b>Translate</b><p>English, French, Portuguese, Swahili, Pidgin and more, with natural local phrasing.</p></div></div>
-          <div><span class="spk"><svg><use href="#i-chat"/></svg></span><div><b>Ask about your workspace</b><p>"How did my last broadcast do?" Cas answers from your real numbers: deliveries, clicks and new subscribers.</p></div></div>
+          <div><span class="spk"><svg><use href="#i-spark"/></svg></span><div><b>Message writer</b><p>Hooks, body and button text in your tone. Shorter, clearer or more urgent in one tap.</p></div></div>
+          <div><span class="spk"><svg><use href="#i-drip"/></svg></span><div><b>Follow-up builder</b><p>"A welcome for my trading channel" becomes timed messages you can check, edit and switch on.</p></div></div>
+          <div><span class="spk"><svg><use href="#i-globe"/></svg></span><div><b>Translate</b><p>English, French, Portuguese, Spanish, Swahili and more, with natural phrasing.</p></div></div>
+          <div><span class="spk"><svg><use href="#i-chat"/></svg></span><div><b>Ask about your workspace</b><p>"How did my last broadcast do?" Cas answers from your deliveries, clicks and subscribers.</p></div></div>
         </div>
       </div>
       <div class="aibox rv">
@@ -266,20 +298,20 @@
         <div class="aitabs" id="aiTabs"><button type="button" class="aitab on" data-i="0">Broadcast</button><button type="button" class="aitab" data-i="1">Follow-up</button><button type="button" class="aitab" data-i="2">Translate</button><button type="button" class="aitab" data-i="3">Rewrite</button></div>
         <div class="aip"><span class="spk" style="width:32px;height:32px;border-radius:10px"><svg><use href="#i-spark"/></svg></span><span id="aiPrompt"></span></div>
         <div class="aiout" id="aiOut"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span class="hint">Example output. AI writes are included in every plan.</span><a class="btn b-blue sm" href="#signup">Try Cas free</a></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span class="hint">Example output. AI writes are included in every paid plan and the free trial.</span><a class="btn b-blue sm" href="#signup">Try Cas free</a></div>
       </div>
     </div>
   </section>
 
-  <section class="sec" style="padding-top:0">
+  <section class="sec" style="padding-top:0" id="compare">
     <div class="wrap">
-      <div class="center rv"><span class="kick">Compare</span><h2 class="h2">Why people switch <span class="gtext">to Castvoo.</span></h2></div>
-      <div class="cmpw rv"><table class="cmp"><thead><tr><th></th><th class="us">Castvoo</th><th>Posting by hand</th><th>Basic bot builders</th></tr></thead><tbody>
-        <tr><td>Welcome message the moment someone starts your bot</td><td class="us y">Yes</td><td class="n">Only if you're awake</td><td class="y">Usually</td></tr>
-        <tr><td>Audiences by start link, tag, language and clicks</td><td class="us y">Yes</td><td class="n">No</td><td class="m">Varies</td></tr>
-        <tr><td>Send at 9am in your audience's time zone</td><td class="us y">Yes</td><td class="n">No</td><td class="m">Rare</td></tr>
-        <tr><td>AI writes, rewrites and translates messages</td><td class="us y">Included</td><td class="n">No</td><td class="m">Often extra</td></tr>
+      <div class="center rv"><span class="kick">Compare</span><h2 class="h2">Why media buyers <em class="gtext">switch to Castvoo.</em></h2></div>
+      <div class="cmpw rv"><table class="cmp"><thead><tr><th></th><th class="us">Castvoo</th><th>By hand</th><th>Basic bot builders</th></tr></thead><tbody>
+        <tr><td>Welcome every join request the moment it arrives</td><td class="us y">Yes</td><td class="n">Only if you're awake</td><td class="m">Varies</td></tr>
+        <tr><td>Turn channel joiners into bot subscribers</td><td class="us y">Yes</td><td class="n">No</td><td class="m">Rare</td></tr>
+        <tr><td>Start links that show which ad brought each person</td><td class="us y">Yes</td><td class="n">No</td><td class="m">Varies</td></tr>
         <tr><td>Clicks per message and per button</td><td class="us y">Yes</td><td class="n">No</td><td class="m">Varies</td></tr>
+        <tr><td>AI writes, rewrites and translates</td><td class="us y">Included</td><td class="n">No</td><td class="m">Often extra</td></tr>
         <tr><td>Channels, groups and bots in one place</td><td class="us y">Yes</td><td class="m">Many apps</td><td class="m">Bots only</td></tr>
       </tbody></table></div>
     </div>
@@ -289,7 +321,7 @@
 
   <section class="sec" id="pricing" style="background:#fff;border-block:1px solid var(--line)">
     <div class="wrap">
-      <div class="center rv"><span class="kick">Pricing</span><h2 class="h2" id="prTitle">Simple prices. Everything included.</h2><p class="lead" id="prSub">Every plan has unlimited broadcasts, auto follow-ups, tracked clicks and Cas the AI helper. No add-on fees.</p>
+      <div class="center rv"><span class="kick">Pricing</span><h2 class="h2" id="prTitle">Simple prices. <em class="gtext">Start free.</em></h2><p class="lead" id="prSub">Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup or add-on fees.</p>
         <div class="billtog" id="billTog"><button type="button" class="on" data-b="m">Monthly</button><button type="button" data-b="y">Yearly <small>2 months free</small></button></div></div>
       <div class="plans" id="plansBox"></div>
       <div class="prnotes" id="prNotes"></div>
@@ -299,11 +331,11 @@
   <section class="sec" id="refer">
     <div class="wrap">
       <div class="refw rv">
-        <div class="money" data-money="14"></div>
+        <div class="money" aria-hidden="true" data-money="14"></div>
         <div style="display:flex;flex-direction:column;gap:16px;position:relative;z-index:1">
           <span class="kick" style="color:#CFE0FF">Refer and earn</span>
-          <h2 class="h2" style="color:#fff">Get paid when your friends grow.</h2>
-          <p class="lead" id="refText">Earn 10 to 30% of every plan payment from people you invite, every month, for as long as they pay. Use it on your own plan, or withdraw from $300 in USDT or Bitcoin.</p>
+          <h2 class="h2" style="color:#fff">Get paid when <em class="sky">your friends grow.</em></h2>
+          <p class="lead" id="refText">Earn 10 to 30% of every plan payment from people you invite, every month, for as long as they pay. Use it on your plan, or withdraw from $300 in USDT or Bitcoin.</p>
           <div><a class="btn b-w" href="#signup" id="refCta">Get my referral link</a></div>
         </div>
         <div class="tiers" id="refTiers" style="z-index:1"></div>
@@ -313,30 +345,31 @@
 
   <section class="sec" id="faq" style="padding-top:0">
     <div class="wrap">
-      <div class="center rv"><span class="kick">FAQ</span><h2 class="h2">Questions people ask <span class="gtext">before they start.</span></h2></div>
+      <div class="center rv"><span class="kick">FAQ</span><h2 class="h2">Questions before <em class="gtext">you start.</em></h2><p class="lead">Straight answers about Telegram's rules, pricing and setup.</p></div>
       <div class="faq" id="faqBox"></div>
     </div>
   </section>
 
-  <section class="sec" style="padding-top:0">
+  <section class="sec" style="padding-top:0" data-shot="closer">
     <div class="wrap">
       <div class="close rv">
         <div class="mesh" style="width:420px;height:420px;left:-10%;top:-40%;background:rgba(47,107,255,.45)"></div>
-        <div style="position:relative;display:flex;flex-direction:column;gap:18px"><h2 class="h2">Stop letting your subscribers <span style="color:var(--sky)">go quiet.</span></h2><p class="lead">Connect your Telegram, switch on a welcome follow-up, and let Castvoo do the follow-up from tonight.</p><div><a class="btn b-blue" href="#signup" data-ctat>Start free · 7 days on us<svg><use href="#i-arrow"/></svg></a></div></div>
+        <div style="position:relative;display:flex;flex-direction:column;gap:18px"><h2 class="h2">Your ads keep bringing people. <em class="sky">Greet every one.</em></h2><p class="lead">Connect your channel, switch on a Welcome Flow, and your next join request gets a hello in seconds. Free to start, no card.</p><div><a class="btn b-blue" href="#signup" data-ctat>Start my 7-day free trial<svg><use href="#i-arrow"/></svg></a></div></div>
         <div class="cc" data-cas="happy"></div>
       </div>
     </div>
   </section>
 
-  <footer><div class="wrap foot">
-    <div class="fcol"><a class="logo" href="#top"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></a><p style="margin-top:12px;max-width:40ch" id="footTag">Telegram broadcasts and follow-ups that sell while you sleep.</p>
+  <footer id="foot"><div class="wrap foot">
+    <div class="fcol"><a class="logo" href="#top"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></a><p style="margin-top:12px;max-width:40ch" id="footTag">Every Telegram join, greeted and followed up.</p>
       <p style="margin-top:10px"><a class="fmail" id="footMail" href="mailto:support@castvoo.com"><svg width="16" height="16"><use href="#i-mail"/></svg><span>support@castvoo.com</span></a></p>
+      <p class="f247"><span class="sdot"></span><span><b>24/7 customer support</b> · AI agents in your dashboard, our human team on call</span></p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><span class="pill" style="background:#EFEBFF;color:#5B3DF5">Joinvoo · tracking</span><span class="pill" style="background:#FFF4D6;color:#7A5800">Replyvoo · AI replies</span></div></div>
     <nav aria-label="Product"><b>Product</b><a href="#features">Features</a><a href="#guide">Setup guide</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="#login" data-out>Log in</a><a href="#app" data-in hidden>Dashboard</a></nav>
     <nav aria-label="Legal"><b>Legal</b><a href="/legal/terms">Terms</a><a href="/legal/privacy">Privacy</a><a href="/legal/refunds">Refunds</a><a href="/legal/acceptable-use">Acceptable use</a><a href="/legal/referral-terms">Referral terms</a><a href="/legal/cookies">Cookies</a></nav>
   </div><div class="wrap fbot"><span id="footCopy">© 2026 Zedapex</span><span>Castvoo is not affiliated with Telegram.</span><a data-voo-app hidden href="#" target="_blank" rel="noopener">Part of VooSquare</a></div></footer>
 
-  <div class="mbar"><a class="lg" href="#login" data-out>Log in</a><a class="go" href="#signup" data-out data-ctat>Start free · 7 days on us</a><a class="go" href="#app" data-in hidden>Open dashboard</a></div>
+  <div class="mbar" id="mbar"><a class="lg" href="#login" data-out>Log in</a><a class="go" href="#signup" data-out data-ctat>Start my 7-day free trial</a><a class="go" href="#app" data-in hidden>Open dashboard</a></div>
 </div>
 
 <!-- ================= SIGN-UP AND LOGIN ================= -->
@@ -370,6 +403,7 @@
       <button type="button" class="cnb" data-connect><span class="cnp"><svg><use href="#i-plus"/></svg></span><span><b>Connect Telegram</b><small>Add a channel, group or bot</small></span></button>
       <nav class="snav" id="snav">
         <button type="button" class="si" data-v="overview"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-home"/></svg></span><span class="lb">Home<small>Everything at a glance</small></span></button>
+        <button type="button" class="si" data-v="flows"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-join"/></svg></span><span class="lb">Welcome Flows<small>Greet new joiners</small></span><span class="tag" id="navFlows">New</span></button>
         <button type="button" class="si" data-v="ai"><span class="ti" style="--b:#E8F1FF;--c:#2F6BFF"><span class="mic" data-cas="mini"></span></span><span class="lb">Ask Cas<small>Your AI helper</small></span><span class="tag">AI</span></button>
         <span class="grp">Send</span>
         <button type="button" class="si" data-v="broadcast"><span class="ti" style="--b:#FFF1E6;--c:#F76707"><svg><use href="#i-send"/></svg></span><span class="lb">Send a message<small>One message to many people</small></span></button>
@@ -384,7 +418,8 @@
         <button type="button" class="si" data-v="wallet"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-wallet"/></svg></span><span class="lb">Wallet and plan<small>Balance, top-ups and plan</small></span></button>
         <button type="button" class="si" data-v="earn" data-feat="referrals"><span class="ti" style="--b:#E2F6EE;--c:#0E9F6E"><svg><use href="#i-gift"/></svg></span><span class="lb">Earn<small>Invite friends, get paid</small></span><span class="tag" id="navEarn"></span></button>
         <span class="grp">Account</span>
-        <button type="button" class="si" data-v="help"><span class="ti" style="--b:#FFF0F0;--c:#E5484D"><svg><use href="#i-help"/></svg></span><span class="lb">Help<small>Chat with the Castvoo team</small></span><span class="tag r" id="navHelp" hidden>New</span></button>
+        <button type="button" class="si" data-v="guides"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-play"/></svg></span><span class="lb">Guides<small>Short video tutorials</small></span><span class="tag" id="navGuides">8</span></button>
+        <button type="button" class="si" data-v="help"><span class="ti" style="--b:#FFF0F0;--c:#E5484D"><svg><use href="#i-help"/></svg></span><span class="lb">Help<small>24/7 customer support</small></span><span class="tag r" id="navHelp" hidden>New</span></button>
         <button type="button" class="si" data-v="settings"><span class="ti" style="--b:#F1F3F5;--c:#495057"><svg><use href="#i-gear"/></svg></span><span class="lb">Settings<small>Profile, team and data</small></span></button>
       </nav>
       <div class="zx"><span class="zxl">More from Zedapex</span>
@@ -392,7 +427,7 @@
         <button type="button" class="zxi" style="background:#FFF1C7;color:#5C4300" data-go="replyvoo"><svg width="28" height="28" style="flex:none"><use href="#rvLogo"/></svg>Replyvoo<span class="pill" style="background:#121110;color:#FFC21A">AI replies</span></button>
         <a class="zxv" data-voo-app hidden href="#" target="_blank" rel="noopener"><span class="vq">V</span>Part of VooSquare</a>
       </div>
-      <div class="wcard"><div class="money" data-money="6" data-h="160"></div><small style="position:relative">Wallet balance</small><b class="tnum walBal">$0.00</b><button type="button" class="btn b-w xs" data-topup data-feat="topups"><svg><use href="#i-plus"/></svg>Top up</button></div>
+      <div class="wcard"><div class="money" aria-hidden="true" data-money="6" data-h="160"></div><small style="position:relative">Wallet balance</small><b class="tnum walBal">$0.00</b><button type="button" class="btn b-w xs" data-topup data-feat="topups"><svg><use href="#i-plus"/></svg>Top up</button></div>
       <div class="me-row" id="meRow"></div>
     </aside>
     <div class="main">
@@ -413,7 +448,7 @@
       <button type="button" data-v="overview"><svg><use href="#i-home"/></svg>Home</button>
       <button type="button" data-v="ai"><span class="mic" data-cas="mini"></span>Cas</button>
       <button type="button" class="plus2" data-create aria-label="Create or connect"><svg><use href="#i-plus"/></svg></button>
-      <button type="button" data-v="wallet"><svg><use href="#i-wallet"/></svg>Wallet</button>
+      <button type="button" data-v="flows"><svg><use href="#i-join"/></svg>Flows</button>
       <button type="button" data-menu><svg><use href="#i-menu"/></svg>More<span class="ddot" id="dockDot" hidden></span></button>
     </nav>
   </div>

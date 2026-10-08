@@ -34,7 +34,7 @@ async function onStart(msg, payload) {
     const row = await db.one('select t.*, u.name, u.email from tg_link_tokens t join users u on u.id = t.user_id where t.token = $1 and t.used_at is null and t.expires_at > now()', [token]);
     if (!row) return dm(from.id, 'This link has expired. Go back to Castvoo and tap <b>Link Telegram</b> again.');
     const who = row.email ? row.email.replace(/^(.).*(@.*)$/, '$1•••$2') : row.name;
-    return dm(from.id, `Link this Telegram account to the Castvoo account <b>${escape(who)}</b>?\n\nOnly tap Yes if you just asked for this on castvoo.com.`, {
+    return dm(from.id, `Link this Telegram account to the Castvoo account <b>${escape(who)}</b>?\n\nOnly tap Yes if <b>you</b> just asked for this on castvoo.com and that is <b>your</b> email. If someone sent you this link, tap No: linking would let them log in as you and receive your channels.`, {
       reply_markup: { inline_keyboard: [[{ text: 'Yes, link it', callback_data: 'link:' + token }], [{ text: 'No', callback_data: 'nolink' }]] },
     });
   }
@@ -57,8 +57,24 @@ async function onCallback(q) {
       return;
     }
     await db.query('update users set tg_user_id = $2, tg_username = $3 where id = $1', [row.user_id, q.from.id, q.from.username || null]);
+    await db.query('update tg_link_tokens set tg_user_id = $2 where token = $1', [token, q.from.id]);
     await tg.platform('answerCallbackQuery', { callback_query_id: q.id, text: 'Linked ✅' }).catch(() => {});
-    await dm(q.from.id, '✅ Linked. Go back to Castvoo: you can now add channels and groups with one tap.');
+    // SEC-10: the person who tapped Yes can undo it from Telegram for 7 days (if someone talked them into it).
+    await dm(q.from.id, '✅ Linked. Go back to Castvoo: you can now add channels and groups with one tap.\n\nNot you, or someone asked you to tap the link? Tap <b>Unlink</b> below.', {
+      reply_markup: { inline_keyboard: [[{ text: 'Unlink this Telegram account', callback_data: 'unlink:' + token }]] },
+    });
+    return;
+  }
+  if (data.startsWith('unlink:')) {
+    const token = data.slice(7);
+    const t = await db.one("select * from tg_link_tokens where token = $1 and tg_user_id = $2 and used_at > now() - interval '7 days'", [token, q.from.id]);
+    const done = t ? await db.one('update users set tg_user_id = null, tg_username = null where id = $1 and tg_user_id = $2 returning id', [t.user_id, q.from.id]) : null;
+    if (done) {
+      // Sessions started with "Log in with Telegram" since then end too.
+      await db.query("delete from sessions where user_id = $1 and created_at >= $2", [t.user_id, t.used_at]).catch(() => {});
+      log.warn('telegram link undone from Telegram', { user: t.user_id });
+    }
+    await tg.platform('answerCallbackQuery', { callback_query_id: q.id, text: done ? 'Unlinked. This Telegram account is no longer linked to that Castvoo account.' : 'Nothing to unlink.', show_alert: !!done }).catch(() => {});
   }
 }
 
@@ -91,7 +107,7 @@ async function onMyChatMember(u) {
   if (other) return dm(from.id, `<b>${escape(chat.title)}</b> is already connected to another Castvoo workspace. Remove it there first (Bots &amp; channels → Remove), then add me again.`);
   const already = await db.one("select 1 from connections where workspace_id = $1 and tg_chat_id = $2 and status <> 'removed'", [ws.id, chat.id]);
   if (!already) {
-    try { await billing.assertCanConnect(ws); } catch (e) {
+    try { await billing.assertCanConnect(ws, chat.type === 'channel' ? 'channel' : 'group'); } catch (e) {
       await dm(from.id, `I couldn't connect <b>${escape(chat.title)}</b>: ${escape(e.message)}`);
       await tg.platform('leaveChat', { chat_id: chat.id }).catch(() => {});
       return;

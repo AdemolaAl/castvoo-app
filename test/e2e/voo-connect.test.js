@@ -144,6 +144,25 @@ describe('Voo ID login', () => {
     assert.match(clash.res.text, /already linked/);
   });
 
+  it('N-2: connecting the same VooSquare account again keeps the first link date (attribution does not flip)', async () => {
+    const me = await app.loginByEmail('relink-same@example.com');
+    const u = vooUser({ email: 'relink-same-voo@example.com' });
+    const first = await vooLogin(me, u, (await me.post('/api/auth/voosquare/link')).body.url);
+    assert.equal(first.location, '/#app/settings');
+    // Pretend the link was made a week ago. Then the same Voo ID comes back through the linking path again (a second
+    // tab that started "Connect VooSquare" before the first one finished): the Settings button itself answers 409.
+    assert.equal((await me.post('/api/auth/voosquare/link')).status, 409);
+    await app.db.query("update users set voo_linked_at = now() - interval '7 days' where id = $1", [me.user.id]);
+    const before = (await app.db.one('select voo_linked_at from users where id = $1', [me.user.id])).voo_linked_at;
+    const auth = require('../../server/services/auth');
+    const current = await app.db.one('select * from users where id = $1', [me.user.id]);
+    const again = await auth.loginWithVoo({ ...u, email_verified: true }, { current });
+    assert.equal(String(again.user.id), String(me.user.id));
+    const row = await app.db.one('select voo_id, voo_linked_at from users where id = $1', [me.user.id]);
+    assert.equal(row.voo_id, u.voo_id);
+    assert.equal(new Date(row.voo_linked_at).getTime(), new Date(before).getTime(), 'link date unchanged');
+  });
+
   it('refuses a forged id_token, a missing state cookie and a cancelled login, with a Try again link', async () => {
     app.fakes.voo.idTokenSecret = 'not-the-client-secret';
     try {
@@ -332,8 +351,10 @@ describe('Money events', () => {
     const bot = await app.connectBot(c5);
     const seqId = (await app.db.one("insert into sequences(workspace_id, connection_id, name, trigger_type, active) values ($1,$2,'Welcome','start',true) returning id", [w5.id, bot.connId])).id;
     const stepId = (await app.db.one("insert into sequence_steps(sequence_id, position, delay_minutes, body) values ($1,1,0,'Hi') returning id", [seqId])).id;
+    // N-3: the rollup only counts hours that finished more than 2 minutes ago, so put the rows half an hour before the
+    // newest such hour boundary (not before date_trunc('hour', now()), which falls outside it during hh:00-hh:02).
     await app.db.query(`insert into deliveries(workspace_id, sender_key, step_id, chat_id, status, sent_at)
-      select $1, 'bot:' || $2, $3, g, 'sent', date_trunc('hour', now()) - interval '30 minutes' from generate_series(1, 3) g`, [w5.id, bot.connId, stepId]);
+      select $1, 'bot:' || $2, $3, g, 'sent', date_trunc('hour', now() - interval '2 minutes') - interval '30 minutes' from generate_series(1, 3) g`, [w5.id, bot.connId, stepId]);
     await app.voosquare.dripRollup();
     await app.voosquare.dripRollup();
     const d = (await queued(u5.voo_id)).filter((e) => e.type === 'drip_step_sent');

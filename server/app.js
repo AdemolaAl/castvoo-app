@@ -6,19 +6,20 @@
  */
 
 const http = require('node:http');
+const { pipeline } = require('node:stream');
 const fs = require('node:fs');
 const path = require('node:path');
 const config = require('./config');
 const log = require('./lib/log');
 const { create, readBody, parseCookies, securityHeaders, sendJson } = require('./lib/router');
-const { HttpError } = require('./lib/util');
+const { HttpError, escHtml } = require('./lib/util');
 const rl = require('./lib/ratelimit');
 const auth = require('./services/auth');
 const perms = require('./permissions');
 const voo = require('./lib/voo');
 
 const ROUTE_FILES = [
-  'public', 'auth', 'workspace', 'connections', 'subscribers', 'segments', 'media', 'broadcasts', 'drips',
+  'public', 'auth', 'workspace', 'connections', 'subscribers', 'segments', 'media', 'broadcasts', 'drips', 'flows',
   'ai', 'wallet', 'referrals', 'support', 'telegram-webhooks', 'payment-webhooks', 'voosquare', 'voo-connect', 'pages',
   'admin/index',
 ];
@@ -28,7 +29,10 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.xml': 'application/xml',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.vtt': 'text/vtt; charset=utf-8',
 };
+// Big media (the training videos): fingerprinted by name and size only, and served in pieces (Range) so players can seek.
+const MEDIA_EXT = new Set(['.mp4', '.webm']);
 
 function cspHeader() {
   const gv = config.gatevoo.url ? ' ' + config.gatevoo.url : '';
@@ -39,7 +43,7 @@ function cspHeader() {
     `script-src 'self' https://telegram.org${gv}${vs}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
-    "img-src 'self' data: blob: https://t.me https://telegram.org https://*.telegram.org https://lh3.googleusercontent.com",
+    "img-src 'self' data: blob: https://t.me https://telegram.org https://*.telegram.org",
     "media-src 'self' blob:",
     `frame-src https://oauth.telegram.org${gv}`,
     `connect-src 'self'${gv}${vs}`,
@@ -89,7 +93,7 @@ function makeCtx(req, res) {
  */
 const ASSET_VERSION = (() => {
   const h = require('node:crypto').createHash('sha1');
-  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else h.update(e.name).update(fs.readFileSync(p)); } };
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (MEDIA_EXT.has(path.extname(e.name).toLowerCase())) h.update(e.name + ':' + fs.statSync(p).size); else h.update(e.name).update(fs.readFileSync(p)); } };
   try { walk(PUBLIC_DIR); } catch { /* no public dir in some tests */ }
   return h.digest('hex').slice(0, 10);
 })();
@@ -108,20 +112,59 @@ async function serveStatic(ctx) {
   if (ext === '.html') {
     let body = htmlCache.get(file);
     if (!body) { body = Buffer.from(fs.readFileSync(file, 'utf8').replace(/\?v=\d+"/g, `?v=${ASSET_VERSION}"`)); htmlCache.set(file, body); }
+    require('./lib/visitor').ensure(ctx); // website chat: proves a real page load (lib/visitor.js)
     const h = { 'Content-Type': MIME[ext], 'Content-Length': body.length, 'Cache-Control': 'no-cache', 'Content-Security-Policy': cspHeader() };
     if (ctx.cookieOut.length) h['Set-Cookie'] = ctx.cookieOut;
     ctx.res.writeHead(200, h);
     ctx.res.end(ctx.method === 'HEAD' ? undefined : body);
     return true;
   }
-  const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': st.size };
-  if (ext === '.html') { headers['Cache-Control'] = 'no-cache'; headers['Content-Security-Policy'] = cspHeader(); }
-  else headers['Cache-Control'] = ctx.query.v ? 'public, max-age=31536000, immutable' : 'public, max-age=300';
+  const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': st.size, 'Accept-Ranges': 'bytes', 'Last-Modified': st.mtime.toUTCString() };
+  if (ctx.query.v) headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+  else headers['Cache-Control'] = MEDIA_EXT.has(ext) ? 'public, max-age=86400' : 'public, max-age=300';
   if (ctx.cookieOut.length) headers['Set-Cookie'] = ctx.cookieOut;
+  // Range requests ("bytes=0-1023", "bytes=500-", "bytes=-500"): one range, as video players ask for. 206 or 416.
+  const range = parseRange(ctx.req.headers.range, st.size);
+  if (range === 'bad') {
+    ctx.res.writeHead(416, { 'Content-Range': `bytes */${st.size}`, 'Accept-Ranges': 'bytes', 'Content-Type': 'text/plain; charset=utf-8' });
+    ctx.res.end();
+    return true;
+  }
+  if (range) {
+    headers['Content-Range'] = `bytes ${range.start}-${range.end}/${st.size}`;
+    headers['Content-Length'] = range.end - range.start + 1;
+    ctx.res.writeHead(206, headers);
+    if (ctx.method === 'HEAD') { ctx.res.end(); return true; }
+    sendFile(file, ctx.res, { start: range.start, end: range.end });
+    return true;
+  }
   ctx.res.writeHead(200, headers);
   if (ctx.method === 'HEAD') { ctx.res.end(); return true; }
-  fs.createReadStream(file).pipe(ctx.res);
+  sendFile(file, ctx.res);
   return true;
+}
+
+/**
+ * ENG-1: stream a file to the response. pipeline() closes the file when the visitor aborts (video players abort Range
+ * requests all the time) and handles a read error (file replaced during a deploy) instead of crashing the process.
+ */
+function sendFile(file, res, range) {
+  pipeline(fs.createReadStream(file, range), res, (err) => {
+    if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE' && !res.headersSent) { try { res.writeHead(500); res.end(); } catch { /* gone */ } }
+    else if (err && !res.destroyed) res.destroy();
+  });
+}
+
+/** "bytes=a-b" -> { start, end } (inclusive), null when there is no usable Range header, 'bad' when it can't be served. */
+function parseRange(h, size) {
+  if (!h) return null;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(h).trim());
+  if (!m || (m[1] === '' && m[2] === '')) return null; // several ranges or junk: send the whole file
+  let start, end;
+  if (m[1] === '') { const n = Number(m[2]); if (!n) return 'bad'; start = Math.max(0, size - n); end = size - 1; }
+  else { start = Number(m[1]); end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1); }
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start >= size || start > end) return 'bad';
+  return { start, end };
 }
 
 function createServer() {
@@ -150,11 +193,19 @@ function createServer() {
       // Rate limits. Logged-in routes count per account (many people in Africa share one mobile IP,
       // so counting per IP would block innocent customers); public routes count per IP.
       const needsLogin = o.auth === 'user' || o.auth === 'workspace' || !!o.staff;
-      const limit = (who) => {
+      // shared: true keeps the counter in PostgreSQL, so it holds across instances (routes that cost money or AI).
+      const limit = async (who) => {
         const key = `${route.method}:${route.pattern}:${who}`;
+        if (o.shared) {
+          const r = await rl.hitShared(key, o.rate[0], o.rate[1]);
+          if (!r.ok) throw new HttpError(429, 'Too many tries. Please wait a little and try again.', 'rate_limited', { retry_after: r.retryAfter });
+          return;
+        }
         if (!rl.hit(key, o.rate[0], o.rate[1])) throw new HttpError(429, 'Too many tries. Please wait a little and try again.', 'rate_limited', { retry_after: rl.retryAfter(key) });
       };
-      if (o.rate && !needsLogin) limit(ctx.ip);
+      if (o.rate && !needsLogin) await limit(ctx.ip);
+      // Server-to-server routes (VooSquare): the router checks the service key itself (SEC-14).
+      if (o.auth === 'service') require('./lib/service-key').requireKey(ctx, { inboundOnly: !!o.inboundOnly });
 
       // Body
       if (!['GET', 'HEAD'].includes(req.method) && !o.stream) {
@@ -192,7 +243,7 @@ function createServer() {
         ctx.member = { role: ctx.workspace.member_role };
       }
 
-      if (o.rate && needsLogin) limit('u' + ctx.user.id);
+      if (o.rate && needsLogin) await limit('u' + ctx.user.id);
 
       const out = await route.handler(ctx);
       if (ctx.sent || res.headersSent) return;
@@ -204,7 +255,7 @@ function createServer() {
       if (err instanceof HttpError) {
         if (err.extra && err.extra.retry_after) res.setHeader('Retry-After', err.extra.retry_after);
         if (!ctx.path.startsWith('/api/') && req.method === 'GET' && err.status !== 401) {
-          return ctx.html(err.status, `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Castvoo</title><body style="font-family:system-ui;padding:40px;text-align:center;color:#0B1430"><h2>${err.message}</h2><p><a href="/" style="color:#2F6BFF">Back to Castvoo</a></p>`);
+          return ctx.html(err.status, `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Castvoo</title><body style="font-family:system-ui;padding:40px;text-align:center;color:#0B1430"><h2>${escHtml(err.message)}</h2><p><a href="/" style="color:#2F6BFF">Back to Castvoo</a></p>`);
         }
         return sendJson(res, err.status, { error: err.message, code: err.code, ...(err.extra || {}) });
       }
@@ -224,4 +275,4 @@ function createServer() {
   return server;
 }
 
-module.exports = { createServer, buildRouter };
+module.exports = { createServer, buildRouter, parseRange, sendFile };

@@ -33,7 +33,7 @@ async function connectBot(ws, rawToken) {
   const elsewhere = await db.one("select * from connections where kind = 'bot' and tg_chat_id = $1 and status <> 'removed'", [me.id]);
   if (elsewhere && Number(elsewhere.workspace_id) !== Number(ws.id)) throw httpError(409, `@${me.username} is already connected to another Castvoo workspace. Remove it there first.`, 'bot_taken');
   if (elsewhere) return reconnectBot(elsewhere, token, me);
-  await billing.assertCanConnect(ws);
+  await billing.assertCanConnect(ws, 'bot');
 
   const secret = randomToken(24).replace(/[^A-Za-z0-9_-]/g, '');
   let conn;
@@ -71,6 +71,31 @@ async function reconnectBot(conn, token, me) {
   return { ...row, reconnected: true };
 }
 
+/** The exact setWebhook call used when a bot is connected (same address, secret and update types). */
+function webhookParams(conn) {
+  return { url: `${config.appUrl}/tg/b/${conn.id}`, secret_token: conn.webhook_secret, allowed_updates: BOT_UPDATES, drop_pending_updates: false, max_connections: 40 };
+}
+
+/**
+ * Point a connected bot's webhook at Castvoo again (support's "repair" button and the support AI's repair_webhook tool).
+ * Keeps the token, secret, subscribers and pending updates. When the token works again, a "Needs attention" bot
+ * becomes active. Returns { ok, username } or throws a friendly error. Never returns the token.
+ */
+async function repairWebhook(conn) {
+  if (!conn || conn.kind !== 'bot' || conn.status === 'removed' || !conn.token_enc) throw badRequest('Only a connected bot has a webhook to repair.');
+  const token = decrypt(conn.token_enc);
+  let me;
+  try { me = await tg.call(token, 'getMe'); } catch (e) {
+    if (e.code === 401 || e.code === 404) throw badRequest('Telegram says this bot token no longer works. Paste a fresh token from @BotFather in Channels & bots.');
+    throw httpError(502, 'Could not reach Telegram. Please try again in a minute.', 'telegram_down');
+  }
+  try { await tg.call(token, 'setWebhook', webhookParams(conn)); } catch (e) {
+    throw httpError(502, 'Telegram did not accept the connection: ' + (e.description || e.message) + '. Please try again in a minute.', 'webhook_failed');
+  }
+  await db.query("update connections set status = 'active', last_error = null, username = coalesce($2, username) where id = $1 and status <> 'removed'", [conn.id, me.username || null]);
+  return { ok: true, username: me.username };
+}
+
 async function removeWebhook(conn) {
   if (conn.kind !== 'bot' || !conn.token_enc) return;
   await tg.call(decrypt(conn.token_enc), 'deleteWebhook', { drop_pending_updates: false });
@@ -90,6 +115,9 @@ async function remove(ws, id) {
     await c.query("update deliveries set status = 'skipped', error = 'Connection removed' where status = 'queued' and sender_key = $1 and workspace_id = $2", [senderKey(conn), ws.id]);
     await c.query("update broadcasts set status = 'cancelled' where connection_id = $1 and status in ('scheduled','pending_approval','sending')", [conn.id]);
     await c.query('update sequences set active = false where connection_id = $1', [conn.id]);
+    // ENG-6: a flow's connection_id is its bot; a removed channel or group also switches off this workspace's
+    // Welcome Flows on that chat (they stay as drafts), so the chat is free for whoever connects it next.
+    if (conn.kind !== 'bot') await c.query("update sequences set active = false, updated_at = now() where workspace_id = $1 and trigger_type = 'join_request' and trigger_value = $2 and active", [ws.id, String(conn.tg_chat_id)]);
   });
   return { ok: true };
 }
@@ -130,4 +158,4 @@ async function refreshCounts(limit = 200) {
   }
 }
 
-module.exports = { connectBot, remove, removeWebhook, addChat, tokenOf, senderKey, refreshCounts, BOT_UPDATES };
+module.exports = { connectBot, remove, removeWebhook, repairWebhook, webhookParams, addChat, tokenOf, senderKey, refreshCounts, BOT_UPDATES };

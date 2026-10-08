@@ -26,10 +26,18 @@ const config = {
   appSecret: env.APP_SECRET || '',
   ownerEmail: (env.OWNER_EMAIL || '').trim().toLowerCase(),
   uploadDir: env.UPLOAD_DIR || require('node:path').join(__dirname, '..', 'data', 'uploads'),
+  // ENG-23: where Railway mounted the volume (set by Railway when a volume is attached). In production on Railway the
+  // uploads folder must be on it, or every deploy would wipe payment proofs, support screenshots and photos.
+  volumeMount: env.RAILWAY_VOLUME_MOUNT_PATH || '',
+  // Set to true only to start in production without a volume on purpose (uploads are lost on every deploy).
+  allowNoVolume: bool(env.ALLOW_NO_VOLUME, false),
   runWorkers: bool(env.RUN_WORKERS, true),
   // Trust X-Forwarded-For only behind a proxy that appends the real address: on by default on Railway, off elsewhere
   // (without a proxy the header is whatever the visitor sends, and per-IP rate limits could be dodged).
   trustProxy: bool(env.TRUST_PROXY, !!env.RAILWAY_ENVIRONMENT),
+  // SEC-7: tracked links of accounts younger than this (that never paid) show a "You are leaving Castvoo" page before
+  // going to a site outside Telegram and Castvoo. 0 = off.
+  linkWarnNewDays: Math.max(0, num(env.LINK_WARN_NEW_DAYS, 7)),
 
   telegram: {
     apiBase: trimSlash(env.TELEGRAM_API_BASE || 'https://api.telegram.org'),
@@ -70,13 +78,6 @@ const config = {
     retryBaseMs: num(env.AI_RETRY_BASE_MS, 800),
   },
 
-  google: {
-    clientId: env.GOOGLE_CLIENT_ID || '',
-    clientSecret: env.GOOGLE_CLIENT_SECRET || '',
-    // Only change this for tests (a fake login provider). Real logins always use Google.
-    issuer: trimSlash(env.GOOGLE_ISSUER || 'https://accounts.google.com'),
-  },
-
   // VooSquare (the Zedapex account hub). All values come from VooSquare → Admin → Products → Castvoo → Credentials.
   voosquare: {
     base: trimSlash(env.VOO_BASE || env.VOO_ISSUER || ''),   // e.g. https://voosquare.com
@@ -85,7 +86,7 @@ const config = {
     apiKey: env.VOO_API_KEY || '',                            // Castvoo → VooSquare calls, and VooSquare → Castvoo calls
     serviceKey: env.VOO_SERVICE_KEY || '',                    // optional second key VooSquare may use to call Castvoo
     // Voo Connect kit (./voo-connect): Voo ID login, affiliate hand-off, money events, support widget.
-    // VOO_CONNECT=off switches all of it off at once (the old email / Telegram / Google logins keep working).
+    // VOO_CONNECT=off switches all of it off at once (the email and Telegram logins keep working).
     connect: bool(env.VOO_CONNECT, true),
     signalSecret: env.VOO_SIGNAL_SECRET || '',                // hashes fraud hints; make once, never change
     serverBase: trimSlash(env.VOO_SERVER_BASE || ''),         // optional private address for server-to-server calls
@@ -122,7 +123,6 @@ config.integrations = () => ({
   telegram: !!config.telegram.botToken,
   email: config.email.provider === 'resend' && !!config.email.resendKey,
   ai: config.aiReady(),
-  google: !!(config.google.clientId && config.google.clientSecret),
   voosquare_login: config.vooConnectOn(),
   voosquare_api: !!(config.voosquare.apiKey || config.voosquare.serviceKey),
   voosquare_events: config.vooEventsOn(),

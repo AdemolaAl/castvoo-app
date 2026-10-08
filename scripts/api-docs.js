@@ -11,8 +11,8 @@ for (const rt of r.routes) {
     : rt.pattern.startsWith('/auth/voosquare') || rt.pattern === '/logout' || rt.pattern === '/api/auth/voosquare/link' ? 'Voo Connect (VooSquare login)'
     : rt.pattern.startsWith('/api/') ? 'App and website' : rt.pattern.startsWith('/tg/') || rt.pattern.startsWith('/pay/') ? 'Webhooks' : 'Pages';
   const o = rt.opts || {};
-  const who = o.staff ? `staff: \`${o.staff}\`` : o.auth === 'workspace' ? 'logged in + workspace' : o.auth === 'user' ? 'logged in' : rt.pattern.startsWith('/api/voosquare') || rt.pattern.startsWith('/hooks/voosquare') ? 'Bearer VOO_API_KEY (or VOO_SERVICE_KEY)' : rt.pattern.startsWith('/tg/') ? 'Telegram secret header' : rt.pattern.startsWith('/pay/') && rt.method === 'POST' ? 'provider signature' : 'anyone';
-  (groups[g] = groups[g] || []).push(`| ${rt.method} | \`${rt.pattern}\` | ${who}${o.rate ? ` · max ${o.rate[0]} per ${o.rate[1]}s per IP` : ''} |`);
+  const who = o.staff ? `staff: \`${o.staff}\`` : o.auth === 'workspace' ? 'logged in + workspace' : o.auth === 'user' ? 'logged in' : o.auth === 'service' ? (o.inboundOnly ? 'Bearer VOO_SERVICE_KEY only' : 'Bearer VOO_API_KEY (or VOO_SERVICE_KEY)') : rt.pattern.startsWith('/tg/') ? 'Telegram secret header' : rt.pattern.startsWith('/pay/') && rt.method === 'POST' ? 'provider signature' : 'anyone';
+  (groups[g] = groups[g] || []).push(`| ${rt.method} | \`${rt.pattern}\` | ${who}${o.rate ? ` · max ${o.rate[0]} per ${o.rate[1]}s per ${o.auth === 'user' || o.auth === 'workspace' || o.staff ? 'account' : 'IP'}${o.shared ? ' (shared by all servers)' : ''}` : ''} |`);
 }
 let md = `# API reference\n\nGenerated from the code by \`node scripts/api-docs.js\` (${r.routes.length} routes).\n\n`
   + 'Rules: JSON in and out. Every non-GET request from the browser must send the header `x-cv: 1`. '

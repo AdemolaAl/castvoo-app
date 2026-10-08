@@ -23,7 +23,7 @@ describe('Cas AI', () => {
     const r = await c.post('/api/ai/write', { goal: 'Announce the weekend sale', tone: 'fun', language: 'English', length: 'short' });
     assert.equal(r.status, 200, r.text);
     assert.equal(r.body.text, 'Big *sale* today 🎉', '**bold** becomes Telegram *bold*');
-    assert.equal(r.body.ai_writes_left, 99);
+    assert.equal(r.body.ai_writes_left, 49);
     const call = lastAi();
     assert.equal(call.model, 'claude-haiku-4-5-20251001');
     assert.match(call.system, /You are Cas/);
@@ -69,12 +69,12 @@ describe('Cas AI', () => {
 
   it('a failed AI call gives the write back', async () => {
     const before = await used();
-    app.fakes.ai.failNext = 1;
+    app.fakes.ai.failNext = app.config.ai.retries + 1; // Claude is retried now (ENG-12): fail every try
     const r = await c.post('/api/ai/write', { goal: 'Will fail' });
     assert.equal(r.status, 502);
     assert.equal(r.body.code, 'ai_error');
     assert.equal(await used(), before);
-    app.fakes.ai.failNext = 1;
+    app.fakes.ai.failNext = app.config.ai.retries + 1; // Claude is retried now (ENG-12): fail every try
     await c.post('/api/ai/sequence', { goal: 'Will fail too', steps: 4 });
     assert.equal(await used(), before);
   });
@@ -102,21 +102,21 @@ describe('Cas AI', () => {
     assert.equal(st.body.workspace.ai_trained, true);
   });
 
-  it('the trial allowance (100) ends with a friendly 402, and parallel calls cannot go over it', async () => {
-    await app.db.query('update workspaces set ai_used = 99 where id = $1', [ws.id]);
+  it('the trial allowance (50) ends with a friendly 402, and parallel calls cannot go over it', async () => {
+    await app.db.query('update workspaces set ai_used = 49 where id = $1', [ws.id]);
     const last = await c.post('/api/ai/write', { goal: 'The last one' });
     assert.equal(last.status, 200);
     assert.equal(last.body.ai_writes_left, 0);
     const over = await c.post('/api/ai/write', { goal: 'One too many' });
     assert.equal(over.status, 402);
     assert.equal(over.body.code, 'ai_limit');
-    assert.match(over.body.error, /all 100 AI writes/);
+    assert.match(over.body.error, /all 50 AI writes/);
     assert.match(over.body.error, /when your plan starts/);
-    await app.db.query('update workspaces set ai_used = 95 where id = $1', [ws.id]);
+    await app.db.query('update workspaces set ai_used = 45 where id = $1', [ws.id]);
     assert.equal((await c.post('/api/ai/sequence', { goal: 'Too many steps', steps: 6 })).status, 402);
     const rs = await Promise.all(Array.from({ length: 12 }, (_, i) => c.post('/api/ai/write', { goal: 'Parallel ' + i })));
     assert.equal(rs.filter((r) => r.status === 200).length, 5);
-    assert.equal(await used(), 100);
+    assert.equal(await used(), 50);
   });
 
   it('a paid plan uses the plan allowance', async () => {
@@ -124,7 +124,7 @@ describe('Cas AI', () => {
     try {
       const r = await c.post('/api/ai/write', { goal: 'Now on Growth' });
       assert.equal(r.status, 200);
-      assert.equal(r.body.ai_writes_left, 2000 - 101);
+      assert.equal(r.body.ai_writes_left, 600 - 101);
     } finally { await app.db.query("update workspaces set plan_status = 'trial', period_end = null where id = $1", [ws.id]); }
   });
 

@@ -175,6 +175,17 @@
       setTimeout(() => { (form.querySelector('input:not([type=checkbox]),textarea,select') || $('button[type=submit]', form)).focus(); }, 30);
     });
   }
+  /** Show an image big (support chat screenshots). Esc or a click closes it. */
+  function lightbox(src) {
+    const d = document.createElement('div');
+    d.className = 'alb'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Image');
+    put(d, html`<button type="button" class="x" aria-label="Close">${icon('x')}</button><img src="${src}" alt="Image">`);
+    const close = () => { d.remove(); document.removeEventListener('keydown', key); };
+    const key = (e) => { if (e.key === 'Escape') close(); };
+    d.addEventListener('click', (e) => { if (e.target.tagName !== 'IMG') close(); });
+    document.addEventListener('keydown', key);
+    document.body.appendChild(d);
+  }
   const confirmBox = (title, text, opt = {}) => dialog({ title, text, danger: opt.danger, okText: opt.okText || 'Yes, do it', icon: opt.icon, body: opt.body }).then((v) => !!v);
 
   /* ---------- permissions ---------- */
@@ -189,9 +200,10 @@
     { group: 'People', items: [
       { key: 'users', label: 'Users', icon: 'users', c: '#29A9EB', perm: 'users.view', desc: 'Find anyone and help them.' },
       { key: 'support', label: 'Support', icon: 'chat', c: '#7B5CF5', perm: 'support.view', desc: 'Answer customer messages.', badge: 'support' },
+      { key: 'support-ai', label: 'Support AI', icon: 'spark', c: '#5B3DF5', perm: 'support.view', desc: 'The 24/7 AI support team.' },
     ] },
     { group: 'Money', items: [
-      { key: 'payments', label: 'Payments', icon: 'card', c: '#0E9F6E', perm: 'payments.view', desc: 'Top-ups and crypto checks.', badge: 'crypto' },
+      { key: 'payments', label: 'Payments', icon: 'card', c: '#0E9F6E', perm: 'payments.view', desc: 'Top-ups and manual payment checks.', badge: 'crypto' },
       { key: 'withdrawals', label: 'Withdrawals', icon: 'out', c: '#14B8A6', perm: 'payments.view', desc: 'Referral payouts to send.', badge: 'withdrawals' },
     ] },
     { group: 'Store', items: [
@@ -322,7 +334,7 @@
 
   Object.assign(CV, {
     Raw, raw, esc, html, $, $$, icon, put, on, num, usd, usdc, date, dt, ago, time, isoDay, initials, plural, cap,
-    api, get, post, put_: putj, putj, del, toast, act, dialog, confirm: confirmBox, field, formValues,
+    api, get, post, put_: putj, putj, del, toast, act, dialog, lightbox, confirm: confirmBox, field, formValues,
     can, role, rank, NAV, navItem, allowed, renderNav, route, openDrawer, closeDrawer, refreshCounts, ApiError,
   });
 })();

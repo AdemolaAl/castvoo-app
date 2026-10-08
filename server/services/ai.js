@@ -14,7 +14,7 @@ const db = require('../db');
 const settings = require('./settings');
 const llm = require('./llm');
 
-const PERSONA = `You are Cas, the friendly AI helper inside Castvoo, a tool for sending Telegram broadcasts and automatic follow-up messages.
+const PERSONA = `You are Cas, the friendly AI helper inside Castvoo, a Telegram tool. Its main feature is Welcome Flows: when someone asks to join a channel or group, the customer's own bot welcomes them at once, lets them in (straight away, after the welcome, when they tap a button, or when the owner decides) and can follow up later. Castvoo also sends broadcasts and automatic follow-up messages, and tracks button clicks.
 Your voice: warm, clear, confident, never pushy. Short sentences. Plain words a 12-year-old understands.
 Hard rules you never break:
 - Never invent facts, numbers, prices, discounts, deadlines, testimonials or results. If you need a detail you don't have, write it as [ADD DETAIL] so the user fills it in.
@@ -24,22 +24,67 @@ Hard rules you never break:
 - To greet each person by their first name in a bot message, write {name} (e.g. "Hi {name}!"). Never use {name} in channel or group posts. Never invent other placeholders.
 - Telegram formatting: use *bold* and _italic_ only. No other markdown (no #, no **, no links in brackets). Emojis are fine, 1 to 3 per message.`;
 
-async function knowledgeText() {
+async function knowledgeText(limit = 60000) {
   const rows = await db.many('select title, body from knowledge where active order by id');
   let out = '';
   for (const r of rows) {
     const block = `## ${r.title}\n${r.body}\n\n`;
-    if (out.length + block.length > 24000) break;
+    if (out.length + block.length > limit) continue; // skip one that doesn't fit, keep trying smaller ones
     out += block;
   }
   return out;
 }
 
+// Plan features worth telling a customer about (keys from seed.js FEATURE_SETS). Others are shown as-is.
+const FEATURE_TEXT = {
+  auto_approve: 'auto-approve join requests', welcome_message: 'a welcome message', welcome_flows: 'Welcome Flows builder (steps, waits, buttons, manual approval, invite links)',
+  tap_to_start: '"Tap to start" button', broadcasts: 'broadcasts', schedule: 'scheduling and 9am sending', drips: 'auto follow-ups', tracked_buttons: 'tracked buttons',
+  basic_stats: 'stats', ai: 'Cas the AI helper', ab_welcome_2: 'A/B welcome (2 versions)', ab_welcome_4: 'A/B welcome (up to 4 versions)',
+  condition_clicked: 'clicked / did not click conditions', audiences: 'audiences', start_links: 'start links', flow_funnel_stats: 'flow funnel stats',
+  onboarding_call: 'an onboarding call',
+};
+// What a plan without these features cannot do (said for the Free plan, so the AI never offers it there).
+const NOT_ON_FREE = [['drips', 'follow-ups'], ['broadcasts', 'broadcasts'], ['tap_to_start', 'tap-to-start'], ['basic_stats', 'stats'], ['audiences', 'audiences'], ['start_links', 'start links'], ['ai', 'AI writes']];
+
+/**
+ * The live plan list as plain text, for Cas, the AI support team and the website chat. Pure (no database), so
+ * scripts/check.js can check that every price and limit in seed.js reaches the AI. Knowledge articles never repeat
+ * these numbers.
+ */
+function formatPlans(plans, t = {}) {
+  const n = (v) => (v == null || Number(v) < 0 ? 'unlimited' : Number(v).toLocaleString('en-US'));
+  const isFree = (p) => Number(p.price_month_cents) === 0 && Number(p.price_year_cents || 0) === 0;
+  let prev = [];
+  const lines = plans.map((p, i) => {
+    const f = Array.isArray(p.features) ? p.features : [];
+    const added = f.filter((k) => !prev.includes(k));
+    prev = f;
+    if (isFree(p)) {
+      const no = NOT_ON_FREE.filter(([k]) => !f.includes(k)).map(([, w]) => w);
+      return `- ${p.name}: $0, no card; ${n(p.connections)} channel or group plus its own welcome bot; ${n(p.join_requests)} join requests a month; ${n(p.flows)} Welcome Flow with ${n(p.flow_steps)} welcome message (text or 1 photo, up to 3 link buttons, {name})`
+        + (Number(p.ai_writes) ? `; ${n(p.ai_writes)} AI writes a month` : '') + `; ${n(p.seats)} seat${Number(p.seats) === 1 ? '' : 's'}`
+        + (f.length ? `; includes: ${f.map((k) => FEATURE_TEXT[k] || k).join(', ')}` : '')
+        + (no.length ? `; no ${no.join(', ')}` : '')
+        + (p.branding ? '; every welcome ends with "⚡ Free welcome bot by Castvoo.com" (cannot be removed on this plan)' : '');
+    }
+    return `- ${p.name}: $${Number(p.price_month_cents) / 100}/month or $${Number(p.price_year_cents) / 100}/year; ${n(p.connections)} connections; ${n(p.subscribers)} bot subscribers (channel and group members are free)`
+      + `; ${n(p.join_requests)} join requests a month; ${n(p.flows)} Welcome Flows with ${n(p.flow_steps)} messages each; ${n(p.ai_writes)} AI writes a month; ${n(p.seats)} seat${Number(p.seats) === 1 ? '' : 's'}`
+      + (added.length ? `; ${i > 0 ? 'adds' : 'includes'}: ${added.map((k) => FEATURE_TEXT[k] || k).join(', ')}` : '')
+      + (p.branding ? '; welcomes end with "⚡ Free welcome bot by Castvoo.com"' : '');
+  });
+  return lines.join('\n')
+    + `\nEach plan includes everything in the plan before it.`
+    + (t.days ? `\nFree trial: ${t.days} days of ${(plans.find((p) => p.code === t.plan) || {}).name || t.plan}, no card needed, ${n(t.ai_writes)} AI writes and ${n(t.join_requests ?? -1)} join requests during the trial. If no plan is paid when it ends, the workspace moves to the Free plan (not paused).` : '');
+}
 async function plansText() {
   const plans = await settings.plans({ activeOnly: true });
   const t = await settings.get('trial');
-  return plans.map((p) => `- ${p.name}: $${p.price_month_cents / 100}/month or $${p.price_year_cents / 100}/year; ${p.connections} connections; ${p.subscribers.toLocaleString('en-US')} bot subscribers (channel and group members are free); ${p.ai_writes.toLocaleString('en-US')} AI writes a month; ${p.seats} seats`).join('\n')
-    + `\nFree trial: ${t.days} days of ${t.plan}, no card needed, ${t.ai_writes} AI writes during the trial.`;
+  return formatPlans(plans, t || {});
+}
+
+/** plansText() that never fails a support answer (a plan edited mid-way, a missing trial plan...). */
+async function plansTextSafe() {
+  try { return await plansText(); } catch { return 'See the Pricing page for current plans.'; }
 }
 
 function profileText(p) {
@@ -97,7 +142,10 @@ ${b.tone ? 'Tone: ' + b.tone : ''}
 ${b.language ? 'Language: ' + b.language : ''}
 Length: ${b.length === 'short' ? 'under 300 characters' : b.length === 'long' ? 'up to 900 characters' : 'about 400 to 600 characters'}.
 Hard limit: ${b.max_chars || 1024} characters.
-${b.kind === 'channel' || b.kind === 'group' ? 'It is a post in a channel or group, so do not address one person by name.' : 'It goes to people who started a bot.'}
+${b.kind === 'channel' || b.kind === 'group' ? 'It is a post in a channel or group, so do not address one person by name.'
+    : b.kind === 'welcome' ? 'It is the Welcome Flow welcome: the bot sends it the moment someone asks to join the channel or group. Greet them with {name}, say what they get from the channel, and keep it short.'
+    : b.kind === 'followup' ? 'It is a later Welcome Flow message, sent some time after someone joined the channel and tapped Start in the bot.'
+    : 'It goes to people who started a bot.'}
 Start with a strong first line (it shows in the notification). End with one clear next step. Reply with the message text only, no explanation.`,
   rewrite: (b) => `Rewrite this Telegram message to make it ${({ shorter: 'shorter (about half the length)', clearer: 'clearer and easier to read', urgent: 'more urgent, using only the real deadline or reason already in it', friendlier: 'warmer and friendlier', fix: 'correct in spelling and grammar, changing nothing else' })[b.how] || 'better'}.
 Keep every fact, price, link and name exactly as it is. Keep it under ${b.max_chars || 1024} characters. Reply with the new message only.
@@ -136,4 +184,4 @@ Where subscribers came from (start link tags): ${sources.map((s) => `${s.source}
 Only use these numbers. Castvoo has no read receipts, so never talk about read rates.`;
 }
 
-module.exports = { systemPrompt, complete, clean, TASKS, workspaceFacts, knowledgeText, profileText, PERSONA };
+module.exports = { systemPrompt, complete, clean, TASKS, workspaceFacts, knowledgeText, formatPlans, plansText, plansTextSafe, profileText, PERSONA };

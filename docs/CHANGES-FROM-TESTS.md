@@ -1,5 +1,7 @@
 # Server changes made because of the end-to-end tests
 
+> Note: Google sign-in was later removed from Castvoo (migration `008_remove_google.sql`). Rows below that mention Google, `GOOGLE_ISSUER` or `oidc.js` are kept as history.
+
 Every change below was found by a test in `test/e2e/`. API request/response shapes and
 route paths were NOT changed unless a line says so.
 

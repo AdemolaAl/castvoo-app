@@ -36,6 +36,7 @@ function showView(v) {
 async function route() {
   const { head, sub, q } = parseHash();
   closeModal();
+  if (typeof closeVideoGuide === 'function') closeVideoGuide(true);
   const hc = $('.helpc'); if (hc) hc.remove();
   if (head === 'signup' || head === 'login') {
     await ready();

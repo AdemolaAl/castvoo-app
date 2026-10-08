@@ -6,7 +6,8 @@ const config = require('../config');
 const billing = require('../services/billing');
 const settings = require('../services/settings');
 const email = require('../services/email');
-const { str, int, oneOf, email: vEmail, randomToken, badRequest, forbidden, notFound, httpError, fmtUSD } = require('../lib/util');
+const { str, int, oneOf, email: vEmail, randomToken, badRequest, forbidden, notFound, httpError, fmtUSD, cleanName, LOOKS_LIKE_URL } = require('../lib/util');
+const rl = require('../lib/ratelimit');
 
 const ownerOnly = (ctx) => { if (ctx.member.role !== 'owner') throw forbidden('Only the workspace owner can do that.'); };
 const canSend = (ctx) => { if (ctx.member.role === 'drafter') throw forbidden('Your role can write drafts. Ask the owner to send.'); };
@@ -18,7 +19,7 @@ async function stats(wsId) {
     db.one("select count(*)::int n from clicks where workspace_id = $1 and created_at > now() - interval '14 days'", [wsId]),
     db.one("select count(distinct subscriber_id)::int n from clicks where workspace_id = $1 and subscriber_id is not null and created_at > now() - interval '14 days'", [wsId]),
     db.one("select count(*)::int n from replies where workspace_id = $1 and created_at > now() - interval '14 days'", [wsId]),
-    db.one("select count(*)::int n from subscribers s join connections c on c.id = s.connection_id where c.workspace_id = $1 and s.joined_at > now() - interval '1 day'", [wsId]),
+    db.one("select count(*)::int n from subscribers s join connections c on c.id = s.connection_id where c.workspace_id = $1 and s.status <> 'joinreq' and s.joined_at > now() - interval '1 day'", [wsId]), // people who asked to join but never pressed Start are not subscribers
     db.many(`select to_char(d, 'YYYY-MM-DD') as day,
         (select count(*)::int from deliveries x where x.workspace_id = $1 and x.status = 'sent' and x.sent_at >= d and x.sent_at < d + interval '1 day') as sent,
         (select count(*)::int from deliveries x where x.workspace_id = $1 and x.status = 'sent' and x.sent_at >= d - interval '14 days' and x.sent_at < d - interval '13 days') as prev
@@ -29,7 +30,7 @@ async function stats(wsId) {
 
 async function activity(wsId) {
   return db.many(`(select 'start' as kind, s.first_name as who, s.source as detail, c.title as place, s.joined_at as at
-        from subscribers s join connections c on c.id = s.connection_id where c.workspace_id = $1 order by s.joined_at desc limit 8)
+        from subscribers s join connections c on c.id = s.connection_id where c.workspace_id = $1 and s.status <> 'joinreq' order by s.joined_at desc limit 8)
     union all (select 'click', coalesce(s.first_name, 'Someone'), l.label, '', k.created_at from clicks k join links l on l.code = k.code left join subscribers s on s.id = k.subscriber_id where k.workspace_id = $1 order by k.created_at desc limit 8)
     union all (select 'broadcast', b.title, b.status, '', coalesce(b.finished_at, b.started_at, b.created_at) from broadcasts b where b.workspace_id = $1 and b.status in ('sent','sending') order by b.id desc limit 4)
     order by at desc limit 12`, [wsId]);
@@ -47,25 +48,28 @@ module.exports = (r) => {
       activity(ws.id),
       db.one("select b.id, b.title, b.total, b.sent, b.failed, c.title as conn from broadcasts b join connections c on c.id = b.connection_id where b.workspace_id = $1 and b.status = 'sending' order by b.id desc limit 1", [ws.id]),
       db.many("select id, title, send_at, total from broadcasts where workspace_id = $1 and status = 'scheduled' order by send_at limit 3", [ws.id]),
-      db.one("select count(*)::int n from support_threads where user_id = $1 and unread_user", [ctx.user.id]),
+      db.one("select count(*)::int n from support_threads where user_id = $1 and workspace_id = $2 and unread_user", [ctx.user.id, ws.id]),
     ]);
     const firstBroadcast = await db.one("select 1 from broadcasts where workspace_id = $1 and status in ('sent','sending','scheduled') limit 1", [ws.id]);
-    const anyDrip = await db.one('select 1 from sequences where workspace_id = $1 and active limit 1', [ws.id]);
+    const anyDrip = await db.one("select 1 from sequences where workspace_id = $1 and active and trigger_type <> 'join_request' limit 1", [ws.id]);
+    const anyFlow = await db.one("select 1 from sequences where workspace_id = $1 and active and trigger_type = 'join_request' limit 1", [ws.id]);
+    const pendingJoins = await db.one("select count(*)::int n from join_requests where workspace_id = $1 and status = 'pending'", [ws.id]);
     const teammates = await db.one('select count(*)::int n from members where workspace_id = $1', [ws.id]);
     const anyTopup = await db.one("select 1 from wallet_tx where workspace_id = $1 and kind = 'topup' limit 1", [ws.id]);
     return {
       workspace: { id: ws.id, name: ws.name, timezone: ws.timezone, role: ctx.member.role, daily_cap: ws.daily_cap, require_approval: ws.require_approval, ai_trained: Object.keys(ws.ai_profile || {}).length > 0 },
       plan, connections: conns,
       wallet: { cash: Number(wallet.wallet_cents) / 100, bonus: Number(wallet.bonus_cents) / 100, total: (Number(wallet.wallet_cents) + Number(wallet.bonus_cents)) / 100 },
-      stats: st, activity: act, sending, upcoming, support_unread: unread.n,
+      stats: st, activity: act, sending, upcoming, support_unread: unread.n, flows: { live: !!anyFlow, pending: pendingJoins.n },
       checklist: [
         { key: 'account', label: 'Create your account', done: true },
         { key: 'connect', label: 'Connect a bot, channel or group', done: conns.length > 0, go: 'connect' },
-        { key: 'drip', label: 'Switch on a welcome follow-up', done: !!anyDrip, go: 'drips' },
-        { key: 'broadcast', label: 'Send your first message', done: !!firstBroadcast, go: 'broadcast' },
-        { key: 'train', label: 'Teach Cas about your business', done: Object.keys(ws.ai_profile || {}).length > 0, go: 'ai' },
+        { key: 'flow', label: 'Switch on a Welcome Flow', done: !!anyFlow, go: 'flows' },
+        ...(plan.welcome_only ? [] : [{ key: 'drip', label: 'Switch on an auto follow-up', done: !!anyDrip, go: 'drips' }]),
+        ...(plan.welcome_only ? [] : [{ key: 'broadcast', label: 'Send your first message', done: !!firstBroadcast, go: 'broadcast' },
+          { key: 'train', label: 'Teach Cas about your business', done: Object.keys(ws.ai_profile || {}).length > 0, go: 'ai' }]),
         { key: 'topup', label: 'Top up your wallet', done: !!anyTopup, go: 'topup' },
-        { key: 'team', label: 'Invite a teammate', done: teammates.n > 1, go: 'settings' },
+        ...(plan.limits.seats > 1 ? [{ key: 'team', label: 'Invite a teammate', done: teammates.n > 1, go: 'settings' }] : []),
       ],
     };
   }, { auth: 'workspace' });
@@ -73,7 +77,13 @@ module.exports = (r) => {
   r.post('/api/app/settings', async (ctx) => {
     ownerOnly(ctx);
     const b = ctx.body;
-    const name = b.name !== undefined ? str(b.name, 'Workspace name', { min: 1, max: 60 }) : ctx.workspace.name;
+    let name = ctx.workspace.name;
+    if (b.name !== undefined) {
+      // SEC-12: the name goes into invite emails, so no web addresses, newlines or odd characters.
+      name = cleanName(str(b.name, 'Workspace name', { min: 1, max: 120 }), 60);
+      if (!name) throw badRequest('Workspace name is required.');
+      if (LOOKS_LIKE_URL.test(name)) throw badRequest('A workspace name can\'t contain a web address or email.');
+    }
     let tz = ctx.workspace.timezone;
     if (b.timezone !== undefined) {
       tz = str(b.timezone, 'Time zone', { min: 1, max: 60 });
@@ -100,10 +110,16 @@ module.exports = (r) => {
     const used = (await db.one('select count(*)::int n from members where workspace_id = $1', [ctx.workspace.id])).n;
     const pending = (await db.one('select count(*)::int n from invites where workspace_id = $1 and accepted_at is null and expires_at > now()', [ctx.workspace.id])).n;
     if (used + pending >= seats) throw httpError(402, `Your plan has ${seats} seat${seats > 1 ? 's' : ''}. Upgrade to invite more people.`, 'limit_seats');
+    // SEC-12: invites are emails from Castvoo's domain with text the owner chose. New accounts may send fewer per day,
+    // and names that read like a web address are replaced, so an invite can't be dressed up as a Castvoo notice.
+    const ageDays = (Date.now() - new Date(ctx.user.created_at || Date.now()).getTime()) / 86400000;
+    const perDay = ctx.workspace.paid_ever ? 100 : ageDays < 2 ? 5 : ageDays < 14 ? 15 : 40;
+    if (!(await rl.hitShared('invite-day:' + ctx.user.id, perDay, 86400)).ok) throw httpError(429, 'That is a lot of invites for one day. Try again tomorrow.', 'rate_limited');
     const token = randomToken(24);
     await db.query("insert into invites(token, workspace_id, email, role, created_by, expires_at) values ($1,$2,$3,$4,$5, now() + interval '7 days')", [token, ctx.workspace.id, mail, role, ctx.user.id]);
     const link = `${config.appUrl}/#join/${token}`;
-    await email.sendTo(mail, 'team_invite', { inviter_name: ctx.user.name, workspace_name: ctx.workspace.name, invite_url: link });
+    const safe = (v, fallback) => { const x = cleanName(v, 60); return x && !LOOKS_LIKE_URL.test(x) ? x : fallback; };
+    await email.sendTo(mail, 'team_invite', { inviter_name: safe(ctx.user.name, 'A Castvoo customer'), workspace_name: safe(ctx.workspace.name, 'their workspace'), invite_url: link });
     return { ok: true, link };
   }, { auth: 'workspace', rate: [30, 3600] });
 
@@ -144,9 +160,34 @@ module.exports = (r) => {
     ownerOnly(ctx);
     const ws = ctx.workspace;
     const code = str(ctx.body.plan, 'Plan', { min: 1, max: 30 });
+    // AUD-8: on a move to a smaller plan the owner picks which Welcome Flows stay live (the others are switched off
+    // and kept when the smaller plan starts). Only this workspace's flows count; unknown ids are ignored.
+    if (Array.isArray(ctx.body.keep_flows)) {
+      const ids = ctx.body.keep_flows.slice(0, 200).map((x) => Number(x)).filter((x) => Number.isSafeInteger(x) && x > 0);
+      const own = ids.length ? (await db.many("select id from sequences where workspace_id = $1 and trigger_type = 'join_request' and id = any($2::bigint[])", [ctx.workspace.id, ids])).map((x) => String(x.id)) : [];
+      await db.query('update workspaces set keep_flow_ids = $2 where id = $1', [ctx.workspace.id, ids.filter((x) => own.includes(String(x)))]);
+      ctx.workspace.keep_flow_ids = ids;
+    }
     const cycle = oneOf(ctx.body.cycle || ws.billing_cycle || 'month', 'Billing', ['month', 'year']);
     const plan = await settings.plan(code);
     if (!plan || !plan.active) throw badRequest('That plan is not available.');
+    const cur0 = await settings.plan(ws.plan_code);
+    const onFree = ws.plan_status === 'active' && billing.isFreePlan(cur0);
+    if (billing.isFreePlan(plan)) {
+      if (onFree) return { ok: true, message: `You are on ${plan.name} already.` };
+      if (ws.plan_status === 'paused' || ws.plan_status === 'cancelled') {
+        await billing.dropToFree(ws.id, { expect: (w) => w.plan_status === 'paused' || w.plan_status === 'cancelled' });
+        return { ok: true, message: `You are on ${plan.name} now. Your first live Welcome Flow keeps welcoming people.` };
+      }
+      await db.query('update workspaces set pending_plan_code = $2, pending_cycle = $3 where id = $1', [ws.id, plan.code, 'month']);
+      return { ok: true, message: ws.plan_status === 'trial' ? `${plan.name} starts when your free trial ends.` : `${plan.name} starts at your next renewal. Nothing more is charged.` };
+    }
+    if (onFree) {
+      // From Free the new plan starts now, paid from the wallet (there is no period to finish).
+      const rf = await billing.activate(ws.id, code, cycle, { expect: (w) => w.plan_code === ws.plan_code && w.plan_status === 'active' });
+      if (rf.skipped) throw httpError(409, 'Your plan changed a moment ago. Refresh the page and try again.', 'plan_changed');
+      return { ok: true, message: `${plan.name} is active. Welcome aboard!` };
+    }
     if (ws.plan_status === 'trial') {
       // Picked during the trial: it starts (and is paid) when the trial ends, unless they want to start now.
       if (ctx.body.start_now) {

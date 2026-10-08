@@ -81,9 +81,10 @@ PAGES.subscribers = {
       $('#tgGo', h).onclick = async (e) => {
         const tag = $('#tgI', h).value.trim().toLowerCase();
         if (!/^[a-z0-9_-]{1,40}$/.test(tag)) { $('#tgE', h).textContent = 'Use only letters, numbers, _ and -.'; $('#tgE', h).hidden = false; return; }
-        btnBusy(e.currentTarget, true, 'Saving…');
-        try { const r = await POST('/api/subscribers/tag', { tag, ids: [...SUBS.sel], remove }); closeModal(); toast((remove ? 'Tag removed from ' : 'Tag added to ') + plural(r.updated, 'person', 'people') + '.'); SUBS.sel.clear(); SUBS.hints = null; d = await load(); if (alive()) table(); }
-        catch (ex) { btnBusy(e.currentTarget, false); $('#tgE', h).textContent = ex.message; $('#tgE', h).hidden = false; }
+        await busy(e.currentTarget, 'Saving…', async () => {
+          try { const r = await POST('/api/subscribers/tag', { tag, ids: [...SUBS.sel], remove }); closeModal(); toast((remove ? 'Tag removed from ' : 'Tag added to ') + plural(r.updated, 'person', 'people') + '.'); SUBS.sel.clear(); SUBS.hints = null; d = await load(); if (alive()) table(); }
+          catch (ex) { $('#tgE', h).textContent = ex.message; $('#tgE', h).hidden = false; }
+        });
       };
       setTimeout(() => { const i = $('#tgI'); if (i) i.focus(); }, 60);
     };
@@ -135,8 +136,9 @@ PAGES.audiences = {
         if (!name) { err.textContent = 'Give the audience a name.'; err.hidden = false; $('#sgName').focus(); return; }
         const bad = SEGR.find((r) => !ruleOk(r));
         if (bad) { err.textContent = fields[bad.field].type === 'number' ? 'Days must be between 1 and 365.' : 'Fill in "' + fields[bad.field].label + '".'; err.hidden = false; return; }
-        btnBusy(e.currentTarget, true, 'Saving…');
-        try { await POST('/api/segments', { name, rules: SEGR }); SEGR = []; toast('Audience saved.'); renderPage('audiences', {}); } catch (ex) { btnBusy(e.currentTarget, false); err.textContent = ex.message; err.hidden = false; }
+        await busy(e.currentTarget, 'Saving…', async () => {
+          try { await POST('/api/segments', { name, rules: SEGR }); SEGR = []; toast('Audience saved.'); renderPage('audiences', {}); } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+        });
       };
       draw();
     }

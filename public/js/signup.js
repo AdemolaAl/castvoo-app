@@ -43,7 +43,7 @@ function suAccount(error) {
   const L = CFG.login || {};
   const signup = SU.mode === 'signup';
   const off = signup && (CFG.features.signups === false || CFG.features.maintenance);
-  const anySso = L.telegram || L.google || L.voosquare;
+  const anySso = L.telegram || L.voosquare;
   suProgress(1);
   SU.codeSent = false;
   $('#suBody').innerHTML = '<div class="su-step">' +
@@ -53,7 +53,6 @@ function suAccount(error) {
     (off ? '<div class="note2"><span>⏸️</span><span><b>New sign-ups are paused for a moment.</b> ' + esc(CFG.features.maintenance ? (CFG.content.maintenance_message || '') : 'Please try again a little later.') + ' Existing accounts can still log in.</span></div>' : '') +
     '<div id="suPick" class="su-pick">' +
       (L.telegram ? '<button type="button" class="sso tgb" id="suTg">' + icon('tg') + 'Continue with Telegram<span class="rec">Fastest</span></button>' : '') +
-      (L.google ? '<button type="button" class="sso" id="suGg"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>' : '') +
       (L.voosquare ? '<button type="button" class="sso" id="suVq"><span class="vq">V</span>Continue with Voo ID</button>' : '') +
       (anySso && L.email ? '<div class="or">or use email</div>' : '') +
       (L.email ? '<form id="suEmF" class="su-pick" novalidate><div class="field"><label for="suEmail">Email</label><input class="inp" id="suEmail" type="email" placeholder="you@company.com" autocomplete="email" value="' + esc(SU.email) + '" required></div><p class="ferr" id="suErr" hidden></p><button class="btn b-blue full" type="submit" id="suN1">Email me a code</button></form>' : '') +
@@ -78,9 +77,7 @@ function suAccount(error) {
 
   const wait = (t) => { $('#suPick').hidden = true; $('#suCodeBox').hidden = true; $('#suWaitT').textContent = t; $('#suWait').hidden = false; };
   const unwait = (codeView) => { $('#suWait').hidden = true; $('#suPick').hidden = !!codeView; $('#suCodeBox').hidden = !codeView; };
-  const tg = $('#suTg'), gg = $('#suGg'), vq = $('#suVq');
-  const qs = () => '?ref=' + encodeURIComponent(refCode()) + (SU.country ? '&country=' + encodeURIComponent(SU.country) : '');
-  if (gg) gg.onclick = () => { wait('Opening Google…'); location.href = '/api/auth/google/start' + qs(); };
+  const tg = $('#suTg'), vq = $('#suVq');
   if (vq) vq.onclick = () => {
     wait('Opening VooSquare…');
     // "Start free" opens VooSquare's sign-up view; the affiliate click (if any) rides along from the voo_attr cookie.
@@ -232,7 +229,7 @@ function suPlan() {
   const draw = () => {
     $('#suBody').innerHTML = '<div class="su-step"><div style="width:80px" data-cas="happy"></div><div><h1>Choose a plan</h1><p class="muted" style="margin-top:6px">Your ' + fmt(CFG.trial.days) + '-day free trial of ' + esc(trialName) + ' is running. The plan you pick starts when the trial ends and is paid from your wallet. Change it any time.</p></div>' +
       '<div class="seg2" id="suCy"><button type="button" data-c="month" class="' + (SU.cycle === 'month' ? 'on' : '') + '">Monthly</button><button type="button" data-c="year" class="' + (SU.cycle === 'year' ? 'on' : '') + '">Yearly' + (yearSaveText() ? ' · ' + yearSaveText() : '') + '</button></div>' +
-      '<div style="display:grid;gap:10px" id="pp">' + plans.map((p) => '<button type="button" class="pp ' + (p.code === SU.plan ? 'on' : '') + '" data-p="' + esc(p.code) + '" aria-pressed="' + (p.code === SU.plan) + '"><div><b>' + esc(p.name) + (p.popular ? ' <span class="pill p-blue">Popular</span>' : '') + '</b><small>' + esc(plural(p.connections, 'connection') + ' · ' + fmt(p.subscribers) + ' subscribers · ' + fmt(p.ai_writes) + ' AI writes') + '</small></div><span class="pr">' + usd(SU.cycle === 'year' ? p.price_year : p.price_month) + '<small>/' + (SU.cycle === 'year' ? 'yr' : 'mo') + '</small></span></button>').join('') + '</div>' +
+      '<div style="display:grid;gap:10px" id="pp">' + plans.map((p) => '<button type="button" class="pp ' + (p.code === SU.plan ? 'on' : '') + '" data-p="' + esc(p.code) + '" aria-pressed="' + (p.code === SU.plan) + '"><div><b>' + esc(p.name) + (p.popular ? ' <span class="pill p-blue">Popular</span>' : '') + '</b><small>' + esc(suPlanLine(p)) + '</small></div><span class="pr">' + usd(SU.cycle === 'year' ? p.price_year : p.price_month) + '<small>/' + (SU.cycle === 'year' ? 'yr' : 'mo') + '</small></span></button>').join('') + '</div>' +
       '<p class="ferr" id="suPlErr" hidden></p>' +
       '<button class="btn b-blue full" type="button" id="suN3">Open my dashboard' + icon('arrow') + '</button>' +
       '<button class="btn b-ghost full" type="button" id="suLater">Decide later</button></div>';
@@ -256,4 +253,14 @@ function finishSignup(msg) {
 function signupInit() {
   $('#suCards').innerHTML = [['tunde', 'Welcome every new subscriber', 'Sent the moment they start your bot'], ['wanjiku', 'Follow up on day 1, 3 and 7', 'Auto follow-ups do it for you'], ['zainab', 'See who tapped your buttons', 'Every button link is tracked']].map((c) => '<div class="su-c">' + mav(c[0]) + '<div><b>' + c[1] + '</b><small>' + c[2] + '</small></div></div>').join('');
   paintAll($('#v-signup'));
+}
+
+/* One line under each plan in the picker. Free gives a welcome bot, not subscribers or AI writes, so it says that. */
+function suPlanLine(p) {
+  if (!Number(p.price_month) && !Number(p.price_year)) {
+    const jr = Number(p.join_requests);
+    const n = Number(p.connections) || 1;
+    return 'Welcome bot for ' + (n === 1 ? '1 channel or group' : fmt(n) + ' channels or groups') + ' · ' + (jr < 0 ? 'unlimited' : fmt(jr || 500)) + ' join requests a month · no card needed';
+  }
+  return plural(p.connections, 'connection') + ' · ' + fmt(p.subscribers) + ' subscribers · ' + fmt(p.ai_writes) + ' AI writes';
 }

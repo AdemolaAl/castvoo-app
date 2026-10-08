@@ -3,17 +3,29 @@
 
 const db = require('../../db');
 const support = require('../../services/support');
+const supportAi = require('../../services/support-ai');
+const images = require('../../services/support-images');
 const email = require('../../services/email');
 const ai = require('../../services/ai');
 const llm = require('../../services/llm');
 const { audit } = require('../../services/audit');
 const { str, int, notFound, badRequest, bool } = require('../../lib/util');
 
+/* The name customers see on a staff reply: first name only (PRODUCT-FACTS). A staff account with no real name has
+   the start of its email as its name (for example "owner"), so that shows as "Castvoo team" instead. */
+function publicStaffName(u) {
+  const name = String((u && u.name) || '').trim();
+  const local = String((u && u.email) || '').split('@')[0].toLowerCase();
+  if (!name || name.toLowerCase() === local) return 'Castvoo team';
+  return name.split(/\s+/)[0].slice(0, 60);
+}
+
 module.exports = (r) => {
   /* ---------- Support ---------- */
   r.get('/api/admin/support', async (ctx) => {
     const threads = await support.listThreads({ status: ctx.query.status || 'open', q: ctx.query.q, assigned: ctx.query.mine === '1' ? ctx.user.id : null, limit: 100 });
-    const counts = await db.one(`select count(*) filter (where status = 'open')::int open, count(*) filter (where status = 'pending')::int pending, count(*) filter (where unread_staff and status <> 'closed')::int unread from support_threads`);
+    const counts = await db.one(`select count(*) filter (where status = 'open')::int open, count(*) filter (where status = 'pending')::int pending, count(*) filter (where unread_staff and status <> 'closed')::int unread,
+      count(*) filter (where needs_human and status <> 'closed')::int human from support_threads`);
     return { threads, counts };
   }, { staff: 'support.view' });
 
@@ -22,15 +34,41 @@ module.exports = (r) => {
     const t = await support.getThread(id);
     await db.query('update support_threads set unread_staff = false where id = $1', [id]);
     const staff = await db.many('select id, name from users where staff_role is not null and status = $1 order by name', ['active']);
-    return { ...t, staff };
+    // What the AI did on this conversation (staff only; inputs and outputs are already redacted).
+    const tool_log = await db.many('select id, tool, input, output, ok, ms, created_at from support_ai_tool_log where thread_id = $1 order by id desc limit 60', [id]);
+    const persona = t.thread.ai_persona_id ? await db.one('select * from support_personas where id = $1', [t.thread.ai_persona_id]) : null;
+    return { ...t, staff, tool_log, agent: supportAi.publicPersona(persona), ai_on: await supportAi.isOn() };
   }, { staff: 'support.view' });
+
+  /** AI on this conversation: takeover (pause, assign to me), handback (AI answers again), on / off. */
+  r.post('/api/admin/support/:id/ai', async (ctx) => {
+    const id = int(ctx.params.id, 'Conversation');
+    const action = String(ctx.body.action || '');
+    await supportAi.staffAction(id, action, ctx.user);
+    await audit(ctx, 'support.ai_' + action, 'support:' + id, {});
+    return { ok: true };
+  }, { staff: 'support.reply' });
 
   r.post('/api/admin/support/:id/reply', async (ctx) => {
     const id = int(ctx.params.id, 'Conversation');
-    await support.staffReply(id, { authorUserId: ctx.user.id, authorName: ctx.user.name || 'Castvoo team', body: ctx.body.body, internal: bool(ctx.body.internal) });
+    await support.staffReply(id, { authorUserId: ctx.user.id, authorName: publicStaffName(ctx.user), body: ctx.body.body, internal: bool(ctx.body.internal), attachments: ctx.body.attachments });
     if (ctx.body.close) await support.setStatus(id, 'closed');
     return { ok: true };
   }, { staff: 'support.reply' });
+
+  /** Staff attach an image to their next reply (raw body, JPG / PNG / WEBP up to 10 MB). */
+  r.post('/api/admin/support/:id/attachments', async (ctx) => {
+    const t = await db.one('select id, workspace_id from support_threads where id = $1', [int(ctx.params.id, 'Conversation')]);
+    if (!t) throw notFound('That conversation');
+    const a = await images.save(ctx, { threadId: t.id, workspaceId: t.workspace_id, userId: ctx.user.id, type: 'staff' });
+    return { attachment: images.publicRow(a, '/api/admin/support/attachments') };
+  }, { staff: 'support.reply', stream: true, rate: [60, 600] });
+
+  /** Any image in a support conversation, for the team (customer screenshots, AI handoff notes, staff replies). */
+  r.get('/api/admin/support/attachments/:id', async (ctx) => {
+    const a = await db.one('select * from support_attachments where id = $1', [int(ctx.params.id, 'Image')]);
+    if (!a || !(await images.stream(ctx, a))) throw notFound('That image');
+  }, { staff: 'support.view' });
 
   r.post('/api/admin/support/:id/status', async (ctx) => support.setStatus(int(ctx.params.id, 'Conversation'), String(ctx.body.status || '')), { staff: 'support.reply' });
 
@@ -92,10 +130,12 @@ module.exports = (r) => {
     const base = email.TEMPLATES[key];
     const S = { code: '482913', trial_end_date: '10 October 2026', guide_url: '#', inviter_name: 'Ejiro', workspace_name: 'Zedapex', invite_url: '#', role_name: 'Support', admin_url: '#',
       plan_name: 'Growth', plan_price: '$49.00', wallet_balance: '$120.00', topup_url: '#', amount: '$100.00', period_start: '3 October 2026', period_end: '2 November 2026', receipt_id: 'cv_sample123',
-      billing_url: '#', renewal_date: '2 November 2026', bonus: '$0.00', method: 'Paystack', new_balance: '$220.00', wallet_url: '#', coin: 'USDT', txid: 'a1b2c3d4e5f6a7b8c9d0', reason: 'The transaction was not found on the TRON network.',
+      billing_url: '#', renewal_date: '2 November 2026', bonus: '$0.00', method: 'Paystack', new_balance: '$220.00', wallet_url: '#', coin: 'USDT', txid: 'a1b2c3d4e5f6a7b8c9d0', reference: 'FT2610081234567', reason: 'The transaction was not found on the TRON network.',
       referral_name: 'Tunde', settle_date: '2 November 2026', referrals_url: '#', address: 'TQ7mZ2r9VbKx4LwN8pHc3eYd6sFa1JuXo5', agent_name: 'Ada', message_preview: 'Hi! I checked your bot and it is connected now.',
       support_url: '#', broadcast_title: 'Weekend sale', delivered: '9,640', failed: '12', clicks: '1,104', report_url: '#', limit_name: 'subscribers', upgrade_url: '#', download_url: '#',
-      connect_url: '#', broadcast_url: '#', drips_url: '#', train_url: '#', pricing_url: '#', coupon_code: 'COMEBACK20', coupon_percent: '20', coupon_expiry: '17 October 2026', reply_url: '#', first_name: 'Ejiro', unsubscribe_url: '#', old_price: '$49.00', new_price: '$59.00', billing_period: 'month', start_date: '2 November 2026' };
+      connect_url: '#', broadcast_url: '#', drips_url: '#', train_url: '#', pricing_url: '#', coupon_code: 'COMEBACK20', coupon_percent: '20', coupon_expiry: '17 October 2026', reply_url: '#', first_name: 'Ejiro', unsubscribe_url: '#', old_price: '$49.00', new_price: '$59.00', billing_period: 'month', start_date: '2 November 2026',
+      used: '412', limit: '500', reset_date: '1 November 2026', plans_url: '#', welcomed: '238',
+      delete_date: '7 November 2026', days_left: '30', login_url: '#' };
     return Object.fromEntries([...base.vars, 'first_name', 'unsubscribe_url'].map((v) => [v, S[v] ?? '']));
   }
 
@@ -126,7 +166,8 @@ module.exports = (r) => {
 
   r.put('/api/admin/knowledge/:id', async (ctx) => {
     const id = int(ctx.params.id, 'Article');
-    const row = await db.one('update knowledge set title = $2, body = $3, active = $4, updated_by = $5, updated_at = now() where id = $1 returning id',
+    // edited = true: Castvoo's defaults never overwrite an article the team changed (seed.js syncKnowledge).
+    const row = await db.one('update knowledge set title = $2, body = $3, active = $4, updated_by = $5, updated_at = now(), edited = true where id = $1 returning id',
       [id, str(ctx.body.title, 'Title', { min: 2, max: 120 }), str(ctx.body.body, 'Text', { min: 5, max: 8000 }), ctx.body.active === undefined ? true : bool(ctx.body.active), ctx.user.id]);
     if (!row) throw notFound('That article');
     await audit(ctx, 'knowledge.update', 'knowledge:' + id, { title: ctx.body.title });
@@ -134,7 +175,9 @@ module.exports = (r) => {
   }, { staff: 'knowledge.edit' });
 
   r.delete('/api/admin/knowledge/:id', async (ctx) => {
-    await db.query('delete from knowledge where id = $1', [int(ctx.params.id, 'Article')]);
+    // A deleted default is remembered, so a later deploy does not bring it back.
+    const gone = await db.one('delete from knowledge where id = $1 returning key', [int(ctx.params.id, 'Article')]);
+    if (gone && gone.key) await db.query('insert into knowledge_removed(key) values ($1) on conflict do nothing', [gone.key]);
     await audit(ctx, 'knowledge.delete', 'knowledge:' + ctx.params.id, {});
     return { ok: true };
   }, { staff: 'knowledge.edit' });

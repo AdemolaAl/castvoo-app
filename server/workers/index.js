@@ -6,6 +6,7 @@
  *   broadcasts    every 5 s     starts scheduled sends, closes finished ones
  *   drips         every 10 s    queues follow-up steps that are due
  *   outbox        every 10 s    sends events to VooSquare
+ *   support AI    every 1 s     AI support replies (services/support-ai.js)
  *   billing       every 5 min   trials, renewals, reminders
  *   sales emails  every 15 min  trial follow-up emails
  *   cleanup       every hour    tidy old rows, refresh channel member counts
@@ -35,12 +36,15 @@ function start() {
     loop('broadcasts', jobs.broadcastsTick, 5000),
     loop('drips', jobs.dripsTick, 10000),
     loop('outbox', voosquare.flush, 10000),
+    // Claims due conversations and answers several at once in the background (does not wait for the answers).
+    loop('support-ai', () => require('../services/support-ai').tick({ wait: false }), 1000, 1500),
     loop('billing', jobs.billingTick, 5 * 60000, 20000),
     loop('sales', jobs.salesTick, 15 * 60000, 60000),
     loop('cleanup', jobs.cleanupTick, 60 * 60000, 120000),
   ];
   log.info('workers started');
-  return { stop: async () => { await Promise.all(loops.map((l) => l.stop())); await sender.stop(); } };
+  // Support-AI turns in progress stop at their next round and go back to the queue for the next instance (ENG-11).
+  return { stop: async () => { await Promise.all([...loops.map((l) => l.stop()), require('../services/support-ai').stop()]); await sender.stop(); } };
 }
 
 module.exports = { start };

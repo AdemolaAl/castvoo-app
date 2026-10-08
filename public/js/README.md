@@ -13,6 +13,7 @@ Plain JavaScript, no framework, no build step. `index.html` loads these classic 
 | `app-home.js` | Home page. |
 | `app-send.js` | Send a message (composer, history, report, edit), Ask Cas writing helpers, Calendar. |
 | `app-drips.js` | Auto follow-ups. |
+| `app-flows.js` | Welcome Flows: list, templates, the block builder with a Telegram preview, stats, the Requests list, and the upgrade prompts for plan features. |
 | `app-people.js` | Subscribers, Audiences, Clicks. |
 | `app-connect.js` | Channels & bots, connect wizard, Telegram linking, start links. |
 | `app-cas.js` | Ask Cas chat and Train Cas. |

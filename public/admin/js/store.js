@@ -33,6 +33,13 @@
         <div class="f"><label>AI writes a month</label><input name="ai_writes" type="number" min="0" value="${p.ai_writes}"${dis}></div>
         <div class="f"><label>Team seats</label><input name="seats" type="number" min="1" value="${p.seats}"${dis}></div>
       </div>
+      <div class="fr four">
+        <div class="f"><label>Join requests a month</label><input name="join_requests" type="number" min="-1" value="${p.join_requests}"${dis}><span class="hint">-1 = no limit</span></div>
+        <div class="f"><label>Welcome Flows</label><input name="flows" type="number" min="-1" value="${p.flows}"${dis}><span class="hint">-1 = no limit</span></div>
+        <div class="f"><label>Messages per flow</label><input name="flow_steps" type="number" min="-1" value="${p.flow_steps}"${dis}><span class="hint">-1 = no limit</span></div>
+        <div class="f"><label class="check" style="margin-top:26px"><input type="checkbox" name="branding" ${p.branding ? raw('checked') : ''}${dis}> "Free welcome bot by Castvoo.com" line</label></div>
+      </div>
+      <div class="f"><label>Features</label><div class="row" style="flex-wrap:wrap;gap:6px 14px">${(PF || []).map((x) => html`<label class="check small"><input type="checkbox" name="feat" value="${x.key}" ${(p.features || []).includes(x.key) ? raw('checked') : ''}${dis}> ${x.name}</label>`)}</div></div>
       <div class="f"><label>What's included (one line each)</label><textarea name="bullets" rows="6"${dis}>${(p.bullets || []).join('\n')}</textarea></div>
       <div class="row">
         <label class="check"><input type="checkbox" name="popular" ${p.popular ? raw('checked') : ''}${dis}> Mark as “Most popular”</label>
@@ -46,12 +53,16 @@
     name: f.name.value.trim(), tagline: f.tagline.value.trim(), price_month: Number(f.price_month.value), price_year: Number(f.price_year.value),
     connections: Number(f.connections.value), subscribers: Number(f.subscribers.value), ai_writes: Number(f.ai_writes.value), seats: Number(f.seats.value),
     bullets: f.bullets.value, popular: f.popular.checked, active: f.active.checked, sort: Number(f.sort.value) || 0,
+    join_requests: Number(f.join_requests.value), flows: Number(f.flows.value), flow_steps: Number(f.flow_steps.value), branding: f.branding.checked,
+    features: [...f.querySelectorAll('input[name=feat]:checked')].map((x) => x.value),
   });
+  let PF = [];
 
   CV.page('pricing', {
     intro: 'Prices here change the website and the dashboard straight away. If you raise a price, people already paying keep their old price for 30 days and get an email first.',
     async render() {
       const plans = await CV.plans(true);
+      PF = (await get('/api/admin/plan-features')).features;
       const ro = !can('pricing.edit');
       const page = html`
         ${ro ? html`<div class="note">${icon('lock')}<span>You can look at prices. Only Owner and Admin can change them.</span></div>` : ''}
@@ -76,7 +87,10 @@
               const v = readPlan(f);
               const notes = [];
               if (v.price_month !== p.price_month || v.price_year !== p.price_year) notes.push(`Price: ${usd(p.price_month)} → ${usd(v.price_month)} a month, ${usd(p.price_year)} → ${usd(v.price_year)} a year.`);
-              const lower = [['connections', 'connections'], ['subscribers', 'subscribers'], ['ai_writes', 'AI writes'], ['seats', 'seats']].filter(([k]) => v[k] < p[k]).map(([k, l]) => `${l} ${num(p[k])} → ${num(v[k])}`);
+              const lower = [['connections', 'connections'], ['subscribers', 'subscribers'], ['ai_writes', 'AI writes'], ['seats', 'seats'], ['join_requests', 'join requests'], ['flows', 'Welcome Flows'], ['flow_steps', 'messages per flow']]
+                .filter(([k]) => p[k] != null && (p[k] < 0 ? v[k] >= 0 : v[k] >= 0 && v[k] < p[k])).map(([k, l]) => `${l} ${p[k] < 0 ? 'unlimited' : num(p[k])} → ${num(v[k])}`);
+              const lost = (p.features || []).filter((x) => !v.features.includes(x));
+              if (lost.length && p.workspaces) notes.push(`You are removing features (${lost.join(', ')}). People on this plan lose them now (anyone who paid before 8 Oct 2026 keeps their old features).`);
               if (lower.length && p.workspaces) notes.push(`You are lowering limits (${lower.join(', ')}). ${CV.plural(p.workspaces, 'workspace is', 'workspaces are')} on this plan now. Anyone above a new limit will have sending paused until they upgrade.`);
               if (!v.active && p.active) notes.push('The plan will be hidden from the website. People already on it keep it.');
               if (notes.length && !(await confirm(`Save changes to ${v.name}?`, '', { okText: 'Save changes', danger: lower.length && p.workspaces, body: html`${notes.map((n) => html`<div class="note ${n.startsWith('You are lowering') ? 'warn' : ''}">${icon(n.startsWith('You are lowering') ? 'warn' : 'info')}<span>${n}</span></div>`)}` }))) return;
@@ -95,6 +109,9 @@
               { name: 'subscribers', label: 'Subscribers', type: 'number', value: 50000, required: true },
               { name: 'ai_writes', label: 'AI writes a month', type: 'number', value: 3000, required: true },
               { name: 'seats', label: 'Team seats', type: 'number', value: 5, required: true },
+              { name: 'join_requests', label: 'Join requests a month (-1 = no limit)', type: 'number', value: 50000, required: true },
+              { name: 'flows', label: 'Welcome Flows (-1 = no limit)', type: 'number', value: 30, required: true },
+              { name: 'flow_steps', label: 'Messages per flow (-1 = no limit)', type: 'number', value: 30, required: true },
               { name: 'bullets', label: "What's included (one line each)", type: 'textarea', rows: 5 },
               { name: 'popular', label: 'Mark as “Most popular”', type: 'checkbox' },
               { name: 'active', label: 'Show on the website', type: 'checkbox', value: true },
@@ -197,8 +214,8 @@
   });
 
   /* =================== COUNTRIES & PAYMENTS =================== */
-  const PROVIDERS = { paystack: 'Paystack', flutterwave: 'Flutterwave', crypto: 'Crypto' };
-  const methodReady = (m, integ) => (m.provider === 'crypto' ? true : !!integ[m.provider]);
+  const PROVIDERS = { paystack: 'Paystack', flutterwave: 'Flutterwave', crypto: 'Crypto', manual: 'Checked by the team' };
+  const methodReady = (m, integ) => (m.provider === 'crypto' || m.provider === 'manual' ? true : !!integ[m.provider]);
   function ratePreview(cur, rate) {
     const r = Number(rate);
     if (!r || r <= 0) return 'Enter a rate';
@@ -206,6 +223,97 @@
     let money;
     try { money = new Intl.NumberFormat('en-US', { style: 'currency', currency: String(cur).toUpperCase(), maximumFractionDigits: r < 100 ? 2 : 0 }).format(r); } catch { money = `${num(r)} ${cur}`; }
     return `${money} = $1`;
+  }
+
+  /** Colours typed in the admin go into style=""; anything that isn't #RRGGBB becomes the default. */
+  const safeColor = (c) => (/^#[0-9a-fA-F]{6}$/.test(String(c || '')) ? c : '#0B1430');
+  const slugKey = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24);
+
+  /** What the customer will see: the instructions, line by line, with a copy button on "Label: value" lines. */
+  function instructionsPreview(text) {
+    const lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) return html`<span class="mut small">Your instructions show here.</span>`;
+    return html`${lines.map((l) => { const m = /^([^:]{1,40}):\s*(.+)$/.exec(l); return m ? html`<div class="ml"><span>${m[1]}</span><b>${m[2]}</b></div>` : html`<div class="ml"><b style="font-weight:600">${l}</b></div>`; })}`;
+  }
+
+  /** Add or edit one of the team's own payment methods. */
+  function methodDialog(m, res) {
+    const isNew = !m;
+    const v = m || { kind: 'bank', proof_ref: 'required', proof_image: 'optional', all_countries: false, countries: [], active: true, sort: 50, icon: '', color: '' };
+    const kinds = res.method_kinds || [];
+    const k0 = kinds.find((k) => k.key === v.kind) || kinds[0] || { icon: '$', color: '#0B1430' };
+    const proofSel = (name, cur) => html`<select name="${name}">${[['required', 'Required'], ['optional', 'Optional'], ['off', 'Don\'t ask']].map(([k, l]) => html`<option value="${k}" ${cur === k ? raw('selected') : ''}>${l}</option>`)}</select>`;
+    const countries = res.countries;
+    const body = html`<div class="mform">
+      <div class="fr two">
+        <div class="f"><label for="mf_label">Name customers see</label><input id="mf_label" name="label" value="${v.label || ''}" maxlength="40" placeholder="e.g. GTBank transfer" required></div>
+        <div class="f"><label for="mf_kind">Kind</label><select id="mf_kind" name="kind">${kinds.map((k) => html`<option value="${k.key}" ${v.kind === k.key ? raw('selected') : ''}>${k.name}</option>`)}</select></div>
+      </div>
+      <div class="f"><label for="mf_detail">Short detail (under the name)</label><input id="mf_detail" name="detail" value="${v.detail || ''}" maxlength="80" placeholder="e.g. Naira bank transfer, confirmed in a few hours"></div>
+      <div class="fr two">
+        <div class="f"><label for="mf_key">Key</label><input id="mf_key" name="key" value="${v.key || ''}" maxlength="30" ${isNew ? '' : raw('disabled')} placeholder="made from the name"><span class="hint">${isNew ? 'Used in reports. Leave empty to make it from the name.' : 'The key can\'t change.'}</span></div>
+        <div class="f"><label>Icon and colour</label><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="big-ic" data-mic style="background:${safeColor(v.color || k0.color)};width:40px;height:40px;font-weight:800">${v.icon || k0.icon}</span><input name="icon" value="${v.icon || ''}" maxlength="8" placeholder="${k0.icon}" aria-label="Icon (emoji or letters)" style="width:70px"><input name="color" type="color" value="${safeColor(v.color || k0.color)}" aria-label="Colour" style="width:52px;padding:4px"></div></div>
+      </div>
+      <div class="f"><label for="mf_ins">Instructions for the customer</label><textarea id="mf_ins" name="instructions" rows="5" maxlength="2000" placeholder="Bank: GTBank&#10;Account number: 0123456789&#10;Account name: Zedapex Limited&#10;Use your email as the transfer note." required>${v.instructions || ''}</textarea>
+        <span class="hint">One thing per line. Lines like “Account number: 0123456789” get a copy button for the customer. They also see the exact amount to send.</span></div>
+      <div class="mpv"><small class="mut">Preview</small><div data-mpv>${instructionsPreview(v.instructions)}</div></div>
+      <div class="fr four">
+        <div class="f"><label for="mf_cur">Currency</label><input id="mf_cur" name="currency" value="${v.currency || ''}" maxlength="3" placeholder="USD" style="text-transform:uppercase"></div>
+        <div class="f" data-ratef ${v.currency ? '' : raw('hidden')}><label for="mf_rate">Per $1</label><input id="mf_rate" name="usd_rate" type="number" step="any" min="0" value="${v.usd_rate ?? ''}" placeholder="country rate"></div>
+        <div class="f"><label for="mf_min">Smallest</label><div class="pre"><span>$</span><input id="mf_min" name="min" type="number" step="0.01" min="0" value="${v.min ?? ''}" placeholder="any"></div></div>
+        <div class="f"><label for="mf_max">Largest</label><div class="pre"><span>$</span><input id="mf_max" name="max" type="number" step="0.01" min="0" value="${v.max ?? ''}" placeholder="any"></div></div>
+      </div>
+      <span class="hint" style="margin-top:-6px">Empty currency = US dollars. In another currency the customer pays the local amount; leave “Per $1” empty to use the rate of their country (set above).</span>
+      <div class="fr two">
+        <div class="f"><label>Transaction reference</label>${proofSel('proof_ref', v.proof_ref)}</div>
+        <div class="f"><label>Screenshot of the payment</label>${proofSel('proof_image', v.proof_image)}</div>
+      </div>
+      <div class="f"><label>Where it is offered</label>
+        <label class="check"><input type="checkbox" name="all_countries" ${v.all_countries ? raw('checked') : ''}> All countries</label>
+        <div data-cwrap ${v.all_countries ? raw('hidden') : ''}>
+          <div class="tsearch" style="display:flex;margin:6px 0">${icon('search')}<input type="search" data-cq placeholder="Find a country" aria-label="Find a country"></div>
+          <div class="mgrid">${countries.map((c) => html`<label class="check" data-cn="${(c.name + ' ' + c.code).toLowerCase()}"><input type="checkbox" name="c_${c.code}" ${(v.countries || []).includes(c.code) ? raw('checked') : ''}> ${c.flag} ${c.name}</label>`)}</div>
+        </div></div>
+      <div class="fr two">
+        <div class="f"><label for="mf_sort">Order</label><input id="mf_sort" name="sort" type="number" min="0" max="999" value="${v.sort ?? 50}"><span class="hint">Lower shows first, after the built-in methods.</span></div>
+        <div class="f"><label>&nbsp;</label><label class="check"><input type="checkbox" name="active" ${v.active ? raw('checked') : ''}> Customers can use it now</label></div>
+      </div>
+    </div>`;
+    return dialog({
+      title: isNew ? 'Add a payment method' : `Edit ${m.label}`, icon: 'wallet', wide: true, okText: isNew ? 'Add method' : 'Save changes',
+      text: 'Customers pay you directly and send proof. Nothing is added to their wallet until someone in Finance approves it.',
+      body,
+      onOpen(form) {
+        const ic = $('[data-mic]', form);
+        let touchedIcon = !!v.icon, touchedColor = !!v.color;
+        const kindOf = () => kinds.find((k) => k.key === form.kind.value) || k0;
+        const drawIcon = () => { const k = kindOf(); ic.textContent = form.icon.value.trim() || k.icon; ic.style.background = safeColor(form.color.value); form.icon.placeholder = k.icon; };
+        form.kind.addEventListener('change', () => { const k = kindOf(); if (!touchedColor) form.color.value = k.color; if (!touchedIcon) form.icon.value = ''; drawIcon(); });
+        form.icon.addEventListener('input', () => { touchedIcon = true; drawIcon(); });
+        form.color.addEventListener('input', () => { touchedColor = true; drawIcon(); });
+        if (isNew) form.label.addEventListener('input', () => { form.key.placeholder = slugKey(form.label.value) || 'made from the name'; });
+        form.instructions.addEventListener('input', () => put($('[data-mpv]', form), instructionsPreview(form.instructions.value)));
+        form.currency.addEventListener('input', () => { const c = form.currency.value.trim().toUpperCase(); $('[data-ratef]', form).hidden = !c || c === 'USD'; });
+        form.all_countries.addEventListener('change', () => { $('[data-cwrap]', form).hidden = form.all_countries.checked; });
+        $('[data-cq]', form).addEventListener('input', (e) => { const q = e.target.value.trim().toLowerCase(); $$('[data-cn]', form).forEach((l) => { l.hidden = q && !l.dataset.cn.includes(q); }); });
+        // Enter in the country search must not submit the form.
+        $('[data-cq]', form).addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+      },
+      onSubmit: async (f) => {
+        const body2 = {
+          label: f.label.trim(), kind: f.kind, detail: f.detail.trim(), icon: f.icon.trim(), color: f.color, instructions: f.instructions,
+          currency: f.currency.trim().toUpperCase(), usd_rate: f.usd_rate === '' ? null : Number(f.usd_rate),
+          min: f.min === '' ? null : Number(f.min), max: f.max === '' ? null : Number(f.max),
+          proof_ref: f.proof_ref, proof_image: f.proof_image, all_countries: !!f.all_countries,
+          countries: Object.keys(f).filter((k) => k.startsWith('c_') && f[k]).map((k) => k.slice(2)), sort: Number(f.sort || 0), active: !!f.active,
+        };
+        if (body2.label.length < 2) throw new Error('Give the method a name.');
+        if (body2.instructions.trim().length < 10) throw new Error('Write the instructions: where and how to pay.');
+        if (!body2.all_countries && !body2.countries.length) throw new Error('Pick at least one country, or tick “All countries”.');
+        if (isNew) { if (f.key && f.key.trim()) body2.key = f.key.trim(); await post('/api/admin/methods', body2); toast(`${body2.label} added.`); } else { await putj('/api/admin/methods/' + encodeURIComponent(m.key), body2); toast(`${body2.label} saved.`); }
+        CV.reload();
+      },
+    });
   }
 
   CV.page('countries', {
@@ -217,7 +325,8 @@
       const q = (query.get('q') || '').toLowerCase();
       const mName = (m) => `${m.label} · ${m.detail}`;
       const methodBadges = (c) => {
-        const list = (c.methods || []).map((k) => res.methods.find((m) => m.key === k)).filter(Boolean);
+        const list = (c.methods || []).map((k) => res.methods.find((m) => m.key === k && m.provider !== 'manual')).filter(Boolean)
+          .concat(res.methods.filter((m) => m.provider === 'manual' && (m.all_countries || (m.countries || []).includes(c.code))));
         return html`<div class="chips" data-mlist>${list.length ? list.map((m) => html`<span class="bd ${!m.active ? '' : methodReady(m, integ) ? 'blue' : 'warn'}" title="${!m.active ? 'Switched off' : methodReady(m, integ) ? 'Customers see this' : 'Provider not connected yet'}">${m.provider === 'crypto' ? 'Crypto' : m.label}${!methodReady(m, integ) ? ' ⚠' : ''}${!m.active ? ' (off)' : ''}</span>`) : html`<span class="bd bad">No way to pay</span>`}${ed ? html`<button type="button" class="btn ghost xs" data-pick>${icon('edit')} Change</button>` : ''}</div>`;
       };
       const row = (c) => html`<div class="ctry${c.active ? '' : ' off'}" data-code="${c.code}" data-name="${(c.name + ' ' + c.code + ' ' + c.currency).toLowerCase()}">
@@ -225,6 +334,20 @@
         <div class="rate-w"><div class="rate"><input class="in cur" name="currency" value="${c.currency}" maxlength="3" aria-label="Currency" ${ed ? '' : raw('disabled')}><span class="mut small">per $1</span><input class="in" name="usd_rate" type="number" step="any" min="0" value="${Number(c.usd_rate)}" aria-label="Exchange rate" ${ed ? '' : raw('disabled')}>${ed ? html`<button class="btn sm" data-save hidden>Save</button>` : ''}</div><div class="pvw" data-pvw>${ratePreview(c.currency, c.usd_rate)}</div></div>
         ${methodBadges(c)}
         <div class="sws"><label>${CV.sw(c.featured, { flag: 'featured' }, { disabled: !ed, label: 'Featured ' + c.name })}Featured</label><label>${CV.sw(c.active, { flag: 'active' }, { disabled: !ed, label: 'Active ' + c.name })}On</label></div>
+      </div>`;
+      const auto = res.methods.filter((m) => m.provider !== 'manual');
+      const own = res.methods.filter((m) => m.provider === 'manual');
+      const KINDS = Object.fromEntries((res.method_kinds || []).map((k) => [k.key, k]));
+      const PROOF_TXT = { off: 'not asked', optional: 'optional', required: 'required' };
+      const where = (m) => (m.all_countries ? 'All countries' : (m.countries || []).map((k) => { const c = res.countries.find((x) => x.code === k); return c ? c.flag + ' ' + c.name : k; }).join(', '));
+      const amountTxt = (m) => (m.currency ? `Paid in ${m.currency}${m.usd_rate ? ` at ${num(m.usd_rate)} per $1` : ' at the country rate'}` : 'Paid in US dollars') + (m.min != null || m.max != null ? ` · ${m.min != null ? 'from ' + usd(m.min) : ''}${m.min != null && m.max != null ? ' ' : ''}${m.max != null ? 'up to ' + usd(m.max) : ''}` : '');
+      const ownRow = (m) => html`<div class="feat own-m" data-own="${m.key}">
+        <span class="big-ic" style="background:${safeColor(m.color)};width:36px;height:36px;font-weight:800">${m.icon}</span>
+        <div class="tx"><b>${m.label}</b>${m.detail ? html`<p>${m.detail}</p>` : ''}
+          <div class="row" style="margin-top:6px;gap:6px"><span class="bd vio">${(KINDS[m.kind] || {}).name || 'Other'}</span><span class="bd">${where(m)}</span><span class="bd">${amountTxt(m)}</span>
+            <span class="bd">Reference ${PROOF_TXT[m.proof_ref]} · screenshot ${PROOF_TXT[m.proof_image]}</span>${m.payments ? html`<span class="bd blue">${CV.plural(m.payments, 'payment')}</span>` : ''}<span class="mono small mut">${m.key}</span></div></div>
+        ${CV.sw(m.active, { oactive: m.key }, { lg: true, disabled: !ed, label: 'Method on or off' })}
+        ${ed ? html`<div class="row" style="gap:6px"><button type="button" class="btn sec sm" data-oedit="${m.key}">${icon('edit')} Edit</button><button type="button" class="ib" data-odel="${m.key}" aria-label="Delete ${m.label}" title="Delete">${icon('trash')}</button></div>` : ''}
       </div>`;
       const page = html`
         <div class="card"><div class="ch"><h3>${icon('plug')} Payment providers</h3><a class="btn ghost sm" href="#settings">Connect in Settings ${icon('chev')}</a></div>
@@ -238,14 +361,19 @@
           <div id="cnone" hidden>${CV.empty('search', 'No country found', 'Try another name.')}</div>
         </div>
         <div class="card flat">
-          <div class="ch" style="padding:16px"><h3>${icon('card')} Payment methods</h3><p>The name and detail customers see on the top-up screen.</p></div>
-          <div style="border-top:1px solid var(--line)">${res.methods.map((m) => html`<form class="feat" data-method="${m.key}">
-            <span class="big-ic" style="background:${m.color};width:36px;height:36px;font-weight:800">${m.icon}</span>
+          <div class="ch" style="padding:16px"><h3>${icon('card')} Built-in payment methods</h3><p>Paid and confirmed automatically by the provider. The name and detail are what customers see on the top-up screen. They can be switched off, not deleted.</p></div>
+          <div style="border-top:1px solid var(--line)">${auto.map((m) => html`<form class="feat" data-method="${m.key}">
+            <span class="big-ic" style="background:${safeColor(m.color)};width:36px;height:36px;font-weight:800">${m.icon}</span>
             <div class="tx"><div class="fr two"><div class="f"><label>Name</label><input name="label" value="${m.label}" maxlength="40" ${ed ? '' : raw('disabled')}></div><div class="f"><label>Detail</label><input name="detail" value="${m.detail}" maxlength="80" ${ed ? '' : raw('disabled')}></div></div>
               <div class="row" style="margin-top:6px"><span class="bd">${PROVIDERS[m.provider]}</span>${m.provider === 'crypto' ? html`<span class="bd ${integ.gatevoo ? 'ok' : 'blue'}">${integ.gatevoo ? 'Uses Gatevoo' : 'Manual addresses (Gatevoo not connected)'}</span>` : html`<span class="bd ${methodReady(m, integ) ? 'ok' : 'bad'}">${methodReady(m, integ) ? 'Provider connected' : 'Provider not connected'}</span>`}<span class="mono small mut">${m.key}</span></div></div>
             ${CV.sw(m.active, { mactive: m.key }, { lg: true, disabled: !ed, label: 'Method on or off' })}
             ${ed ? html`<button class="btn sec sm" type="submit">Save</button>` : ''}
           </form>`)}</div>
+        </div>
+        <div class="card flat" id="ownMethods">
+          <div class="ch" style="padding:16px"><h3>${icon('wallet')} Your own payment methods</h3>${ed ? html`<button type="button" class="btn sm" data-addm>${icon('plus')} Add payment method</button>` : ''}
+            <p>Bank transfer, mobile money, a crypto wallet or anything else. Customers see your instructions and an exact amount, pay, and send proof. You check it and approve it in <a href="#payments?check=1">Payments</a>.</p></div>
+          <div style="border-top:1px solid var(--line)">${own.length ? own.map(ownRow) : CV.empty('wallet', 'No methods of your own yet', 'Add a local bank account or mobile money number so more people can top up.', ed ? html`<button type="button" class="btn sm" data-addm>${icon('plus')} Add payment method</button>` : '')}</div>
         </div>`;
 
       return {
@@ -280,9 +408,10 @@
             const r = b.closest('.ctry'); const c = country(r.dataset.code);
             dialog({
               title: `How can people in ${c.name} pay?`, text: 'Tick the methods they should see. A method only shows when its provider is connected and the method is switched on.', icon: 'card', okText: 'Save methods',
-              fields: res.methods.map((m) => ({ name: 'm_' + m.key, type: 'checkbox', value: (c.methods || []).includes(m.key), label: mName(m), hint: `${PROVIDERS[m.provider]}${methodReady(m, integ) ? '' : ' · not connected yet'}${m.active ? '' : ' · switched off'}` })),
+              body: own.length ? html`<div class="note">${icon('info')}<span>Your own methods (${own.map((m) => m.label).join(', ')}) pick their countries themselves: press Edit on the method.</span></div>` : '',
+              fields: auto.map((m) => ({ name: 'm_' + m.key, type: 'checkbox', value: (c.methods || []).includes(m.key), label: mName(m), hint: `${PROVIDERS[m.provider]}${methodReady(m, integ) ? '' : ' · not connected yet'}${m.active ? '' : ' · switched off'}` })),
               onSubmit: async (v) => {
-                const methods = res.methods.filter((m) => v['m_' + m.key]).map((m) => m.key);
+                const methods = auto.filter((m) => v['m_' + m.key]).map((m) => m.key);
                 if (!methods.length && !(await confirm(`Remove every payment method from ${c.name}?`, 'People in this country will not be able to top up.', { danger: true, okText: 'Remove all' }))) return false;
                 await putj('/api/admin/countries/' + c.code, { name: c.name, flag: c.flag, currency: c.currency, usd_rate: Number(c.usd_rate), methods, featured: c.featured, active: c.active, sort: c.sort });
                 c.methods = methods; toast(`${c.name}: payment methods saved.`);
@@ -309,6 +438,22 @@
             e.preventDefault();
             const m = res.methods.find((x) => x.key === f.dataset.method);
             if (await act($('button[type=submit]', f), () => putj('/api/admin/methods/' + m.key, { label: f.label.value, detail: f.detail.value, active: m.active }), `${f.label.value} saved.`)) { m.label = f.label.value; m.detail = f.detail.value; }
+          });
+          /* ----- your own methods ----- */
+          on(el, 'click', '[data-addm]', () => methodDialog(null, res));
+          on(el, 'click', '[data-oedit]', (e, b) => methodDialog(res.methods.find((x) => x.key === b.dataset.oedit), res));
+          on(el, 'click', '[data-oactive]', async (e, s) => {
+            const m = res.methods.find((x) => x.key === s.dataset.oactive);
+            const next = s.getAttribute('aria-checked') !== 'true';
+            if (!next && !(await confirm(`Switch off ${m.label}?`, 'Customers stop seeing it. Payments already started with it can still be approved.', { okText: 'Switch off', danger: true }))) return;
+            CV.setSw(s, next);
+            if (await act(null, () => putj('/api/admin/methods/' + m.key, { active: next }), `${m.label} is ${next ? 'on' : 'off'}.`)) m.active = next; else CV.setSw(s, !next);
+          });
+          on(el, 'click', '[data-odel]', async (e, b) => {
+            const m = res.methods.find((x) => x.key === b.dataset.odel);
+            if (!(await confirm(`Delete ${m.label}?`, m.payments ? 'Payments already use it, so it is switched off and hidden instead. Their history keeps its name.' : 'Customers stop seeing it straight away.', { okText: 'Delete', danger: true }))) return;
+            const r = await act(b, () => del('/api/admin/methods/' + encodeURIComponent(m.key)), (x) => (x.hidden ? `${m.label} is switched off and hidden.` : `${m.label} deleted.`));
+            if (r) CV.reload();
           });
         },
       };

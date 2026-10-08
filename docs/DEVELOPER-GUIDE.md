@@ -43,8 +43,10 @@ same process, in loops that never overlap.
 | Switch a feature off | Admin → Features |
 | Change website headline, FAQ, announcement | Admin → Website text |
 | Reword an email | Admin → Emails |
-| Teach Cas something | Admin → Cas knowledge |
-| Add a payment method for a country | Admin → Countries & payments |
+| Teach Cas something | Admin → Cas knowledge (also read by the AI support team and the website chat) |
+| Change the AI support agents, their photos, rules and limits | Admin → Support AI |
+| Pick payment methods for a country | Admin → Countries & payments |
+| Add a bank transfer, mobile money or wallet method | Admin → Countries & payments → Add payment method |
 | Give someone admin access | Admin → Team |
 
 ## Common changes (code)
@@ -57,8 +59,10 @@ same process, in loops that never overlap.
 - **New feature switch**: one line in `server/features.js`; check it with `await settings.requireFeature('key')`
   on the server and `CFG.features.key` in the browser.
 - **New team permission**: one line in `server/permissions.js`.
-- **New payment provider**: `server/payments/index.js` (start + verify), a webhook in
-  `server/routes/payment-webhooks.js`, a row in `payment_methods` (seed or SQL), then pick it per country in admin.
+- **New payment method checked by hand** (bank, mobile money...): no code, Admin → Countries & payments → Add payment method.
+- **New automatic payment gateway**: `server/payments/index.js` (start + verify, added to `GATEWAYS`), a webhook in
+  `server/routes/payment-webhooks.js`, a row in `payment_methods` (migration or seed), then pick it per country in admin.
+  Step by step: [INTEGRATIONS.md → Adding a payment gateway](INTEGRATIONS.md#adding-a-payment-gateway-automatic-needs-code).
 
 ## Telegram facts the code relies on
 - ~30 messages/second per bot (we send 25), 1 message/second per chat, 20/minute per group.
@@ -66,7 +70,13 @@ same process, in loops that never overlap.
 - Bots get no read receipts and cannot list channel members.
 - A file uploaded once gives a `file_id` that the same bot can reuse.
 - Bots can delete their messages for 48 hours.
-- After a join request, the bot may message that person for 5 minutes (`user_chat_id`).
+- After a join request, the bot may message that person for 5 minutes (`user_chat_id`), until the request is
+  approved or declined. So Welcome Flows send the welcome first, then approve (`services/flows.js`).
+- Bots can't message people who never pressed Start: later Welcome Flow steps wait (`sequence_runs.status = 'waiting'`)
+  until `/start` (the welcome's "Tap to start" button sends `?start=j_<code>`), and stop after 7 days.
+- Plans: limits and features live in the `plans` table (Admin → Pricing). Check them with `billing.limits(ws)`,
+  `billing.hasFeature(ws, key)` / `requirePlanFeature(ws, key)` (402 `plan_feature`) and `billing.joinMeter(ws)`.
+  A workspace whose trial or plan ends unpaid drops to the Free plan (`billing.dropToFree`), it is not paused.
 - `t.me/<bot>?start=<tag>` passes `<tag>` to `/start`. `?startchannel&admin=...` / `?startgroup&admin=...`
   open Telegram's "add as admin" screen.
 
@@ -86,9 +96,59 @@ OpenRouter/OpenAI calls retry 408/429/5xx twice with backoff (honouring `Retry-A
 anywhere else. `ai_usage` records provider, model, tokens and (OpenRouter) `cost_usd`. Tests:
 `test/e2e/openrouter.test.js` with the mock in `test/helpers/mock-openrouter.js` (ports 4971–4979).
 
+## The 24/7 AI support team
+Files: `services/support-ai.js` (queue, persona, prompt, handoff, sandbox, website chat), `services/support-tools.js`
+(the tools and redaction), `routes/admin/support-ai.js` (Admin → Support AI), `public/admin/js/support-ai.js`.
+- A customer message (`support.userMessage`) only queues a job in `support_ai_jobs`; the `support-ai` worker loop
+  (every second) answers it. Replies are 1–3 bubbles in `support_messages` (`author_type 'ai'`, `persona_id`) with a
+  future `visible_at`, so the dashboard shows "Mia is typing…" and then the bubbles. `GET /api/support` only returns
+  visible bubbles plus `typing`.
+- Tools get `scope = { userId, workspaceId, threadId, sandbox }` from the thread, never from the model. Every id the
+  model passes is looked up with `workspace_id = scope.workspaceId`. Outputs go through `redact()` (keys like token /
+  secret / password / code / api_key are dropped; bot tokens and keys in text are masked) and are logged in
+  `support_ai_tool_log` for staff.
+- Money: `recheck_payment` only calls `payments.verify()` (credited only when the provider confirms; idempotent). Manual
+  methods are read-only and hand over to Finance. No tool approves, credits, refunds or discounts. A reply that claims
+  money moved when no provider confirmed it is replaced and handed over (`MONEY_CLAIM`).
+- Handoff (`handoff()`): code rules (`classify()`: asks for a human, refund, chargeback, legal, data deletion,
+  ownership, closing the account, anger, 3 failed tries), the model's `create_handoff`, manual payments, tool or AI
+  errors, daily caps and the Free allowance. It sets `needs_human`, priority, queue, an internal note and pauses the AI.
+  A staff reply or "Take over" also pauses it; "Hand back to AI" resumes.
+- Cas (`POST /api/ai/ask`) uses the read-only `CAS_TOOLS` with the same scope rules.
+- Knowledge: `server/knowledge-defaults.js` (every default has a `key`) reaches every database through ONE path,
+  `seed.syncKnowledge()` on each start: new defaults are inserted, defaults nobody edited are updated, edited ones are
+  never overwritten, deleted ones never come back, `RETIRED` keys are removed if unedited, and old untitled rows are
+  adopted by title (or a `formerly` title). No prices or per-plan limits in knowledge text: Cas, the support agents and
+  the website chat read them from the plans table through `ai.formatPlans()` (prices, connections, subscribers, join
+  requests, flows, steps per flow, AI writes, seats, features, trial); `npm run check` checks that output against seed.js.
+- `get_usage` and `get_flows` cover Welcome Flows: the join-request meter (`billing.joinMeter`), flows made / live /
+  plan limit, and per flow the channel, approve mode, requests, welcomed, let in and people waiting to press Start.
+- `llm.complete({ tools })` speaks one neutral tool format and translates it for Claude, OpenRouter and OpenAI.
+- Faces: `support_personas.face` picks one of the illustrated faces in `public/img/agents/<face>.svg` (8 built in,
+  `supportAi.FACES`; Admin → Support AI → Face). An uploaded photo shows first; with neither, the initials avatar.
+  All three come from the same URL, `/api/public/personas/:id/photo`. To add a face: drop `<key>.svg` (128×128, ids
+  prefixed with the key) in `public/img/agents/` and add it to `FACES` in `services/support-ai.js`.
+- Images (`services/support-images.js`): customers upload with `POST /api/support/attachments` (raw body, JPG / PNG / WEBP,
+  10 MB, checked by signature and by reading the header; EXIF/XMP/comments and PNG text chunks are removed, JPG
+  rotation kept), then send the ids with `POST /api/support { body, attachments }` (max 3). Staff use
+  `/api/admin/support/:id/attachments`. Files live in `UPLOAD_DIR/support/<workspace>/`; `GET /api/support/attachments/:id`
+  only serves the thread's own customer (never internal notes), `/api/admin/support/attachments/:id` needs
+  `support.view`. Unsent uploads go after a day (cleanup worker); files go with the workspace (`media-files.removeFiles`).
+- The AI sees up to 4 recent customer images: `historyFrom(messages, imageParts)` turns those messages into
+  `[{ type: 'text' }, { type: 'image', mime, data }]` and `llm.js` sends Claude base64 image blocks and OpenRouter/OpenAI
+  `image_url` data URLs. No image library in plain Node, so images over 3.75 MB (Claude's 5 MB base64 limit) or 8,000 px
+  are described in text and the agent asks for a smaller screenshot. Text inside images is untrusted like any customer text.
+- Receipt screenshots: when `recheck_payment` finds the customer's OWN pending manual top-up in a turn where they sent an
+  image, `images.linkAsProof()` copies it to that payment's proof (only if it has none and the method takes
+  screenshots) and the Finance handoff note gets a copy. Nothing is approved or credited.
+- The website chat (logged out) refuses images (`images_not_allowed`). "Powered by Replyvoo" under both chats:
+  `support_ai.powered_by` / `powered_by_text`.
+- Tests: `test/e2e/support-ai.test.js`; the fake Anthropic plays tool calls with `fakes.ai.script`, the OpenRouter mock
+  with `mock.script`. Call `require('server/services/support-ai').tick()` to run the worker once.
+
 ## Tests
 - `test/e2e/*.test.js` run the real server against a real throwaway PostgreSQL, with fake Telegram,
-  Resend, Anthropic, Paystack, Flutterwave, Gatevoo, Google and VooSquare (`test/helpers/fakes.js`).
+  Resend, Anthropic, Paystack, Flutterwave, Gatevoo and VooSquare (`test/helpers/fakes.js`).
 - Add a test for every bug you fix. Copy the style of the nearest test file.
 - `node --test test/e2e/broadcasts.test.js` runs one file.
 
@@ -96,6 +156,9 @@ anywhere else. `ai_usage` records provider, model, tokens and (OpenRouter) `cost
 Sessions are random tokens stored hashed; HttpOnly + SameSite=Lax cookies; CSRF header on every change;
 strict Content-Security-Policy (no inline scripts); bot tokens AES-256-GCM encrypted; webhook signatures
 checked (Telegram secret token, Paystack HMAC-SHA512, Flutterwave hash, Gatevoo HMAC-SHA256 + 5-minute
-window, VooSquare API key, Voo ID `id_token`); rate limits on logins, codes, AI and payments; login codes hashed with
+window, VooSquare API key, Voo ID `id_token`); rate limits on logins, codes, AI and payments (cost-related ones are
+shared by every instance: `rl.hitShared` / route option `shared: true`, table `rate_buckets`); server-to-server routes use
+`{ auth: 'service' }` (the router checks the key); the support AI only uses a workspace the person is a member of now,
+with owner-only write tools; login codes hashed with
 5-try lock; team roles with ranks; audit log; uploads checked by file signature; CSV export protected
 against formula injection; tracked-link clicks signed per subscriber.

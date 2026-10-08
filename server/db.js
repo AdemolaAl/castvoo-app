@@ -38,22 +38,27 @@ const end = async () => { if (pool) { const x = pool; pool = null; await x.end()
 async function migrate() {
   const dir = path.join(__dirname, 'migrations');
   await p().simple('create table if not exists schema_migrations (name text primary key, ran_at timestamptz not null default now())');
-  // Only one server instance migrates at a time.
-  return tx(async (c) => {
-    await c.query('select pg_advisory_xact_lock(424242)');
-    const done = new Set((await c.query('select name from schema_migrations')).rows.map((r) => r.name));
-    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
-    const ran = [];
-    for (const f of files) {
-      if (done.has(f)) continue;
+  // Each file runs in its own transaction (and is recorded in it), so a big file never holds the locks of the
+  // others, and a failed file leaves the earlier ones applied. Only one server instance migrates at a time
+  // (advisory lock, checked again inside the lock). Migrations may run longer than the pool's 30 s statement
+  // timeout, but they give up waiting for a lock after 10 s instead of blocking the old instance's traffic.
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+  const ran = [];
+  for (const f of files) {
+    const did = await tx(async (c) => {
+      await c.query('select pg_advisory_xact_lock(424242)');
+      if ((await c.query('select 1 from schema_migrations where name = $1', [f])).rows[0]) return false;
+      await c.query('set local statement_timeout = 0');
+      await c.query("set local lock_timeout = '10s'");
       const sql = fs.readFileSync(path.join(dir, f), 'utf8');
       log.info('running migration', { file: f });
       for (const stmt of splitSql(sql)) await c.query(stmt);
       await c.query('insert into schema_migrations(name) values ($1)', [f]);
-      ran.push(f);
-    }
-    return ran;
-  });
+      return true;
+    });
+    if (did) ran.push(f);
+  }
+  return ran;
 }
 
 /** Split a .sql file into statements (handles quotes, comments and $$ blocks). */

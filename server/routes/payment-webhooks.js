@@ -62,9 +62,12 @@ module.exports = (r) => {
     ctx.send(200, 'ok'); // invoice.test and other events are simply acknowledged
   }, { raw: true });
 
+  // The page a checkout sends people back to. It asks the provider only for a top-up that is still pending and less
+  // than a day old, and is rate-limited per IP (SEC-13), so it can't be used to make us call the providers in a loop.
   r.get('/pay/return', async (ctx) => {
     const ref = String(ctx.query.ref || ctx.query.reference || ctx.query.tx_ref || '').slice(0, 40);
-    if (ref) await payments.verify(ref, { transaction_id: ctx.query.transaction_id }).catch(() => false);
+    const open = ref ? await db.one("select 1 from payments where reference = $1 and status = 'pending' and created_at > now() - interval '24 hours'", [ref]) : null;
+    if (open) await payments.verify(ref, { transaction_id: ctx.query.transaction_id }).catch(() => false);
     ctx.redirect('/#app/wallet?ref=' + encodeURIComponent(ref));
-  });
+  }, { rate: [30, 600], shared: true });
 };

@@ -613,6 +613,7 @@ describe('limits and switches', () => {
   it('over the subscriber limit: sending is blocked with 402', async () => {
     const { c, bot, ws } = await setup('overlimit@example.com', 0);
     await app.db.query("insert into plans(code, name, price_month_cents, price_year_cents, connections, subscribers, ai_writes, seats) values ('tiny','Tiny',100,1000,2,2,10,1) on conflict do nothing");
+    await app.db.query("update plans set features = '[\"broadcasts\"]' where code = 'tiny'");
     await app.db.query("update workspaces set plan_code = 'tiny' where id = $1", [ws.id]);
     app.settings.bust();
     await app.addSubscribers(bot.connId, 3, { from: 51001 });

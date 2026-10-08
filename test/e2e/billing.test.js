@@ -84,12 +84,12 @@ describe('trial', () => {
     }
   });
 
-  it('trial ends with an empty wallet: paused, "trial ended" email, nothing charged', async () => {
+  it('trial ends with an empty wallet: drops to Free (not paused), "trial ended" email, nothing charged', async () => {
     const u = await customer({ wallet: 4899 });
     await endTrial(u.id);
     await app.jobs.billingTick();
     const w = await W(u.id);
-    assert.equal(w.plan_status, 'paused');
+    assert.deepEqual([w.plan_code, w.plan_status, w.period_end], ['free', 'active', null]);
     assert.equal(Number(w.wallet_cents), 4899);
     assert.ok(app.fakes.lastEmail(u.email, /trial has ended/));
     // Topping up later + picking the plan starts it.
@@ -123,14 +123,15 @@ describe('trial', () => {
     assert.equal((await v.c.post('/api/app/plan', { plan: 'nope' })).status, 400);
   });
 
-  it('a trial whose plan was switched off in admin pauses instead of failing forever', async () => {
+  it('a trial whose plan was switched off in admin drops to Free instead of failing forever', async () => {
     const u = await customer({ wallet: 100000 });
     await app.db.query("insert into plans(code, name, price_month_cents, price_year_cents, connections, subscribers, ai_writes, seats, active) values ('retired','Retired',500,5000,1,100,0,1,false) on conflict do nothing");
     app.settings.bust();
     await app.db.query("update workspaces set pending_plan_code = 'retired' where id = $1", [u.id]);
     await endTrial(u.id);
     await app.jobs.billingTick();
-    assert.equal((await W(u.id)).plan_status, 'paused');
+    assert.deepEqual([(await W(u.id)).plan_code, (await W(u.id)).plan_status], ['free', 'active']);
+    assert.equal(Number((await W(u.id)).wallet_cents), 100000, 'nothing charged');
   });
 });
 
@@ -147,7 +148,7 @@ describe('renewals', () => {
     assert.equal((await planTx(u.id)).length, 1);
   });
 
-  it('low balance reminder before renewal (once), then pause when the money is short', async () => {
+  it('low balance reminder before renewal (once), then Free when the money is short; a top-up restarts the plan', async () => {
     const u = await customer({ wallet: 1000 });
     await makeActive(u.id, { daysLeft: 2 });
     await Promise.all([app.jobs.billingTick(), app.jobs.billingTick()]);
@@ -160,9 +161,13 @@ describe('renewals', () => {
 
     await endPeriod(u.id);
     await app.jobs.billingTick();
-    assert.equal((await W(u.id)).plan_status, 'paused');
+    const w = await W(u.id);
+    assert.deepEqual([w.plan_code, w.plan_status, w.dropped_from], ['free', 'active', 'growth']);
     assert.ok(app.fakes.lastEmail(u.email, /could not renew your Growth plan/));
     assert.equal(Number((await W(u.id)).wallet_cents), 1000);
+    // The next billing runs leave Free alone (nothing to renew, nothing charged).
+    await app.jobs.billingTick();
+    assert.equal((await planTx(u.id)).length, 0);
   });
 
   it('cancel at period end: runs to the end, then stops; resume undoes it', async () => {
@@ -178,7 +183,7 @@ describe('renewals', () => {
     await endPeriod(u.id);
     await app.jobs.billingTick();
     const w = await W(u.id);
-    assert.equal(w.plan_status, 'cancelled');
+    assert.deepEqual([w.plan_code, w.plan_status], ['free', 'active'], 'the plan ends on Free');
     assert.equal(Number(w.wallet_cents), 100000, 'not charged');
   });
 

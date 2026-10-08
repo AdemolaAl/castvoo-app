@@ -1,0 +1,77 @@
+WEBVTT
+
+1
+00:00:03.700 --> 00:00:06.339
+Now let's connect a Telegram channel.
+
+2
+00:00:06.469 --> 00:00:08.473
+Groups work the same way.
+
+3
+00:00:08.790 --> 00:00:11.669
+On Channels and bots, tap Add a channel.
+
+4
+00:00:11.968 --> 00:00:17.972
+The first time, Castvoo asks you to link your Telegram account, so it knows the channel is yours.
+
+5
+00:00:18.272 --> 00:00:21.737
+Tap Link my Telegram, then Open Telegram.
+
+6
+00:00:22.037 --> 00:00:25.460
+In Telegram, press Start, then tap Yes, link it.
+
+7
+00:00:25.590 --> 00:00:27.914
+Castvoo updates by itself.
+
+8
+00:00:28.212 --> 00:00:29.469
+Linked.
+
+9
+00:00:29.599 --> 00:00:32.462
+Now tap "Add @CastvooBot to my channel".
+
+10
+00:00:32.762 --> 00:00:35.422
+Telegram opens with the bot ready.
+
+11
+00:00:35.552 --> 00:00:37.785
+Pick your channel, and confirm.
+
+12
+00:00:38.086 --> 00:00:40.111
+Prefer to do it by hand?
+
+13
+00:00:40.241 --> 00:00:44.677
+Add the bot as an admin of your channel, with the Post messages right.
+
+14
+00:00:44.977 --> 00:00:47.984
+Either way, Castvoo spots it within moments.
+
+15
+00:00:48.114 --> 00:00:50.166
+Your channel is connected.
+
+16
+00:00:50.466 --> 00:00:55.137
+You can now post to it from Castvoo, and it shows here with its member count.
+
+17
+00:00:55.437 --> 00:00:57.430
+Planning a Welcome Flow?
+
+18
+00:00:57.560 --> 00:01:04.252
+Set the channel's invite link to Approve new members, and make your own bot an admin with the Add members right.
+
+19
+00:01:04.382 --> 00:01:07.906
+Castvoo checks this for you before a flow goes live.

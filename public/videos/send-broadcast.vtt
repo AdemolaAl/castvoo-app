@@ -1,0 +1,73 @@
+WEBVTT
+
+1
+00:00:03.702 --> 00:00:07.717
+To send one message to many people, open Send a message.
+
+2
+00:00:08.018 --> 00:00:11.889
+First, pick where it goes out from: your bot, or your channel.
+
+3
+00:00:12.187 --> 00:00:16.394
+With a bot, you can send to everyone, or to one of your audiences.
+
+4
+00:00:16.524 --> 00:00:19.381
+Castvoo shows how many people will get it.
+
+5
+00:00:19.680 --> 00:00:21.492
+Now write your message.
+
+6
+00:00:21.622 --> 00:00:25.066
+Tap Name, and each person sees their own first name.
+
+7
+00:00:27.978 --> 00:00:32.195
+So "Hi {name}" becomes each person's name, like "Hi Tunde" here.
+
+8
+00:00:32.325 --> 00:00:37.177
+If Telegram has no name, or it's a channel post, it says "there" instead.
+
+9
+00:00:37.478 --> 00:00:39.359
+Add a button with your link.
+
+10
+00:00:39.489 --> 00:00:42.635
+Every click is tracked, so you can see what works.
+
+11
+00:00:44.108 --> 00:00:45.691
+Then choose when.
+
+12
+00:00:45.821 --> 00:00:51.857
+Send now, schedule a date and time, or send at the next 9am in your workspace time zone.
+
+13
+00:00:52.156 --> 00:00:56.640
+The "Stop these messages" button lets people opt out in one tap.
+
+14
+00:00:56.770 --> 00:01:00.086
+That means fewer spam reports, and a safer bot.
+
+15
+00:01:00.386 --> 00:01:02.769
+You can send yourself a test first.
+
+16
+00:01:02.899 --> 00:01:05.276
+When it looks right, tap Schedule.
+
+17
+00:01:05.576 --> 00:01:09.937
+Your messages are listed below, with how many were delivered and clicked.
+
+18
+00:01:10.067 --> 00:01:13.101
+From here you can edit, pin, or delete them.

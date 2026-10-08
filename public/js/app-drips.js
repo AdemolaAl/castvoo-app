@@ -33,11 +33,18 @@ PAGES.drips = {
     if (CFG.features.drips === false) { el.innerHTML = emptyBox({ cas: 'think', title: 'Auto follow-ups are switched off for a moment', text: 'The Castvoo team has paused them. Please check back soon.' }); return; }
     const r = await GET('/api/drips');
     if (!alive()) return;
-    DRIP.list = r.sequences || [];
+    // Join-request follow-ups live in Welcome Flows now.
+    DRIP.list = (r.sequences || []).filter((x) => x.trigger_type !== 'join_request');
     $('#navDrips').textContent = DRIP.list.filter((x) => x.active).length || '';
     $('#navDrips').hidden = !DRIP.list.some((x) => x.active);
+    const pf = (APP.state.plan.features || []);
+    if (!pf.includes('drips')) {
+      el.innerHTML = emptyBox({ cas: 'wave', title: 'Auto follow-ups are on Starter and up', text: 'Your plan welcomes people who ask to join. Upgrade to send follow-ups to everyone who starts your bot.', action: '<div class="row2b" style="max-width:420px"><button type="button" class="btn b-blue" data-upgrade-drips>' + icon('up') + 'See plans</button><button type="button" class="btn b-ghost" data-go="flows">Welcome Flows</button></div>' });
+      $('[data-upgrade-drips]', el).onclick = () => openUpgrade({ title: 'Send auto follow-ups', text: 'Auto follow-ups are on Starter and up.', feature: 'drips' });
+      return;
+    }
     if (!bots.length) {
-      el.innerHTML = emptyBox({ cas: 'wave', title: 'Follow-ups are sent by a bot', text: 'Connect a Telegram bot first. Then Castvoo can welcome every new subscriber and follow up on day 1, 3 and 7 for you.', action: '<div class="row2b" style="max-width:420px"><button type="button" class="btn b-blue" data-connect="bot">' + icon('plus') + 'Connect a bot</button><button type="button" class="btn b-ghost" data-guide>' + icon('play') + 'Watch how</button></div>' });
+      el.innerHTML = emptyBox({ cas: 'wave', title: 'Follow-ups are sent by a bot', text: 'Connect a Telegram bot first. Then Castvoo can welcome every new subscriber and follow up on day 1, 3 and 7 for you.', action: '<div class="row2b" style="max-width:420px"><button type="button" class="btn b-blue" data-connect="bot">' + icon('plus') + 'Connect a bot</button><button type="button" class="btn b-ghost" data-vguide="connect-bot">' + icon('play') + 'Watch how</button></div>' });
       return;
     }
     if (q.new === '1') { DRIP.sel = 'new'; DRIP.E = newDrip(bots); DRIP.dirty = false; }
@@ -57,7 +64,8 @@ function drawDrips(el, bots, alive) {
     DRIP.list.map((x) => '<button type="button" class="dli ' + (x.id === DRIP.sel ? 'on' : '') + '" data-d="' + x.id + '"><span class="dlih"><b class="ell">' + esc(x.name) + '</b><span class="pill ' + (x.active ? 'p-ok' : 'p-grey') + '">' + (x.active ? '<span class="dl"></span>On' : 'Off') + '</span></span><small>' + plural(x.steps.length, 'message') + ' · ' + plural(x.people, 'person', 'people') + ' so far · @' + esc(x.bot) + '</small></button>').join('') +
     (DRIP.sel === 'new' ? '<button type="button" class="dli on"><span class="dlih"><b>' + esc(E.name || 'New follow-up') + '</b><span class="pill p-warn">Not saved</span></span><small>' + plural(E.steps.length, 'message') + '</small></button>' : '') +
     (editable ? '<button type="button" class="btn b-ghost sm" id="dNew">' + icon('plus') + 'New follow-up</button>' + (aiOn() ? '<button type="button" class="btn b-ink sm" id="dAI">' + icon('spark') + 'Write one with Cas</button>' : '') : '') +
-    '<div class="note2"><span>💡</span><span>Start with a welcome: message 1 instantly, then a tip on day 1 and your offer on day 3.</span></div></div>' +
+    '<div class="note2"><span>💡</span><span>Start with a welcome: message 1 instantly, then a tip on day 1 and your offer on day 3.</span></div>' +
+    '<div class="note2"><span>👋</span><span>Welcoming people who ask to join a channel or group? Use <button type="button" class="lnk" data-go="flows">Welcome Flows</button>.</span></div></div>' +
     '<div class="box"><div class="bh"><div style="min-width:0;flex:1"><input class="inp ttlin" id="dName" value="' + esc(E.name) + '" maxlength="60" aria-label="Follow-up name"' + (editable ? '' : ' disabled') + '><small class="muted">' + (E.id ? plural(E.people || 0, 'person has', 'people have') + ' started it · ' + fmt(E.in_progress || 0) + ' in it now' : 'New follow-up, not saved yet') + '</small></div>' +
     '<div class="dtgl"><span class="muted" id="dTgL">' + (E.active ? 'On' : 'Off') + '</span>' + toggleBtn('dTg', E.active, 'Turn this follow-up on or off') + '</div></div>' +
     '<div class="canvas" id="dCv"></div>' +
@@ -91,8 +99,7 @@ function drawDrips(el, bots, alive) {
       join_connection_id: E.trigger_type === 'join_request' ? +E.join_connection_id : undefined, approve_join: E.approve_join, active: E.active,
       steps: E.steps.map((s) => ({ delay_value: Number(s.delay_value) || 0, delay_unit: s.delay_unit, body: s.body, media_id: s.media ? s.media.id : null, buttons: cleanButtons(s.buttons) })),
     };
-    btnBusy(e.currentTarget, true, 'Saving…');
-    try {
+    await busy(e.currentTarget, 'Saving…', async () => { try {
       if (E.id) await api('PUT', '/api/drips/' + E.id, body);
       else { const r = await POST('/api/drips', body); DRIP.sel = r.id; }
       DRIP.dirty = false;
@@ -100,7 +107,7 @@ function drawDrips(el, bots, alive) {
       if (!E.id) confetti();
       refreshState();
       renderPage('drips', {});
-    } catch (ex) { btnBusy(e.currentTarget, false); err.textContent = ex.message; err.hidden = false; apiErr(ex, { silent: true }); }
+    } catch (ex) { err.textContent = ex.message; err.hidden = false; apiErr(ex, { silent: true }); } });
   };
   const dl = $('#dDel'); if (dl) dl.onclick = async () => {
     if (!(await confirmBox('Delete "' + E.name + '"?', 'It stops for everyone in it, and its numbers are removed. This can\'t be undone.', 'Delete', true))) return;
@@ -125,7 +132,7 @@ function checkDrip(E) {
 function drawCanvas(bots, chats, editable) {
   const E = DRIP.E;
   const dis = editable ? '' : ' disabled';
-  const types = Object.keys(TRIG).filter((k) => k !== 'join_request' || CFG.features.join_welcome !== false || E.trigger_type === k);
+  const types = Object.keys(TRIG).filter((k) => k !== 'join_request' || E.trigger_type === k);
   const trig = '<div class="node trig"><div class="nh"><b style="display:flex;align-items:center;gap:8px">' + TG + 'Starts when</b><span class="pill" style="background:rgba(255,255,255,.14);color:#fff">Trigger</span></div>' +
     '<label class="tlab">Bot that sends it</label><select class="trigsel" id="dBot"' + (E.id ? ' disabled title="The bot can\'t be changed after saving. Make a new follow-up instead."' : dis) + '>' + bots.map((b) => '<option value="' + b.id + '"' + (b.id === E.connection_id ? ' selected' : '') + '>@' + esc(b.username || b.title) + '</option>').join('') + '</select>' +
     '<label class="tlab">What starts it</label><select class="trigsel" id="dTrig"' + dis + '>' + types.map((k) => '<option value="' + k + '"' + (k === E.trigger_type ? ' selected' : '') + '>' + TRIG[k] + '</option>').join('') + '</select>' +
@@ -142,7 +149,7 @@ function drawCanvas(bots, chats, editable) {
     '<textarea class="inp" rows="4" data-body="' + i + '" placeholder="Write message ' + (i + 1) + '…"' + dis + '>' + esc(s.body) + '</textarea><div class="cc" data-cc="' + i + '">' + counterHtml(s.body, !!s.media) + '</div>' +
     '<div class="btnl" data-btns="' + i + '">' + btnRows(s.buttons) + '</div>' +
     (editable ? '<div class="nacts"><button type="button" class="addm" data-dma="' + i + '"' + (CFG.features.media === false ? ' hidden' : '') + '>📎 ' + (s.media ? 'Replace' : 'Add') + ' photo or video</button>' + (s.buttons.length < 6 ? '<button type="button" class="addm" data-dba="' + i + '">🔘 Add a button</button>' : '') + '<button type="button" class="addm" data-dname="' + i + '" title="Each person sees their own first name">👤 Add their name</button></div>' : '') +
-    '<div class="nup" data-up="' + i + '"></div>' +
+    '<div class="nup" data-upl="' + i + '"></div>' +
     (E.id ? '<div class="stats"><span>📨 ' + fmt(s.sent) + ' sent</span><span>🔘 ' + fmt(s.clicks) + ' clicks</span></div>' : '') + '</div>').join('');
   $('#dCv').innerHTML = trig + steps + (editable && E.steps.length < 20 ? '<div class="conn"><span>Then</span></div><button type="button" class="btn b-ghost sm" id="dAdd">' + icon('plus') + 'Add a message</button>' : '');
   $$('#dCv img.mimg').forEach((im) => im.addEventListener('error', () => { const v = document.createElement('video'); v.src = im.src; v.muted = true; v.playsInline = true; im.replaceWith(v); }, { once: true }));
@@ -169,10 +176,7 @@ function drawCanvas(bots, chats, editable) {
     const ap = t.closest('#dAp'); if (ap) { E.approve_join = !E.approve_join; setToggle(ap, E.approve_join); mark(); return; }
     const nm = t.closest('[data-dname]');
     if (nm) {
-      const i = +nm.dataset.dname, ta = $('[data-body="' + i + '"]', cv);
-      const s0 = ta.selectionStart ?? ta.value.length, s1 = ta.selectionEnd ?? ta.value.length;
-      ta.value = ta.value.slice(0, s0) + '{name}' + ta.value.slice(s1); ta.focus(); ta.setSelectionRange(s0 + 6, s0 + 6);
-      ta.dispatchEvent(new Event('input', { bubbles: true })); return;
+      insertAtCaret($('[data-body="' + nm.dataset.dname + '"]', cv), '{name}'); return;
     }
     const d = t.closest('[data-del]'); if (d) { E.steps.splice(+d.dataset.del, 1); mark(); drawCanvas(bots, chats, editable); return; }
     const bx = t.closest('[data-bx]'); if (bx) { const i = +bx.closest('[data-btns]').dataset.btns; E.steps[i].buttons.splice(+bx.dataset.bx, 1); mark(); drawCanvas(bots, chats, editable); return; }
@@ -181,7 +185,7 @@ function drawCanvas(bots, chats, editable) {
     const ma = t.closest('[data-dma]'); if (ma) {
       const i = +ma.dataset.dma;
       const fin = document.createElement('input'); fin.type = 'file'; fin.accept = 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime';
-      fin.onchange = async () => { const f = fin.files[0]; if (!f) return; const m = await pickAndUpload(f, $('[data-up="' + i + '"]', cv)); if (m) { E.steps[i].media = m; mark(); } drawCanvas(bots, chats, editable); };
+      fin.onchange = async () => { const f = fin.files[0]; if (!f) return; const m = await pickAndUpload(f, $('[data-upl="' + i + '"]', cv)); if (m) { E.steps[i].media = m; mark(); } drawCanvas(bots, chats, editable); };
       fin.click();
       return;
     }

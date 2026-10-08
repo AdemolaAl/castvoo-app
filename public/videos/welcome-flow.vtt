@@ -1,0 +1,105 @@
+WEBVTT
+
+1
+00:00:03.702 --> 00:00:08.341
+Welcome Flows greet everyone who asks to join your channel or group.
+
+2
+00:00:08.471 --> 00:00:12.928
+Your own bot welcomes them, lets them in, and follows up later.
+
+3
+00:00:13.227 --> 00:00:15.508
+The quickest start is a template.
+
+4
+00:00:15.638 --> 00:00:18.928
+Let's pick "Welcome + 3-day follow-up".
+
+5
+00:00:19.227 --> 00:00:23.764
+Pick the channel people ask to join, and the bot that sends the welcome.
+
+6
+00:00:23.894 --> 00:00:27.968
+Castvoo checks that your bot is an admin who can let people in.
+
+7
+00:00:28.268 --> 00:00:30.672
+Next, choose how people get in.
+
+8
+00:00:30.802 --> 00:00:33.201
+After the welcome is the default.
+
+9
+00:00:33.331 --> 00:00:36.161
+They get your message first, then they're let in.
+
+10
+00:00:36.462 --> 00:00:39.191
+"Straight away" lets everyone in at once.
+
+11
+00:00:39.321 --> 00:00:42.291
+"When they tap a button" stops most fake accounts.
+
+12
+00:00:42.421 --> 00:00:45.865
+And with "I decide", requests wait in a list for you.
+
+13
+00:00:46.164 --> 00:00:48.536
+Keep the "Tap to start" button on.
+
+14
+00:00:48.666 --> 00:00:52.979
+When people press Start in your bot, your later messages can reach them.
+
+15
+00:00:53.279 --> 00:00:55.027
+Here is the welcome.
+
+16
+00:00:55.157 --> 00:01:01.657
+{name} becomes each person's first name, so everyone is greeted personally.
+
+17
+00:01:01.958 --> 00:01:04.111
+A wait step sets the timer.
+
+18
+00:01:04.241 --> 00:01:07.499
+This one waits one day before the next message.
+
+19
+00:01:07.799 --> 00:01:11.056
+Message two reaches people who tapped Start.
+
+20
+00:01:11.186 --> 00:01:12.833
+Write your tip here.
+
+21
+00:01:13.556 --> 00:01:15.576
+Add buttons with your links.
+
+22
+00:01:15.706 --> 00:01:18.451
+Up to six, and every click is tracked.
+
+23
+00:01:20.187 --> 00:01:24.564
+Use the plus button to add more steps: a message, or a wait.
+
+24
+00:01:25.625 --> 00:01:27.682
+Save it, then switch it on.
+
+25
+00:01:27.812 --> 00:01:31.139
+Your bot now welcomes everyone who asks to join.
+
+26
+00:01:31.439 --> 00:01:37.928
+Later, check the Stats tab to see who was welcomed and let in, and Requests to handle people by hand.

@@ -9,7 +9,7 @@ const db = require('../db');
 const config = require('../config');
 const settings = require('./settings');
 const email = require('./email');
-const { randomToken, randomCode, sha256, addDays, fmtDate, httpError } = require('../lib/util');
+const { randomToken, randomCode, sha256, addDays, fmtDate, httpError, cleanName } = require('../lib/util');
 
 const COOKIE = 'cv_session';
 const SESSION_DAYS = 30;
@@ -23,6 +23,11 @@ async function createSession(ctx, user) {
   await db.query('insert into sessions(token_hash, user_id, ip, user_agent, expires_at) values ($1,$2,$3,$4,$5)',
     [sha256(token), user.id, ctx.ip, String(ctx.req.headers['user-agent'] || '').slice(0, 300), addDays(new Date(), SESSION_DAYS)]);
   await db.query('update users set last_login_at = now() where id = $1', [user.id]);
+  // SEC-2: the addresses an account logs in from (one row per address, first and last seen), for self-referral checks.
+  if (ctx.ip) {
+    await db.query(`insert into user_ips(user_id, ip) values ($1,$2) on conflict (user_id, ip) do update set last_seen = now()`, [user.id, String(ctx.ip).slice(0, 64)])
+      .catch(() => {});
+  }
   ctx.setCookie(COOKIE, token, cookieOpts(SESSION_DAYS * 86400));
 }
 
@@ -35,6 +40,11 @@ async function loadSession(ctx) {
   // Slide the expiry forward when less than half is left.
   if (new Date(row.expires_at).getTime() - Date.now() < (SESSION_DAYS / 2) * 86400000) {
     await db.query('update sessions set expires_at = $2 where token_hash = $1', [row.token_hash, addDays(new Date(), SESSION_DAYS)]);
+  }
+  // AUD-6: a dashboard visit counts as use (sessions slide, so an active owner may not log in again for a year).
+  // Written at most once a day per account.
+  if (!row.last_seen_at || Date.now() - new Date(row.last_seen_at).getTime() > 86400000) {
+    await db.query('update users set last_seen_at = now() where id = $1', [row.id]).catch(() => {});
   }
   const { token_hash, expires_at, ...user } = row;
   return { user, tokenHash: token_hash };
@@ -57,12 +67,12 @@ async function uniqueRefCode(base) {
 
 /**
  * Find the user for a login identity, or create them (with a workspace and trial).
- * identity: { email } | { tg_user_id, tg_username } | { google_sub, email } | { voo_id, email }
+ * identity: { email } | { tg_user_id, tg_username } | { voo_id, email }
  * extra:    { name, country, ref, linkTo (logged-in user to link this identity to) }
  * Returns { user, created }.
  */
 async function loginWith(identity, extra = {}) {
-  const field = identity.tg_user_id ? 'tg_user_id' : identity.google_sub ? 'google_sub' : identity.voo_id ? 'voo_id' : 'email';
+  const field = identity.tg_user_id ? 'tg_user_id' : identity.voo_id ? 'voo_id' : 'email';
   const value = identity[field];
 
   if (extra.linkTo) {
@@ -74,7 +84,8 @@ async function loginWith(identity, extra = {}) {
   }
 
   let user = await db.one(`select * from users where ${field} = $1`, [value]);
-  // Google/VooSquare logins with a verified email join an existing email account.
+  // VooSquare logins with a verified email join an existing email account.
+  // (People who once signed in with Google keep their email on the account, so the email code finds them.)
   if (!user && identity.email && field !== 'email') {
     user = await db.one('select * from users where email = $1', [identity.email]);
     if (user) await db.query(`update users set ${field} = $2, email_verified = true where id = $1`, [user.id, value]);
@@ -85,7 +96,8 @@ async function loginWith(identity, extra = {}) {
     if (identity.tg_username !== undefined && identity.tg_user_id) await db.query('update users set tg_username = $2 where id = $1', [user.id, identity.tg_username]);
     // Logging in with an emailed code proves the email (team members added by an admin started unverified).
     if (field === 'email' && !user.email_verified) { await db.query('update users set email_verified = true where id = $1', [user.id]); user.email_verified = true; }
-    if (user.email && config.ownerEmail && user.email === config.ownerEmail && user.staff_role !== 'owner') {
+    // SEC-16: only a Castvoo email code proves OWNER_EMAIL; a VooSquare (or Telegram) login never makes an owner.
+    if (field === 'email' && user.email && config.ownerEmail && user.email === config.ownerEmail && user.staff_role !== 'owner') {
       await db.query("update users set staff_role = 'owner' where id = $1", [user.id]);
       user.staff_role = 'owner';
     }
@@ -95,19 +107,19 @@ async function loginWith(identity, extra = {}) {
   if (!(await settings.feature('signups'))) throw httpError(403, 'New sign-ups are paused right now. Please try again later.', 'signups_off');
   if ((await settings.features()).maintenance) throw httpError(503, 'Castvoo is under maintenance. Please try again in a few minutes.', 'maintenance');
 
-  const name = String(extra.name || identity.name || (identity.email ? identity.email.split('@')[0] : '') || 'Friend').slice(0, 80);
+  const name = cleanName(extra.name || identity.name || (identity.email ? identity.email.split('@')[0] : ''), 80) || 'Friend'; // SEC-4
   let referredBy = null;
   if (extra.ref) {
     const r = await db.one("select id from users where ref_code = $1 and status = 'active'", [String(extra.ref).toLowerCase().slice(0, 40)]);
     if (r) referredBy = r.id;
   }
   const country = extra.country && (await db.one('select code from countries where code = $1 and active', [extra.country])) ? extra.country : null;
-  const isOwner = !!(identity.email && config.ownerEmail && identity.email === config.ownerEmail);
+  const isOwner = !!(field === 'email' && identity.email && config.ownerEmail && identity.email === config.ownerEmail); // SEC-16
 
   user = await db.tx(async (c) => {
-    const u = (await c.query(`insert into users(email, email_verified, name, tg_user_id, tg_username, google_sub, voo_id, country, staff_role, ref_code, referred_by)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *`,
-    [identity.email || null, !!identity.email, name, identity.tg_user_id || null, identity.tg_username || null, identity.google_sub || null, identity.voo_id || null,
+    const u = (await c.query(`insert into users(email, email_verified, name, tg_user_id, tg_username, voo_id, country, staff_role, ref_code, referred_by, referred_at)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, case when $10::bigint is null then null else now() end) returning *`,
+    [identity.email || null, !!identity.email, name, identity.tg_user_id || null, identity.tg_username || null, identity.voo_id || null,
       country, isOwner ? 'owner' : null, await uniqueRefCode(name), referredBy])).rows[0];
     await createWorkspace(c, u);
     return u;
@@ -138,17 +150,14 @@ async function loginWithVoo(vu, { current = null, ref = null } = {}) {
     if (u.status === 'suspended') throw httpError(403, 'This account is suspended. Contact support@castvoo.com.', 'suspended');
     if (u.status === 'deleted') throw httpError(403, 'This account was deleted.', 'deleted');
   };
-  const promoteOwner = async (u) => {
-    if (u.email && config.ownerEmail && u.email === config.ownerEmail && u.staff_role !== 'owner') {
-      await db.query("update users set staff_role = 'owner' where id = $1", [u.id]);
-      u.staff_role = 'owner';
-    }
-    return u;
-  };
+  // SEC-16: VooSquare's email_verified is not enough to become the platform owner. OWNER_EMAIL is promoted only after
+  // a Castvoo email code (email login, or adding the email in Settings), so this is a no-op kept for readability.
+  const promoteOwner = async (u) => u;
   const link = async (u) => {
+    // N-2: linking the same account again keeps the first link date (attribution depends on it).
     // "where voo_id is null" makes two logins at the same moment safe; the unique index refuses a second account.
     try {
-      await db.query('update users set voo_id = $2, voo_ref = coalesce(voo_ref, $3), voo_linked_at = now() where id = $1 and (voo_id is null or voo_id = $2)', [u.id, vooId, vooRef]);
+      await db.query('update users set voo_id = $2, voo_ref = coalesce(voo_ref, $3), voo_linked_at = case when voo_id = $2 then coalesce(voo_linked_at, now()) else now() end where id = $1 and (voo_id is null or voo_id = $2)', [u.id, vooId, vooRef]);
     } catch (e) {
       if (e.code === '23505') throw httpError(409, 'That VooSquare account is already linked to another Castvoo login.', 'already_linked');
       throw e;
@@ -185,7 +194,7 @@ async function loginWithVoo(vu, { current = null, ref = null } = {}) {
 async function createWorkspace(c, user) {
   const trial = await settings.get('trial');
   const tz = user.country ? (TZ_BY_COUNTRY[user.country] || 'UTC') : 'Africa/Lagos';
-  const first = (user.name || 'My').split(/\s+/)[0];
+  const first = cleanName(user.name || 'My', 30).split(' ')[0] || 'My';
   const ws = (await c.query(`insert into workspaces(name, owner_user_id, plan_code, plan_status, trial_ends_at, timezone)
     values ($1,$2,$3,'trial',$4,$5) returning *`, [`${first}'s workspace`, user.id, trial.plan, addDays(new Date(), trial.days), tz])).rows[0];
   await c.query("insert into members(workspace_id, user_id, role) values ($1,$2,'owner')", [ws.id, user.id]);

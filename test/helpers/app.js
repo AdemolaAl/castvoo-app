@@ -99,8 +99,6 @@ async function startApp({ env = {}, port: wantPort, host = '127.0.0.1' } = {}) {
     uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'castvoo-uploads-'));
     const platformBotToken = '600000001:' + crypto.randomBytes(26).toString('base64url').slice(0, 35);
     fakes.tg.addBot(platformBotToken, { id: 600000001, username: 'CastvooBot' });
-    fakes.oidc.clientId = 'google-client';
-    fakes.oidc.clientSecret = 'google-secret';
 
     Object.assign(process.env, {
       NODE_ENV: 'test',
@@ -130,9 +128,6 @@ async function startApp({ env = {}, port: wantPort, host = '127.0.0.1' } = {}) {
       GATEVOO_URL: fakes.base,
       GATEVOO_KEY: 'gv_test_key',
       GATEVOO_WEBHOOK_SECRET: 'gv-webhook-secret',
-      GOOGLE_CLIENT_ID: 'google-client',
-      GOOGLE_CLIENT_SECRET: 'google-secret',
-      GOOGLE_ISSUER: fakes.base + '/oidc',
       VOO_SERVICE_KEY: 'voo-service-key-123',
       VOO_BASE: fakes.base + '/voo',
       VOO_API_KEY: 'voo-api-key-456',
@@ -142,6 +137,9 @@ async function startApp({ env = {}, port: wantPort, host = '127.0.0.1' } = {}) {
       UPLOAD_DIR: uploadDir,
       TG_SEND_PER_SECOND: '200',
       QUIET_LOGS: '1',
+      AI_RETRY_BASE_MS: '20',
+      // The leaving-Castvoo page for new accounts' links is tested on its own (security-fixes.test.js).
+      LINK_WARN_NEW_DAYS: '0',
       ...env,
     });
 
@@ -225,7 +223,10 @@ async function startApp({ env = {}, port: wantPort, host = '127.0.0.1' } = {}) {
           method: 'POST', body: JSON.stringify({ update_id: tgUpdateId++, ...update }),
           headers: { 'content-type': 'application/json', 'x-telegram-bot-api-secret-token': secret ?? (c ? c.webhook_secret : '') },
         });
-        return { status: res.status, text: await res.text() };
+        const out = { status: res.status, text: await res.text() };
+        // Join requests are handled just after the webhook answers (ENG-10): wait for that work, like Telegram's user would.
+        if (update.chat_join_request && !update.noWait) await require(S('services/bot-updates')).idle();
+        return out;
       },
       async platformUpdate(update, { secret } = {}) {
         const res = await fetch(`${appUrl}/tg/platform`, {

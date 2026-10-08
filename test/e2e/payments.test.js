@@ -42,7 +42,7 @@ describe('wallet', () => {
     assert.equal(w.body.methods[0].currency, 'NGN');
     assert.equal(w.body.min_topup, 10);
     assert.equal(w.body.max_topup, 5000);
-    assert.deepEqual(w.body.bonuses, [{ min: 200, bonus: 10 }, { min: 500, bonus: 40 }, { min: 1000, bonus: 100 }]);
+    assert.deepEqual(w.body.bonuses, [{ min: 200, bonus: 10 }, { min: 500, bonus: 40 }, { min: 1000, bonus: 60 }]);
     assert.equal(w.body.has_email, true);
   });
 

@@ -30,7 +30,6 @@ PAGES.settings = {
       '<button type="button" class="btn b-blue sm" id="stPSave" style="align-self:flex-start">Save profile</button>' +
       '<div class="srow"><span class="sri">' + icon('mail') + '</span><div style="flex:1;min-width:0"><b>Email</b><small class="ell" style="display:block">' + (u.email ? esc(u.email) + (u.email_verified ? ' · verified' : '') : 'No email yet. Add one for receipts and login codes.') + '</small></div><button type="button" class="btn b-ghost xs" id="stEm">' + (u.email ? 'Change' : 'Add email') + '</button></div><div id="stEmBox"></div>' +
       '<div class="srow"><span class="sri">' + icon('tg') + '</span><div style="flex:1;min-width:0"><b>Telegram</b><small style="display:block">' + (u.tg_linked ? 'Linked' + (u.tg_username ? ' as @' + esc(u.tg_username) : '') + '. Used for channels, groups and test messages.' : 'Not linked. Link it to add channels and groups and get test messages.') + '</small></div>' + (u.tg_linked ? '<span class="pill p-ok">Linked</span>' : '<button type="button" class="btn b-ghost xs" id="stTg">Link Telegram</button>') + '</div>' +
-      (u.google_linked ? '<div class="srow"><span class="sri">G</span><div style="flex:1"><b>Google</b><small style="display:block">You can log in with Google.</small></div><span class="pill p-ok">Linked</span></div>' : '') +
       (L.voosquare ? '<div class="srow"><span class="sri vq">V</span><div style="flex:1;min-width:0"><b>VooSquare</b><small style="display:block">' + (u.voo_linked ? 'Linked. One Voo ID for all Zedapex tools.' : 'Connect your VooSquare account to log in with your Voo ID.') + '</small></div>' + (u.voo_linked ? '<span class="pill p-ok">Linked</span>' : '<button type="button" class="btn b-ghost xs" id="stVoo">Connect</button>') + '</div>' : '') +
       '<div class="tg"><span><b style="font-size:14.5px">Tips and offers by email</b><br><small class="muted">Helpful emails about getting more from Castvoo. Receipts and login codes always arrive.</small></span>' + toggleBtn('stMk', !u.marketing_opt_out, 'Tips and offers by email') + '</div></div>' +
       // Workspace
@@ -64,9 +63,9 @@ PAGES.settings = {
     $('#stPSave').onclick = async (e) => {
       const name = $('#stName').value.trim();
       if (!name) { toast('Your name can\'t be empty.', { kind: 'err' }); return; }
-      btnBusy(e.currentTarget, true, 'Saving…');
-      try { const body = { name }; if ($('#stCt').value) body.country = $('#stCt').value; ME = await POST('/api/me', body); shellUI(); toast('Profile saved.'); } catch (ex) { apiErr(ex); }
-      btnBusy(e.currentTarget, false);
+      await busy(e.currentTarget, 'Saving…', async () => {
+        try { const body = { name }; if ($('#stCt').value) body.country = $('#stCt').value; ME = await POST('/api/me', body); shellUI(); toast('Profile saved.'); } catch (ex) { apiErr(ex); }
+      });
     };
     $('#stMk').onclick = async (e) => {
       const b = e.currentTarget, on = !b.classList.contains('on');
@@ -77,9 +76,9 @@ PAGES.settings = {
     $('#stEm').onclick = () => { emailMini($('#stEmBox'), () => renderPage('settings', {})); const t = $('#stEmBox b'); if (t) t.textContent = 'Your email'; const p2 = $('#stEmBox p'); if (p2) p2.textContent = 'We send a 6-digit code to check it\'s yours.'; };
     const ap = $('#wsAp'); ap.onclick = () => { if (owner) setToggle(ap, !ap.classList.contains('on')); };
     const wsv = $('#wsSave'); if (wsv) wsv.onclick = async (e) => {
-      btnBusy(e.currentTarget, true, 'Saving…');
-      try { await POST('/api/app/settings', { name: $('#wsN').value.trim(), timezone: $('#wsTz').value, daily_cap: +$('#wsCap').value, require_approval: ap.classList.contains('on') }); await refreshState(); await loadMe(); toast('Workspace saved.'); } catch (ex) { apiErr(ex); }
-      btnBusy(e.currentTarget, false);
+      await busy(e.currentTarget, 'Saving…', async () => {
+        try { await POST('/api/app/settings', { name: $('#wsN').value.trim(), timezone: $('#wsTz').value, daily_cap: +$('#wsCap').value, require_approval: ap.classList.contains('on') }); await refreshState(); await loadMe(); toast('Workspace saved.'); } catch (ex) { apiErr(ex); }
+      });
     };
     const inv = $('#invF'); if (inv) inv.onsubmit = async (e) => {
       e.preventDefault();
@@ -113,15 +112,28 @@ function deleteAccount() {
     '<div class="row2b"><button type="button" class="btn b-ghost" data-shx>Keep my account</button><button type="button" class="btn b-bad" id="delGo" disabled>Delete forever</button></div>');
   $('#delI', h).oninput = (e) => { $('#delGo', h).disabled = e.target.value.trim().toUpperCase() !== 'DELETE'; };
   $('#delGo', h).onclick = async (e) => {
-    btnBusy(e.currentTarget, true, 'Deleting…');
-    try { await POST('/api/me/delete', { confirm: 'DELETE' }); closeModal(); ME = { user: null, workspaces: [] }; APP.booted = false; APP.state = null; WS.set(null); siteAuthUI(); location.hash = '#top'; toast('Your account was deleted. Thank you for trying Castvoo.'); }
-    catch (ex) { btnBusy(e.currentTarget, false); $('#delE', h).textContent = ex.message; $('#delE', h).hidden = false; }
+    await busy(e.currentTarget, 'Deleting…', async () => {
+      try { await POST('/api/me/delete', { confirm: 'DELETE' }); closeModal(); ME = { user: null, workspaces: [] }; APP.booted = false; APP.state = null; WS.set(null); siteAuthUI(); location.hash = '#top'; toast('Your account was deleted. Thank you for trying Castvoo.'); }
+      catch (ex) { $('#delE', h).textContent = ex.message; $('#delE', h).hidden = false; }
+    });
   };
 }
 
 /* ---------- Help ---------- */
+/*
+ * Support chat. When the AI support team is on, named agents answer 24/7: the server sends `typing` while an agent
+ * "types", and bubbles appear one by one (their visible_at). We poll every 1.5 s while someone is typing or just
+ * after you sent a message, and every 10 s otherwise. A human teammate can take over the same chat at any time.
+ * Images: up to 3 screenshots per message (button, paste or drag and drop). Each is uploaded first
+ * (POST /api/support/attachments) and its id sent with the message. Only you and the support team can open them.
+ */
+const supAva = (m) => (m.avatar ? '<img class="sav" src="' + esc(m.avatar) + '" alt="" width="34" height="34" loading="lazy">' : '<span class="sav team">' + esc((m.author_name || 'C')[0]) + '</span>');
+function supTeam(team, n) {
+  return '<span class="steam">' + (team || []).slice(0, n || 3).map((p) => '<img src="' + esc(p.avatar) + '" alt="' + esc(p.name) + '" width="30" height="30">').join('') + '</span>';
+}
+const supPics = (list) => (list && list.length ? '<span class="cpics n' + Math.min(list.length, 3) + '">' + list.map((a) => '<button type="button" class="cpic" data-lb="' + esc(a.url) + '" aria-label="Open image"><img src="' + esc(a.url) + '" alt="Image"' + (a.width && a.height ? ' width="' + Number(a.width) + '" height="' + Number(a.height) + '"' : '') + '></button>').join('') + '</span>' : '');
 PAGES.help = {
-  title: 'Help', sub: 'Chat with the Castvoo team',
+  title: 'Help', sub: '24/7 customer support',
   async render(el, q, alive) {
     el.innerHTML = skel(1, 140) + skel(1, 360);
     const s = CFG.support || {};
@@ -129,30 +141,127 @@ PAGES.help = {
     let d = chatOn ? await GET('/api/support') : { messages: [], reply_time: s.reply_time };
     if (!alive()) return;
     if (APP.state.support_unread) { APP.state.support_unread = 0; shellUI(); }
-    el.innerHTML = '<div class="box hello helpb"><div style="display:flex;flex-direction:column;gap:10px;min-width:0;padding-bottom:16px"><h2>How can we help?</h2><p>' + esc(d.reply_time || s.reply_time || '') + '</p><div class="acts"><a class="btn b-w" href="mailto:' + esc(s.email) + '">' + icon('mail') + esc(s.email) + '</a>' + (s.telegram ? '<a class="btn b-g" href="https://t.me/' + esc(String(s.telegram).replace(/^@/, '')) + '" target="_blank" rel="noopener">' + icon('tg') + '@' + esc(String(s.telegram).replace(/^@/, '')) + '</a>' : '') + '</div></div><div class="hart" data-cas="happy"></div></div>' +
-      '<div class="dg"><div class="box c8 chatb"><div class="bh"><h3>' + icon('chat') + 'Chat with the team</h3>' + (chatOn ? '<span class="pill p-ok"><span class="dl"></span>We reply here and by email</span>' : '') + '</div>' +
-      (chatOn ? '<div class="chatl tall" id="hpL"></div><form class="chatf" id="hpF"><textarea class="inp" id="hpQ" rows="2" maxlength="4000" placeholder="Write your message. Tell us what you were trying to do." aria-label="Your message"></textarea><button type="submit" class="btn b-blue" aria-label="Send">' + icon('send') + '<span class="hide-sm">Send</span></button></form>'
+    const ai = d.ai || { on: false, team: [] };
+    const team = ai.team || [];
+    const opt = d.chat || { images: false, max_images: 3, max_mb: 10, powered_by: null };
+    const names = team.slice(0, 2).map((p) => p.name).join(' and ');
+    const lead = ai.on && team.length ? 'Ask anything, any time. ' + esc(names) + ' answer in seconds, day and night, and a person from our team can step in whenever you need one.' : esc(d.reply_time || s.reply_time || '');
+    el.innerHTML = '<div class="box hello helpb"><div style="display:flex;flex-direction:column;gap:10px;min-width:0;padding-bottom:16px">' + (ai.on ? '<span class="h247"><span class="sdot"></span>24/7 customer support · replies in seconds</span>' : '') + '<h2>How can we help?</h2><p>' + lead + '</p><div class="acts"><a class="btn b-w" href="mailto:' + esc(s.email) + '">' + icon('mail') + esc(s.email) + '</a>' + (s.telegram ? '<a class="btn b-g" href="https://t.me/' + esc(String(s.telegram).replace(/^@/, '')) + '" target="_blank" rel="noopener">' + icon('tg') + '@' + esc(String(s.telegram).replace(/^@/, '')) + '</a>' : '') + '</div></div>' + (team.length && ai.on ? '<div class="hface">' + supTeam(team, 4) + '<small>Your support team</small></div>' : '<div class="hart" data-cas="happy"></div>') + '</div>' +
+      '<div class="dg"><div class="box c8 chatb" id="hpBox">' +
+      (chatOn ? '<div class="shead">' + (team.length ? supTeam(team, 3) : '<span class="sav team">C</span>') + '<div class="sh-t"><b>Castvoo support</b><small id="hpSt"></small></div></div>' : '<div class="bh"><h3>' + icon('chat') + 'Chat with the team</h3></div>') +
+      (chatOn ? '<div class="chatl tall" id="hpL" aria-live="polite"></div>' +
+        '<form class="chatf hpf" id="hpF"><div class="cmp-pics" id="hpP" hidden></div>' +
+        (opt.images ? '<label class="ib cmp-att" title="Attach a screenshot (or paste one)"><input type="file" id="hpFile" accept="image/jpeg,image/png,image/webp" multiple hidden>' + icon('image') + '<span class="sr">Attach a screenshot</span></label>' : '') +
+        '<textarea class="inp" id="hpQ" rows="2" maxlength="4000" placeholder="' + (opt.images ? 'Write your message, or paste a screenshot…' : 'Write your message. Tell us what you were trying to do.') + '" aria-label="Your message"></textarea><button type="submit" class="btn b-blue" aria-label="Send">' + icon('send') + '<span class="hide-sm">Send</span></button></form>' +
+        '<div class="chat-foot"><span>' + (ai.on ? icon('clock') + '24/7 · AI agents with our human team on call' : icon('mail') + 'We reply here and by email') + '</span>' + poweredBy(opt.powered_by) + '</div>' +
+        (opt.images ? '<div class="dropz" id="hpDrop" hidden><span>' + icon('image') + 'Drop your screenshot to attach it</span></div>' : '')
         : emptyBox({ plain: 1, emoji: '✉️', title: 'Chat is offline right now', text: 'Email us at <a href="mailto:' + esc(s.email) + '">' + esc(s.email) + '</a> and we\'ll get back to you.' })) + '</div>' +
-      '<div class="box c4"><div class="bh"><h3>Quick help</h3></div><div class="qhelp"><button type="button" data-guide>' + icon('play') + '<span><b>Watch the setup guide</b><small>Connect Telegram in 40 seconds</small></span></button>' + (aiOn() ? '<button type="button" data-go="ai">' + icon('spark') + '<span><b>Ask Cas</b><small>Instant answers, any time</small></span></button>' : '') + '<a href="/#faq" target="_blank" rel="noopener">' + icon('help') + '<span><b>Read the FAQ</b><small>Common questions</small></span></a><a href="/legal/refunds" target="_blank" rel="noopener">' + icon('wallet') + '<span><b>Refunds</b><small>How refunds work</small></span></a></div></div></div>';
+      '<div class="box c4"><div class="bh"><h3>Quick help</h3></div><div class="qhelp"><button type="button" class="vgq" data-go="guides">' + icon('play') + '<span><b>Watch the video guides</b><small>' + (typeof VGUIDES !== 'undefined' ? VGUIDES.length + ' ' : '') + 'short tutorials with voice and captions</small></span></button>' + (aiOn() ? '<button type="button" data-go="ai">' + icon('spark') + '<span><b>Ask Cas</b><small>Help writing messages</small></span></button>' : '') + '<a href="/#faq" target="_blank" rel="noopener">' + icon('help') + '<span><b>Read the FAQ</b><small>Common questions</small></span></a><a href="/legal/refunds" target="_blank" rel="noopener">' + icon('wallet') + '<span><b>Refunds</b><small>How refunds work</small></span></a></div></div></div>';
+    paintCas(el);
     if (!chatOn) return;
-    const draw = () => {
+    const status = () => {
+      const st = $('#hpSt'); if (!st) return;
+      const human = d.thread && d.thread.with_human;
+      st.innerHTML = '<span class="sdot' + (human ? ' h' : '') + '"></span><span>' + (human ? 'A teammate is on this chat · 24/7 support' : ai.on ? '24/7 customer support · replies in seconds' : esc(d.reply_time || 'We reply here and by email')) + '</span>';
+    };
+    let lastKey = '';
+    const draw = (force) => {
       const L = $('#hpL'); if (!L) return;
-      const atBottom = L.scrollHeight - L.scrollTop - L.clientHeight < 60;
-      L.innerHTML = d.messages.length ? d.messages.map((m) => '<div class="cmsg ' + (m.author_type === 'user' ? 'u' : 'a') + '">' + (m.author_type === 'user' ? '' : '<span class="cav team">' + esc((m.author_name || 'C')[0]) + '</span>') + '<div class="cb">' + (m.author_type === 'user' ? '' : '<small class="cn">' + esc(m.author_name || 'Castvoo team') + '</small>') + esc(m.body).replace(/\n/g, '<br>') + '<small class="ct">' + fmtDate(m.created_at) + '</small></div></div>').join('')
-        : '<div class="cmsg a"><span class="cav" data-cas="mini"></span><div class="cb">Hi! Send us a message about anything: setup, payments, or a question about your bot. A real person from the Castvoo team will answer.</div></div>';
+      const key = d.messages.map((m) => m.id + ':' + (m.attachments || []).length).join(',') + '|' + (d.typing ? d.typing.name : '');
+      if (!force && key === lastKey) return;
+      lastKey = key;
+      const atBottom = L.scrollHeight - L.scrollTop - L.clientHeight < 80;
+      const ms = d.messages;
+      let h = '';
+      if (!ms.length) {
+        h = team.length && ai.on
+          ? '<div class="cmsg a first last">' + supAva(team[0]) + '<div class="cb"><small class="cn">' + esc(team[0].name) + '</small>Hi! I\'m ' + esc(team[0].name) + ' from Castvoo. Ask me anything: setup, sending, payments or your bot. I can check your account for you' + (opt.images ? ', and you can send me a screenshot' : '') + '.</div></div>'
+          : '<div class="cmsg a first last"><span class="cav" data-cas="mini"></span><div class="cb">Hi! Send us a message about anything: setup, payments, or a question about your bot. A real person from the Castvoo team will answer.</div></div>';
+      }
+      ms.forEach((m, i) => {
+        const mine = m.author_type === 'user';
+        const prev = ms[i - 1], next = ms[i + 1];
+        const same = (x) => x && (x.author_type === 'user') === mine && (mine || x.author_name === m.author_name);
+        const first = !same(prev), last = !same(next) && !(d.typing && !mine && i === ms.length - 1 && d.typing.name === m.author_name);
+        const ava = mine ? '' : last ? supAva(m) : '<span class="sav sp"></span>';
+        const nm = !mine && first ? '<small class="cn">' + esc(m.author_name || 'Castvoo team') + (m.author_type === 'staff' ? ' <span class="steam-tag">Team</span>' : '') + '</small>' : '';
+        const pics = supPics(m.attachments);
+        const text = m.body ? esc(m.body).replace(/\n/g, '<br>') : '';
+        h += '<div class="cmsg ' + (mine ? 'u' : 'a') + (first ? ' first' : '') + (last ? ' last' : '') + '">' + ava + '<div class="cb' + (pics && !text ? ' po' : '') + '">' + nm + pics + text + (last ? '<small class="ct">' + (m.sending ? 'Sending…' : fmtDate(m.created_at)) + '</small>' : '') + '</div></div>';
+      });
+      if (d.typing) h += '<div class="cmsg a typing last">' + supAva({ avatar: d.typing.avatar, author_name: d.typing.name }) + '<div class="cb"><span class="tg-typing in"><i></i><i></i><i></i></span></div><span class="tlabel">' + esc(d.typing.name) + ' is typing…</span></div>';
+      L.innerHTML = h;
       paintCas(L);
-      if (atBottom || !draw.done) L.scrollTop = L.scrollHeight;
+      const stick = atBottom || !draw.done;
+      if (stick) {
+        L.scrollTop = L.scrollHeight;
+        // Images finish loading after this: keep the newest message in view.
+        $$('img', L).forEach((im) => { if (!im.complete) im.addEventListener('load', () => { L.scrollTop = L.scrollHeight; }, { once: true }); });
+      }
       draw.done = true;
     };
-    draw();
+    status(); draw(true);
+    $('#hpL').onclick = (e) => { const b = e.target.closest('[data-lb]'); if (b) openLightbox(b.dataset.lb); };
+    let fastUntil = d.typing ? Date.now() + 60000 : 0;
+    let busy = false;
+    const refresh = async () => {
+      if (busy) return; busy = true;
+      try { const n = await GET('/api/support'); if (!alive()) return; d = n; status(); draw(); if (d.typing) fastUntil = Math.max(fastUntil, Date.now() + 15000); } catch (_) { /* try again later */ }
+      busy = false;
+    };
+
+    /* images waiting to be sent: { k, file, url, att, st: 'up' | 'ok' | 'err' } */
+    let pend = [];
+    const P = $('#hpP');
+    const drawPend = () => {
+      P.hidden = !pend.length;
+      P.innerHTML = pend.map((x) => '<span class="cmp-pic ' + x.st + '"><img src="' + esc(x.url) + '" alt="">' + (x.st === 'up' ? '<i class="spin"></i>' : x.st === 'err' ? '<b title="' + esc(x.err || '') + '">!</b>' : '') + '<button type="button" class="cmp-x" data-rmp="' + x.k + '" aria-label="Remove image">' + icon('x') + '</button></span>').join('') +
+        (pend.some((x) => x.att && !x.att.ai_readable) ? '<small class="cmp-note">This image is big. The team can see it, but for an instant answer send a smaller screenshot.</small>' : '');
+    };
+    const TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+    const addFiles = (files) => {
+      for (const f of [...(files || [])]) {
+        if (!TYPES.includes(f.type)) { toast('Send a JPG, PNG or WEBP image.', { kind: 'err' }); continue; }
+        if (f.size > (opt.max_mb || 10) * 1048576) { toast('Images can be up to ' + (opt.max_mb || 10) + ' MB. Send a smaller screenshot.', { kind: 'err' }); continue; }
+        if (pend.length >= (opt.max_images || 3)) { toast('Send up to ' + (opt.max_images || 3) + ' images in one message.', { kind: 'err' }); break; }
+        const x = { k: Math.random().toString(36).slice(2), file: f, url: URL.createObjectURL(f), st: 'up' };
+        pend.push(x);
+        uploadTo('/api/support/attachments', 'attachment', f).then((att) => { x.att = att; x.st = 'ok'; drawPend(); }).catch((ex) => { x.st = 'err'; x.err = ex.message; drawPend(); apiErr(ex); });
+      }
+      drawPend();
+    };
+    if (opt.images) {
+      $('#hpFile').onchange = (e) => { addFiles(e.target.files); e.target.value = ''; };
+      $('#hpQ').addEventListener('paste', (e) => { const fs = [...((e.clipboardData && e.clipboardData.files) || [])].filter((f) => f.type.startsWith('image/')); if (fs.length) { e.preventDefault(); addFiles(fs); } });
+      const box = $('#hpBox'), dz = $('#hpDrop');
+      let depth = 0;
+      box.addEventListener('dragenter', (e) => { if ([...(e.dataTransfer.types || [])].includes('Files')) { depth++; dz.hidden = false; e.preventDefault(); } });
+      box.addEventListener('dragover', (e) => { if ([...(e.dataTransfer.types || [])].includes('Files')) e.preventDefault(); });
+      box.addEventListener('dragleave', () => { depth = Math.max(0, depth - 1); if (!depth) dz.hidden = true; });
+      box.addEventListener('drop', (e) => { e.preventDefault(); depth = 0; dz.hidden = true; addFiles(e.dataTransfer.files); });
+      P.onclick = (e) => { const b = e.target.closest('[data-rmp]'); if (!b) return; const x = pend.find((y) => y.k === b.dataset.rmp); if (x) URL.revokeObjectURL(x.url); pend = pend.filter((y) => y.k !== b.dataset.rmp); drawPend(); };
+    }
     $('#hpF').onsubmit = async (e) => {
       e.preventDefault();
-      const t = $('#hpQ').value.trim(); if (!t) return;
+      const t = $('#hpQ').value.trim();
+      if (pend.some((x) => x.st === 'up')) { toast('Wait a second, your image is still uploading.'); return; }
+      const ready = pend.filter((x) => x.st === 'ok');
+      if (!t && !ready.length) return;
       const b = $('button[type=submit]', e.currentTarget); btnBusy(b, true, '');
-      try { await POST('/api/support', { body: t }); $('#hpQ').value = ''; d = await GET('/api/support'); draw.done = false; draw(); toast('Sent. We\'ll reply here and by email.'); } catch (ex) { apiErr(ex); }
+      try {
+        await POST('/api/support', { body: t, attachments: ready.map((x) => x.att.id) });
+        $('#hpQ').value = '';
+        d.messages = d.messages.concat([{ id: 'tmp' + Date.now(), author_type: 'user', body: t, created_at: new Date().toISOString(), attachments: ready.map((x) => ({ id: x.att.id, url: x.att.url })) }]);
+        pend = []; drawPend();
+        draw(true);
+        fastUntil = Date.now() + 90000;
+        if (!ai.on) toast('Sent. We\'ll reply here and by email.');
+        later(600, refresh);
+      } catch (ex) { apiErr(ex); }
       btnBusy(b, false);
     };
-    $('#hpQ').onkeydown = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#hpF').requestSubmit(); };
-    every(10000, async () => { try { const n = await GET('/api/support'); if (!alive()) return; if (n.messages.length !== d.messages.length) { d = n; draw(); } } catch (_) { /* try again later */ } });
+    $('#hpQ').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && window.matchMedia('(pointer:fine)').matches) { e.preventDefault(); $('#hpF').requestSubmit(); } };
+    let tick = 0;
+    every(1500, () => { tick++; if (Date.now() < fastUntil || tick % 7 === 0) refresh(); });
   },
 };

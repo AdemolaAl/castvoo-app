@@ -15,7 +15,8 @@
   }
 
   const PLAN_STATUS = { trial: ['Free trial', 'blue'], active: ['Paying', 'ok'], paused: ['Paused', 'warn'], cancelled: ['Cancelled', 'bad'] };
-  const planBadge = (s) => { const x = PLAN_STATUS[s]; return x ? html`<span class="bd ${x[1]}"><span class="dot"></span>${x[0]}</span>` : html`<span class="bd">${s || 'No plan'}</span>`; };
+  // free = the workspace is on the Free plan (its status is 'active' but it pays nothing), so it is not "Paying".
+  const planBadge = (s, free) => { const x = free && s === 'active' ? ['Free plan', 'blue'] : PLAN_STATUS[s]; return x ? html`<span class="bd ${x[1]}"><span class="dot"></span>${x[0]}</span>` : html`<span class="bd">${s || 'No plan'}</span>`; };
   const PAY_STATUS = { pending: ['Waiting', 'warn'], paid: ['Paid', 'ok'], failed: ['Failed', 'bad'], rejected: ['Rejected', 'bad'], requested: ['Waiting', 'warn'] };
   const payBadge = (s) => { const x = PAY_STATUS[s] || [s, '']; return html`<span class="bd ${x[1]}">${x[0]}</span>`; };
   const roleBadge = (r, name) => r ? html`<span class="bd role-${r}">${name || CV.cap(r)}</span>` : '';
@@ -124,7 +125,7 @@
   /** Friendly names for integrations. */
   const INTEG = {
     telegram: 'Telegram bot', email: 'Email (Resend)', ai: 'Cas AI', paystack: 'Paystack', flutterwave: 'Flutterwave',
-    gatevoo: 'Gatevoo', google: 'Google login', voosquare_login: 'VooSquare login', voosquare_api: 'VooSquare API',
+    gatevoo: 'Gatevoo', voosquare_login: 'VooSquare login', voosquare_api: 'VooSquare API',
   };
 
   function pager(page, pages, total) {

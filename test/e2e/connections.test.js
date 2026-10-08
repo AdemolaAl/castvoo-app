@@ -74,9 +74,10 @@ describe('connect a bot', () => {
     assert.equal(live.n, 1);
   });
 
-  it('the plan connection limit is enforced', async () => {
+  it('the plan connection limit is enforced (Starter: 2)', async () => {
     const c = await app.loginByEmail('limit@example.com');
     await app.db.query("update workspaces set plan_code = 'starter' where owner_user_id = $1", [c.user.id]);
+    await app.connectBot(c);
     await app.connectBot(c);
     const r = await c.post('/api/connections/bot', { token: app.fakes.tg.newBot().token });
     assert.equal(r.status, 402);
@@ -196,6 +197,7 @@ describe('connect a channel or group in one tap', () => {
     const c = await app.loginByEmail('fullplan@example.com');
     await linkTelegram(c, 3300);
     await app.db.query("update workspaces set plan_code = 'starter' where owner_user_id = $1", [c.user.id]);
+    await app.connectBot(c);
     await app.connectBot(c);
     await c.post('/api/connections/request', { kind: 'group' });
     const chat = { id: -1004444, type: 'supergroup', title: 'Too Many' };

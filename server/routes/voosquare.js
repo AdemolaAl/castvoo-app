@@ -2,6 +2,7 @@
 /*
  * Server-to-server API for VooSquare (see the "VooSquare Integration Spec").
  * Every call needs:  Authorization: Bearer <VOO_API_KEY>   (or <VOO_SERVICE_KEY> if you set one)
+ * Staff sync (GET/POST /api/voosquare/staff) accepts ONLY VOO_SERVICE_KEY (inbound-only), never the outgoing key.
  *
  *   GET  /api/voosquare/summary?voo_id=&period=1d|7d|30d          dashboard numbers
  *   POST /api/voosquare/support/webhook                             VooSquare HQ inbox → reply lands in Castvoo
@@ -21,14 +22,13 @@
 const db = require('../db');
 const config = require('../config');
 const support = require('../services/support');
-const { safeEqual, httpError, int } = require('../lib/util');
-
-function requireKey(ctx) {
-  const h = String(ctx.req.headers.authorization || '');
-  const key = h.startsWith('Bearer ') ? h.slice(7) : '';
-  const ok = key && [config.voosquare.apiKey, config.voosquare.serviceKey].some((k) => k && safeEqual(key, k));
-  if (!ok) throw httpError(401, 'Bad or missing service key.', 'unauthorized');
-}
+const log = require('../lib/log');
+const { httpError, int } = require('../lib/util');
+// The router already checks the key for { auth: 'service' } routes (lib/service-key.js); each handler checks again.
+const { requireKey: checkKey } = require('../lib/service-key');
+const requireKey = (ctx, o) => checkKey(ctx, o);
+const SVC = { auth: 'service' };
+const SVC_IN = { auth: 'service', inboundOnly: true }; // staff sync: VOO_SERVICE_KEY only (SEC-15)
 
 /* VooSquare roles → Castvoo staff roles. Owners are never created from VooSquare. */
 const ROLE_MAP = { admin: 'admin', support: 'support', finance: 'finance', content: 'marketing', marketing: 'marketing', viewer: 'viewer' };
@@ -72,7 +72,7 @@ module.exports = (r) => {
     ];
     const status = ws.plan_status === 'cancelled' ? 'none' : ws.plan_status;
     return { tool: 'castvoo', linked: true, status, period, metrics, open_url: config.appUrl + '/#app' };
-  });
+  }, SVC);
 
   /** A staff reply written in VooSquare's HQ inbox. VooSquare has already emailed the customer.
    *  Two addresses: ours, and the Voo Connect default (/hooks/voosquare/support). */
@@ -85,14 +85,14 @@ module.exports = (r) => {
     await support.staffReply(Number(m[1]), { authorName: String(b.agent || 'Castvoo team').slice(0, 60), body: b.body, via: 'voosquare', notify: false });
     return { ok: true };
   };
-  r.post('/api/voosquare/support/webhook', supportReply);
-  r.post('/hooks/voosquare/support', supportReply);
+  r.post('/api/voosquare/support/webhook', supportReply, SVC);
+  r.post('/hooks/voosquare/support', supportReply, SVC);
 
   r.get('/api/voosquare/support/boxes', async (ctx) => {
     requireKey(ctx);
     const n = await db.one("select count(*)::int n from support_threads where status <> 'closed'");
     return { boxes: [{ id: 'general', name: 'General', open: n.n }] };
-  });
+  }, SVC);
 
   r.get('/api/voosquare/support/tickets', async (ctx) => {
     requireKey(ctx);
@@ -104,20 +104,20 @@ module.exports = (r) => {
     if (!status) rows = rows.filter((t) => t.status !== 'closed');
     if (q.view === 'unassigned') rows = rows.filter((t) => !t.assigned_to);
     return { tickets: rows.map(ticket) };
-  });
+  }, SVC);
 
   r.get('/api/voosquare/support/tickets/:ref', async (ctx) => {
     requireKey(ctx);
     const { thread, messages } = await support.getThread(int(ctx.params.ref, 'Ticket'));
     return { ticket: { ...ticket({ ...thread, last_message: null }), customer: { name: thread.user_name, email: thread.user_email } },
       messages: messages.map((m) => ({ id: m.id, from: m.author_type === 'user' ? 'customer' : 'staff', author: m.author_name, text: m.body, note: m.internal, via: m.via, created_at: m.created_at })) };
-  });
+  }, SVC);
 
   r.post('/api/voosquare/support/tickets/:ref/reply', async (ctx) => {
     requireKey(ctx);
     const s = await staffName(ctx.body.voo_id, ctx.body.staff_name);
     return support.staffReply(int(ctx.params.ref, 'Ticket'), { authorUserId: s.id || null, authorName: s.name, body: ctx.body.text || ctx.body.body, internal: !!ctx.body.note, via: 'voosquare' });
-  });
+  }, SVC);
 
   r.post('/api/voosquare/support/tickets/:ref/update', async (ctx) => {
     requireKey(ctx);
@@ -128,31 +128,33 @@ module.exports = (r) => {
       await db.query('update support_threads set assigned_to = $2 where id = $1', [id, s.id || null]);
     }
     return { ok: true };
-  });
+  }, SVC);
 
   /** VooSquare manages who on the Zedapex team can help with Castvoo. */
   r.get('/api/voosquare/staff', async (ctx) => {
-    requireKey(ctx);
+    requireKey(ctx, { inboundOnly: true });
     const rows = await db.many("select voo_id, email, name, staff_role as role, last_login_at from users where staff_role is not null and status = 'active' order by id");
     return { staff: rows };
-  });
+  }, SVC_IN);
 
   r.post('/api/voosquare/staff', async (ctx) => {
-    requireKey(ctx);
+    requireKey(ctx, { inboundOnly: true });
     const b = ctx.body || {};
     const vooId = String(b.voo_id || '').slice(0, 120);
     if (!vooId) throw httpError(400, 'voo_id is required.', 'bad_request');
     let u = await db.one("select * from users where voo_id = $1 and status <> 'deleted'", [vooId]);
     const mail = b.email ? String(b.email).trim().toLowerCase().slice(0, 254) : null;
-    if (!u && mail) {
-      u = await db.one("select * from users where email = $1 and status <> 'deleted'", [mail]);
-      if (u && u.voo_id && u.voo_id !== vooId) throw httpError(409, 'That email belongs to a different VooSquare account.', 'conflict');
-      if (u) await db.query('update users set voo_id = $2 where id = $1', [u.id, vooId]);
+    // SEC-15: staff are never matched to an existing customer account by email (that would hand admin rights to
+    // whoever owns that inbox's Castvoo account). The person links their Voo ID in Castvoo first, or uses a new email.
+    if (!u && mail && (await db.one("select 1 from users where email = $1 and status <> 'deleted'", [mail]))) {
+      log.warn('voosquare staff sync refused: email belongs to an existing Castvoo account', { voo_id: vooId });
+      throw httpError(409, 'That email already has a Castvoo account. Ask the person to link their Voo ID in Castvoo (Settings → Connect VooSquare) and sync again.', 'conflict');
     }
     if (u && u.staff_role === 'owner') throw httpError(403, 'Castvoo owners are managed inside Castvoo only.', 'forbidden');
     if (b.active === false) {
       if (u) await db.query('update users set staff_role = null where id = $1', [u.id]);
       if (u) await db.query('delete from sessions where user_id = $1', [u.id]);
+      if (u) await require('../services/audit').audit({ user: null, ip: 'voosquare' }, 'team.sync.remove', 'user:' + u.id, { voo_id: vooId });
       return { ok: true, removed: !!u };
     }
     const role = ROLE_MAP[String(b.role || '').toLowerCase()];
@@ -166,28 +168,31 @@ module.exports = (r) => {
         return nu;
       });
     }
+    const before = u.staff_role || null;
     await db.query('update users set staff_role = $2 where id = $1', [u.id, role]);
-    await require('../services/audit').audit({ user: null, ip: 'voosquare' }, 'team.sync', 'user:' + u.id, { voo_id: vooId, role });
+    await require('../services/audit').audit({ user: null, ip: 'voosquare' }, 'team.sync', 'user:' + u.id, { voo_id: vooId, role, before });
+    // An alert in the logs whenever VooSquare grants or raises admin-level access.
+    if (role === 'admin' && before !== 'admin') log.warn('voosquare staff sync granted admin', { user: u.id, voo_id: vooId });
     return { ok: true, role };
-  });
+  }, SVC_IN);
 
   r.get('/api/voosquare/support/threads', async (ctx) => {
     requireKey(ctx);
     return { threads: await support.listThreads({ status: ctx.query.status || 'open', q: ctx.query.q, limit: ctx.query.limit, before: ctx.query.before }) };
-  });
+  }, SVC);
 
   r.get('/api/voosquare/support/threads/:id', async (ctx) => {
     requireKey(ctx);
     return support.getThread(int(ctx.params.id, 'Conversation'));
-  });
+  }, SVC);
 
   r.post('/api/voosquare/support/threads/:id/reply', async (ctx) => {
     requireKey(ctx);
     return support.staffReply(int(ctx.params.id, 'Conversation'), { authorName: ctx.body.staff_name || 'Castvoo team', body: ctx.body.body, internal: !!ctx.body.internal, via: 'voosquare' });
-  });
+  }, SVC);
 
   r.post('/api/voosquare/support/threads/:id/status', async (ctx) => {
     requireKey(ctx);
     return support.setStatus(int(ctx.params.id, 'Conversation'), String(ctx.body.status || ''));
-  });
+  }, SVC);
 };

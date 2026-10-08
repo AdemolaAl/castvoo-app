@@ -134,21 +134,3 @@ describe('referral clawback', () => {
     assert.equal(r2.body.referral_reversed, 0);
   });
 });
-
-describe('subscriber limits and login', () => {
-  it('Google login without a verified email never becomes the Owner', async () => {
-    const cfg = app.require('config');
-    const was = cfg.ownerEmail;
-    cfg.ownerEmail = 'boss@example.com';
-    try {
-      app.fakes.oidc.nextUser = { sub: 'g-boss-fake', email: 'boss@example.com', name: 'Fake Boss' };
-      const c = app.client();
-      const s = await c.get('/api/auth/google/start');
-      const back = await fetch(s.headers.get('location'), { redirect: 'manual' });
-      const cb = new URL(back.headers.get('location'));
-      await c.get(cb.pathname + cb.search);
-      const me = await c.get('/api/me');
-      assert.equal(me.body.user.staff_role, null);
-    } finally { cfg.ownerEmail = was; }
-  });
-});

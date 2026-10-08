@@ -21,16 +21,18 @@ describe('public endpoints', () => {
     const r = await app.client().get('/api/public/config');
     assert.equal(r.status, 200);
     const c = r.body;
-    assert.deepEqual(c.plans.map((p) => p.code), ['starter', 'growth', 'scale']);
-    assert.equal(c.plans[1].price_month, 49);
+    assert.deepEqual(c.plans.map((p) => p.code), ['free', 'starter', 'growth', 'scale']);
+    assert.equal(c.plans[2].price_month, 49);
+    assert.deepEqual(c.plans.map((p) => [p.connections, p.join_requests, p.flows, p.flow_steps, p.ai_writes, p.branding]),
+      [[1, 500, 1, 1, 0, true], [2, 5000, 3, 5, 150, false], [5, 30000, 15, 20, 600, false], [20, 150000, -1, -1, 1500, false]]);
     assert.equal(c.features.broadcasts, true);
     assert.equal(c.features.maintenance, false);
     assert.ok(c.content.hero_title);
     assert.ok(Array.isArray(JSON.parse(c.content.faq)));
-    assert.deepEqual(c.trial, { days: 7, plan: 'growth', ai_writes: 100 });
+    assert.deepEqual(c.trial, { days: 7, plan: 'growth', ai_writes: 50, join_requests: 3000 });
     assert.equal(c.login.email, true);
     assert.equal(c.login.telegram, true);
-    assert.equal(c.login.google, true);
+    assert.equal(c.login.google, undefined);
     assert.equal(c.bot_username, 'CastvooBot');
     assert.equal(c.bot_id, 600000001);
     assert.equal(c.ai_available, true);
@@ -38,7 +40,7 @@ describe('public endpoints', () => {
     assert.deepEqual(c.topup_bonuses.map((b) => b.min), [200, 500, 1000]);
     // Nothing secret leaks into the public config.
     const s = JSON.stringify(c);
-    for (const secret of ['sk_test_paystack', 'FLWSECK', 'gv_test_key', 'google-secret', 'voo-service-key', app.platformBotToken]) assert.ok(!s.includes(secret), secret);
+    for (const secret of ['sk_test_paystack', 'FLWSECK', 'gv_test_key', 'voo-service-key', app.platformBotToken]) assert.ok(!s.includes(secret), secret);
   });
 
   it('public methods depend on the country', async () => {
@@ -104,6 +106,35 @@ describe('public endpoints', () => {
     const bad = await app.client().get('/r/nobody-here');
     assert.equal(bad.status, 302);
     assert.ok(!bad.headers.getSetCookie().some((x) => x.startsWith('cv_ref=')), 'no cookie for unknown code');
+  });
+
+  it('homepage: "See how it works" videos sit right after the hero, posters only until tapped', async () => {
+    const r = await app.client().get('/');
+    assert.equal(r.status, 200);
+    const html = r.text;
+    const at = (needle) => html.indexOf(needle);
+    assert.ok(at('id="how"') > at('id="top"') && at('id="how"') < at('id="story"'), '#how is between the hero and the story');
+    assert.ok(at('id="story"') > 0 && at('id="guide"') > 0, 'the animated walkthrough sections are still there');
+    assert.match(html, /<a class="btn b-ghost hwatch" href="#how" id="heroWatch">/, 'hero has the "Watch how it works" button');
+    const sec = html.slice(at('id="how"'), at('id="story"'));
+    // Nothing heavy loads with the page: no <video> or autoplay, lazy poster images only.
+    assert.ok(!/<video|autoplay|preload="auto"/i.test(sec), 'no video element in the section');
+    for (const img of sec.match(/<img [^>]+>/g)) assert.match(img, /loading="lazy"/);
+    // Each card opens a real guide from the player's "site" set, and its length matches the guide.
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const vm = require('node:vm');
+    const box = { PAGES: {}, document: { addEventListener() {} } };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'app-guides.js'), 'utf8') + '\n;this.VGUIDES = VGUIDES; this.VG_SETS = VG_SETS; this.vgTime = vgTime;', box);
+    const cards = [...sec.matchAll(/data-vguide="([a-z-]+)" data-vset="site"[\s\S]*?data-len>([0-9:]+)</g)].map((m) => [m[1], m[2]]);
+    assert.deepEqual(cards.map((c) => c[0]), ['welcome-flow', 'connect-bot', 'send-broadcast', 'wallet-plans']);
+    assert.deepEqual(cards.map((c) => c[0]), [...box.VG_SETS.site]);
+    for (const [id, len] of cards) {
+      const g = box.VGUIDES.find((x) => x.id === id);
+      assert.ok(g, id + ' is a guide');
+      assert.equal(len, box.vgTime(g.dur), id + ' shows its real length');
+      assert.ok(sec.includes('/videos/' + id + '.jpg'), id + ' poster');
+    }
   });
 
   it('robots.txt and sitemap.xml', async () => {
@@ -185,5 +216,44 @@ describe('public endpoints', () => {
     const logout = await c.post('/api/auth/logout');
     assert.equal(logout.status, 200);
     assert.equal((await c.get('/api/me')).body.user, null);
+  });
+
+  it('homepage copy v2/v3: unedited old hero, FAQ, footer and plan taglines move to the new text; edited ones are kept', async () => {
+    const seed = app.require('seed');
+    const get = async (k) => (await app.db.one('select value from site_content where key = $1', [k])).value;
+    const tag = async (code) => (await app.db.one('select tagline from plans where code = $1', [code])).tagline;
+    // A workspace still on the previous defaults...
+    await app.db.query("update site_content set value = 'Welcome everyone who asks to *join your channel.*' where key = 'hero_title'");
+    await app.db.query("update site_content set value = 'Start free · 7 days on us' where key = 'hero_cta'");
+    await app.db.query("update site_content set value = 'Turn every join into *a lead you can message.*' where key = 'hero_title'");
+    await app.db.query("update site_content set value = 'Telegram welcomes, broadcasts and follow-ups, sent on time.' where key = 'footer_tagline'");
+    await app.db.query("update site_content set value = 'New: Cas, your AI helper, now learns your business. Train it in two minutes.' where key = 'announcement_text'");
+    await app.db.query("update site_content set value = '#ai' where key = 'announcement_link'");
+    const oldFaq = JSON.parse(seed.CONTENT.faq);
+    const first = oldFaq.splice(0, 2);
+    oldFaq.splice(3, 0, ...first);
+    const v1 = JSON.stringify(oldFaq.map((f) => ({ q: f.q, a: f.a.replace('skips people who blocked your bot', 'removes people who blocked your bot') })));
+    await app.db.query("update site_content set value = $1 where key = 'faq'", [v1]);
+    await app.db.query("update plans set tagline = 'Welcome everyone who asks to join your channel.' where code = 'free'");
+    // ...and one the team edited.
+    await app.db.query("update site_content set value = 'Our own subtitle.' where key = 'hero_subtitle'");
+    await app.db.query("update plans set tagline = 'Our growth line.' where code = 'growth'");
+    await seed.run();
+    assert.equal(await get('hero_title'), seed.CONTENT.hero_title);
+    assert.equal(seed.CONTENT.hero_title, 'Welcome. Broadcast. Follow up. *All on autopilot.*');
+    assert.equal(await get('hero_cta'), 'Start my 7-day free trial');
+    assert.equal(await get('footer_tagline'), 'Every Telegram join, greeted and followed up.');
+    assert.equal(await get('announcement_link'), '#how', 'the link follows its untouched text');
+    assert.equal(await get('faq'), seed.CONTENT.faq, 'the first seeded FAQ is replaced');
+    assert.doesNotMatch(await get('faq'), /removes people who blocked/);
+    assert.equal(JSON.parse(await get('faq'))[0].q, 'Can Castvoo message people who join my channel?');
+    assert.equal(await tag('free'), 'Greet every join, free.');
+    assert.equal(await get('hero_subtitle'), 'Our own subtitle.', 'edited text kept');
+    assert.equal(await tag('growth'), 'Our growth line.', 'edited tagline kept');
+    // A team that wrote its own announcement keeps its link.
+    await app.db.query("update site_content set value = 'Big sale' where key = 'announcement_text'");
+    await app.db.query("update site_content set value = '#ai' where key = 'announcement_link'");
+    await seed.run();
+    assert.equal(await get('announcement_link'), '#ai');
   });
 });

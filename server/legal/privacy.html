@@ -33,9 +33,9 @@
 <li><strong>Subscriber data your bots receive from Telegram:</strong> Telegram user ID, first name, username, language, the start tag they used, and their join and click history.</li>
 <li><strong>Payment records:</strong> top-ups, plan payments, receipts and the payment method used. We never receive or store full card numbers. For crypto top-ups, we keep the coin, amount and transaction ID.</li>
 <li><strong>Referral records:</strong> who signed up through your referral link, your earnings and, if you withdraw, the crypto address you give us.</li>
-<li><strong>Support chats:</strong> messages you send to our team inside the dashboard and emails you send us.</li>
+<li><strong>Support chats:</strong> messages you send to our support team inside the dashboard (answered first by our AI support assistants, with our human team as back-up), including any images or screenshots you attach (we remove photo metadata such as location when you upload them, and only you and our support team can open them), the questions visitors ask in the chat on our website, and emails you send us. Our support team may also answer from the VooSquare support inbox (see section 6), which receives a copy of your support messages with your name and email.</li>
 <li><strong>Notes for Cas:</strong> the information you write on the Train Cas page, and the questions and text you give Cas.</li>
-<li><strong>Technical data:</strong> when you use our website and dashboard, our hosting provider processes basic technical information such as your IP address and browser type, so pages load and the service stays secure. We also keep an audit log of staff actions.</li>
+<li><strong>Technical data:</strong> when you use our website and dashboard, our hosting provider processes basic technical information such as your IP address and browser type, so pages load and the service stays secure. We use IP addresses and a security cookie to limit abuse (for example how many questions one visitor can ask the website chat each day). We also keep an audit log of staff actions.</li>
 </ul>
 
 <h2>4. How we use your data</h2>
@@ -45,7 +45,7 @@
 <li>To send your messages and follow-ups to your subscribers through Telegram, and to show you delivery and click results.</li>
 <li>To power Cas when you ask it for help.</li>
 <li>To take payments, credit your wallet, renew plans, issue receipts and pay referral earnings.</li>
-<li>To answer your support questions.</li>
+<li>To answer your support questions. Our AI support assistants can look up your own account, workspace, payments and connections to help you; they never see bot tokens or login codes, and they cannot move money.</li>
 <li>To send you emails about your account, such as login codes, receipts and reminders.</li>
 <li>During your trial, to send you a short series of helpful emails about getting the most from Castvoo. You can unsubscribe from these at any time with the link in each email.</li>
 <li>To prevent fraud and abuse, enforce our Terms and keep Castvoo secure.</li>
@@ -60,7 +60,7 @@
 <li><strong>Contract:</strong> to provide the service you signed up for, including payments and support.</li>
 <li><strong>Legitimate interests:</strong> to keep Castvoo secure, prevent fraud, improve the service and send trial emails about Castvoo, in a way that respects your rights and lets you opt out.</li>
 <li><strong>Legal obligation:</strong> to keep records and respond to lawful requests from authorities.</li>
-<li><strong>Consent:</strong> where we rely on your consent, such as signing in with Google, you can withdraw it at any time. This does not affect anything we did before you withdrew it.</li>
+<li><strong>Consent:</strong> where we ask for your consent, you can withdraw it at any time. This does not affect anything we did before you withdrew it.</li>
 </ul>
 
 <h2>6. Who we share data with (sub-processors)</h2>
@@ -68,13 +68,18 @@
 <ul>
 <li><strong>Railway</strong> for hosting and our database.</li>
 <li><strong>Telegram</strong> to deliver your messages to your subscribers.</li>
-<li><strong>Anthropic</strong> to power Cas, our AI writing assistant. When you use Cas, the text you give it and the relevant notes from the Train Cas page are sent to Anthropic to create a reply.</li>
+<li><strong>Anthropic</strong> to power Cas, our AI writing assistant, and our AI support assistants. When you use Cas, the text you give it and the relevant notes from the Train Cas page are sent to Anthropic to create a reply. When you write to support (or use the chat on our website), your messages, any images you attach, your first name and country, and the account details needed to answer them (for example your plan, payment status, referral earnings or connection status) are sent to Anthropic to create a reply. Bot tokens, passwords, login codes and full card numbers are never sent.</li>
+<li><strong>OpenRouter</strong> and <strong>OpenAI</strong>, only if we switch them on instead of Anthropic. We can choose to run Cas and our AI support assistants through OpenRouter (which passes the request to the AI model we pick, such as models from Anthropic, OpenAI or Google) or directly through OpenAI. When one of them is switched on, it receives the same data described for Anthropic above, for the same purpose, and nothing more. Only one AI provider is used at a time.</li>
 <li><strong>Paystack</strong> and <strong>Flutterwave</strong> to process card, bank transfer, USSD, instant EFT and mobile money payments, depending on your country.</li>
 <li><strong>Gatevoo</strong>, a crypto checkout run by Zedapex, to create crypto payment pages and confirm USDT and Bitcoin payments. It receives the top-up amount, a payment reference and your first name. It never holds your money.</li>
-<li><strong>VooSquare</strong>, the Zedapex account hub, if you sign in with VooSquare. It receives your account ID and activity totals (counts and amounts, never your subscribers' details).</li>
+<li><strong>VooSquare</strong>, the Zedapex account hub, in two ways:
+<ul>
+<li>if you sign in with VooSquare, it receives your account ID and activity totals (counts and amounts, never your subscribers' details); and</li>
+<li>our support team uses the VooSquare support inbox. When it is switched on, every message you send to Castvoo support (with your name, your email address and the conversation's subject) is copied there, whether or not you use VooSquare, so our team can answer you from one place. Images stay in Castvoo; the copy only says that an image was attached.</li>
+</ul></li>
 <li><strong>Resend</strong> to deliver our emails to you.</li>
-<li><strong>Google</strong> for optional sign-in, only if you choose to sign in with Google.</li>
 </ul>
+<p>The "Powered by Replyvoo" line under the support chat names the support software brand. Replyvoo does not receive any of your data.</p>
 <p>Crypto payments are made on public blockchains. Transactions on a public blockchain, including the addresses and amounts involved, can be seen by anyone. This is how those networks work, and it is outside our control.</p>
 <p>We may also share data if the law requires it, to protect people from harm or fraud, or as part of a merger, sale or reorganisation of our business. In that last case, this policy will continue to protect your data.</p>
 
@@ -86,10 +91,11 @@
 <p><strong>We keep data only as long as we need it.</strong></p>
 <ul>
 <li>While your account is active, we keep your account details and workspace content so the service works.</li>
-<li>When a plan ends, we keep your data for {{data_retention_days}} days so you can come back and pick up where you left off. After that, we delete it.</li>
-<li>When you delete your account, we delete your account and workspace data. Deleted data may remain in secure backups for a short time until those backups are replaced.</li>
-<li>We keep payment and financial records for as long as the law requires, even after your account is deleted.</li>
-<li>If a subscriber blocks your bot, Castvoo removes them from your list automatically.</li>
+<li>When a paid plan or trial ends, your workspace moves to the Free plan and we keep your data while you use it, so you can pick up where you left off.</li>
+<li>If a Free workspace is not used for 12 months (no owner login, no join requests and no money in the wallet), it is inactive. We email you before that happens. If you still do not come back, we delete its content (bots, channels and groups, subscribers, messages, flows and media). Your account and payment records stay. If an account was paused under our earlier rules, we keep its data for {{data_retention_days}} days after the plan ended, then delete it.</li>
+<li>When you delete your account, we delete your account and workspace data, including your subscribers, the people who asked to join your channels, your links and click records, and your support chats. Your teammates lose access straight away. Deleted data may remain in secure backups for a short time until those backups are replaced.</li>
+<li>We keep payment and financial records for as long as the law requires, even after your account is deleted. We also keep records of AI usage (amounts and cost only, no message text and no name) and the audit log of staff actions.</li>
+<li>If a subscriber blocks your bot, Castvoo marks them as blocked and stops messaging them. They stay in your list, marked blocked, until you delete them or your workspace data is deleted.</li>
 </ul>
 
 <h2>9. How we protect your data</h2>
@@ -123,7 +129,7 @@
 <p>We send emails you need to use Castvoo, such as login codes, receipts, payment reminders and security notices. These cannot be turned off while you have an account. During your trial we also send a short series of tips about Castvoo. Each of those emails has an unsubscribe link.</p>
 
 <h2>12. Cookies</h2>
-<p><strong>We use only two cookies, and neither is for advertising.</strong> We use one essential login cookie and one referral cookie. Our <a href="{{site_url}}/legal/cookies">Cookie Policy</a> explains them.</p>
+<p><strong>We use a few small cookies, and none is for advertising or tracking.</strong> They keep you logged in, remember a referral or VooSquare partner link, make VooSquare logins safe and protect our website chat from abuse. Our <a href="{{site_url}}/legal/cookies">Cookie Policy</a> lists each one.</p>
 
 <h2>13. Children</h2>
 <p><strong>Castvoo is for adults.</strong> Castvoo is not meant for anyone under 18, and we do not knowingly collect data from children. If you believe a child has given us personal data, please write to {{privacy_email}} and we will delete it.</p>

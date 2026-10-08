@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Deleting uploaded photos and videos from disk.
+ * Deleting uploaded photos and videos (and top-up proof screenshots, support chat images) from disk.
  * Call this BEFORE deleting the media rows (it reads their paths), when a workspace's data
  * is purged after the retention period or an account is deleted. Without it the files stayed
  * on the volume forever after the rows were gone.
@@ -21,6 +21,11 @@ async function removeFiles(workspaceIds) {
     if (!p.startsWith(root)) continue; // never delete anything outside the upload folder
     try { await fs.promises.unlink(p); n++; } catch { /* already gone */ }
   }
+  // Screenshots sent as proof for manual top-ups (their payment rows go with the workspace).
+  const proofs = await db.many('select proof_path from payments where workspace_id = any($1::bigint[]) and proof_path is not null', [workspaceIds]);
+  n += await require('./payment-proofs').remove(proofs.map((r) => r.proof_path));
+  // Images sent in the support chat of these workspaces.
+  n += await require('./support-images').removeForWorkspaces(workspaceIds);
   return n;
 }
 

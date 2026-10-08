@@ -75,7 +75,9 @@ describe('email safety', () => {
     assert.ok(mail, 'invite sent');
     assert.ok(!mail.html.includes('<a href="https://evil.example'), 'no injected link');
     assert.ok(!mail.html.includes('<img src=x'), 'no injected image');
-    assert.ok(mail.html.includes('&lt;a href=&quot;https://evil.example/login&quot;&gt;'), 'shown as text');
+    // SEC-12: a name that reads like a web address is not used at all in an invite; a neutral name is shown instead.
+    assert.ok(!mail.html.includes('evil.example'), 'the address is not shown');
+    assert.ok(mail.html.includes('A Castvoo customer'), 'neutral inviter name');
     assert.ok(!mail.html.includes('/email/unsubscribe'), 'a {{var}} inside a value is not expanded');
   });
 

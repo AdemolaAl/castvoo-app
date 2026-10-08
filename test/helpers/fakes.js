@@ -7,7 +7,6 @@
  *   Paystack           /transaction/initialize, /transaction/verify/:ref, /balance
  *   Flutterwave        /v3/payments, /v3/transactions/:id/verify, /v3/transactions/verify_by_reference, /v3/balances
  *   Gatevoo            /api/v1/invoices (POST, GET /:id), /healthz
- *   Google-like OIDC   /oidc/.well-known/openid-configuration, /oidc/authorize, /oidc/token, /oidc/userinfo
  *   VooSquare events   POST /voo/events
  *
  * Every call is recorded in `fakes.calls` ({ service, method, params, at, token }) so tests
@@ -53,6 +52,7 @@ async function startFakes() {
     rate429: { n: 0, retryAfter: 1 },
     memberCount: 42,
     chatMember: null, // override for getChatMember result
+    joinError: null, // e.g. 'Bad Request: HIDE_REQUESTER_MISSING' for approve/decline
     uploads: [], // { method, field, filename, size, file_id }
     fail5xx: 0,
     nextBotId: 700000000,
@@ -71,11 +71,15 @@ async function startFakes() {
 
   /* ---------- Other services ---------- */
   const emails = [];
-  const ai = { calls: [], failNext: 0, text: 'Hello from Cas 👋 Here is your message.' };
+  /*
+   * ai.script scripts tool calls (the support agent and Cas): a function (body) => reply, or an array used one reply
+   * per request. A reply is { text } or { tools: [{ name, input }], text? } (tool_use blocks, stop_reason tool_use),
+   * or null to fall back to ai.text.
+   */
+  const ai = { calls: [], failNext: 0, text: 'Hello from Cas 👋 Here is your message.', script: null };
   const paystack = { txns: new Map(), webhookSecret: null };
   const flw = { txns: new Map(), byId: new Map(), nextId: 5000 };
   const gatevoo = { invoices: new Map() };
-  const oidc = { codes: new Map(), tokens: new Map(), nextUser: { sub: 'g-1', email: 'guser@example.com', email_verified: true, name: 'Goo User' }, clientId: null, clientSecret: null };
   const voo = { events: [], seen: new Set(), rejectIds: new Set(), support: [], failNext: 0, codes: new Map(), nextUser: { voo_id: 'vs_new', email: 'vsuser@example.com', name: 'Voo Square', country: 'KE' }, clientId: 'cv-client', clientSecret: 'cv-secret' };
 
   function record(service, method, params, token) {
@@ -143,7 +147,12 @@ async function startFakes() {
     if (sending && chatId && tg.forbiddenChats.has(chatId)) return tgErr(res, 403, 'Forbidden: bot is not a member of the channel chat');
     switch (method) {
       case 'getMe': return tgOk(res, { ...bot });
-      case 'setWebhook': case 'deleteWebhook': case 'setMyCommands': case 'answerCallbackQuery': case 'approveChatJoinRequest':
+      case 'approveChatJoinRequest': case 'declineChatJoinRequest':
+        if (tg.joinError) return tgErr(res, 400, tg.joinError);
+        return tgOk(res, true);
+      case 'createChatInviteLink':
+        return tgOk(res, { invite_link: 'https://t.me/+' + crypto.randomBytes(8).toString('base64url').replace(/[^A-Za-z0-9]/g, 'x'), creator: { id: bot.id }, creates_join_request: !!params.creates_join_request, name: params.name, is_primary: false, is_revoked: false });
+      case 'setWebhook': case 'deleteWebhook': case 'setMyCommands': case 'answerCallbackQuery':
       case 'leaveChat': case 'pinChatMessage': case 'deleteMessage':
         return tgOk(res, true);
       case 'getWebhookInfo': return tgOk(res, { url: 'https://example/tg', pending_update_count: 0 });
@@ -210,6 +219,13 @@ async function startFakes() {
         ai.calls.push({ ...b, system_blocks: b.system, system: Array.isArray(b.system) ? b.system.map((x) => x.text).join('\n\n') : b.system });
         if (!req.headers['x-api-key']) return send(res, 401, { error: { message: 'no key' } });
         if (ai.failNext > 0) { ai.failNext--; return send(res, 500, { error: { message: 'overloaded' } }); }
+        const scripted = typeof ai.script === 'function' ? ai.script(b) : Array.isArray(ai.script) && ai.script.length ? ai.script.shift() : null;
+        if (scripted) {
+          const content = [];
+          if (scripted.text) content.push({ type: 'text', text: scripted.text });
+          (scripted.tools || []).forEach((t, i) => content.push({ type: 'tool_use', id: t.id || `toolu_${ai.calls.length}_${i}`, name: t.name, input: t.input || {} }));
+          return send(res, 200, { content, stop_reason: (scripted.tools || []).length ? 'tool_use' : 'end_turn', usage: { input_tokens: 300, output_tokens: 60 } });
+        }
         return send(res, 200, { content: [{ type: 'text', text: aiReply(b) }], usage: { input_tokens: 120, output_tokens: 40 } });
       }
 
@@ -268,40 +284,6 @@ async function startFakes() {
         return inv ? send(res, 200, { invoice: { ...inv } }) : send(res, 404, { error: 'not found' });
       }
       if (p === '/healthz') { record('gatevoo', 'healthz', {}); return send(res, 200, { ok: true }); }
-
-      /* OIDC */
-      if (p === '/oidc/.well-known/openid-configuration') {
-        return send(res, 200, { issuer: base + '/oidc', authorization_endpoint: base + '/oidc/authorize', token_endpoint: base + '/oidc/token', userinfo_endpoint: base + '/oidc/userinfo' });
-      }
-      if (p === '/oidc/authorize') {
-        const q = Object.fromEntries(u.searchParams);
-        record('oidc', 'authorize', q);
-        const code = 'code_' + crypto.randomBytes(6).toString('hex');
-        oidc.codes.set(code, { challenge: q.code_challenge, client_id: q.client_id, redirect_uri: q.redirect_uri, user: { ...oidc.nextUser } });
-        const to = new URL(q.redirect_uri);
-        to.searchParams.set('code', code);
-        to.searchParams.set('state', q.state);
-        res.writeHead(302, { Location: to.toString() });
-        return res.end();
-      }
-      if (p === '/oidc/token' && req.method === 'POST') {
-        const b = Object.fromEntries(new URLSearchParams(raw.toString('utf8')));
-        record('oidc', 'token', b);
-        const c = oidc.codes.get(b.code);
-        if (!c) return send(res, 400, { error: 'invalid_grant' });
-        oidc.codes.delete(b.code);
-        const challenge = crypto.createHash('sha256').update(String(b.code_verifier || '')).digest('base64url');
-        if (challenge !== c.challenge) return send(res, 400, { error: 'invalid_grant', error_description: 'PKCE failed' });
-        if (b.client_id !== oidc.clientId || b.client_secret !== oidc.clientSecret || b.redirect_uri !== c.redirect_uri) return send(res, 401, { error: 'invalid_client' });
-        const at = 'at_' + crypto.randomBytes(8).toString('hex');
-        oidc.tokens.set(at, c.user);
-        return send(res, 200, { access_token: at, token_type: 'Bearer', expires_in: 3600 });
-      }
-      if (p === '/oidc/userinfo') {
-        const user = oidc.tokens.get(auth.replace(/^Bearer /, ''));
-        record('oidc', 'userinfo', {});
-        return user ? send(res, 200, user) : send(res, 401, { error: 'invalid_token' });
-      }
 
       /* VooSquare (fixed OAuth endpoints, events API and support inbox API) */
       if (p === '/voo/oauth/authorize') {
@@ -364,7 +346,7 @@ async function startFakes() {
   const base = `http://127.0.0.1:${server.address().port}`;
 
   const fakes = {
-    base, calls, tg, emails, ai, paystack, flw, gatevoo, oidc, voo,
+    base, calls, tg, emails, ai, paystack, flw, gatevoo, voo,
     /** Telegram calls, optionally only one method and/or one bot token. */
     tgCalls(method, token) { return calls.filter((c) => c.service === 'telegram' && (!method || c.method === method) && (!token || c.token === token)); },
     emailsTo(addr) { return emails.filter((e) => e.to === String(addr).toLowerCase()); },
