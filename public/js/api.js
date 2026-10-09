@@ -18,7 +18,7 @@ let CFG = {
     hero_subtitle: 'Greet everyone who asks to join, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links in a simple builder. Cas, the AI helper, writes the messages.',
     hero_cta: 'Start my 7-day free trial',
     pricing_title: 'Simple prices. *Start free.*',
-    pricing_subtitle: 'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup or add-on fees.',
+    pricing_subtitle: 'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup fees.',
     footer_tagline: 'Every Telegram join, greeted and followed up.',
     maintenance_message: '', faq: '[]',
   },

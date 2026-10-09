@@ -148,6 +148,8 @@ module.exports = (r) => {
     const pend = owner && !h ? await helper.pendingInvite(ws.id) : null;
     return {
       members, invites, seats: (await billing.limits(ws)).seats, seats_used: seatsUsed(rows.length - (h ? 1 : 0), invites.length),
+      // Extra team seats (Settings → Team → Add seats): price, what renews, and whether this workspace can buy them.
+      extra_seats: await billing.seatsInfo(ws),
       helper: {
         included: 1,
         member: h ? { id: h.id, name: h.name, email: owner ? h.email : maskEmail(h.email), tg_username: owner ? h.tg_username : null, joined_at: h.joined_at, last_active_at: h.last_active_at } : null,
@@ -166,11 +168,15 @@ module.exports = (r) => {
     if (mail === String(ctx.user.email || '').toLowerCase()) throw badRequest('That is your own email. Invite someone else.');
     if (role === 'helper') await helperRoom(ctx);
     else {
-      const seats = (await billing.limits(ctx.workspace)).seats;
+      // Plan seats + extra seats bought (not the ones the owner asked to remove at the next renewal).
+      const l = await billing.limits(ctx.workspace);
+      const seats = l.seats_for_invites;
       // The setup helper (and an invite for one) never uses a team seat.
-      const used = (await db.one("select count(*)::int n from members where workspace_id = $1 and role <> 'helper'", [ctx.workspace.id])).n;
-      const pending = (await db.one("select count(*)::int n from invites where workspace_id = $1 and role <> 'helper' and accepted_at is null and declined_at is null and expires_at > now()", [ctx.workspace.id])).n;
-      if (used + pending >= seats) throw httpError(402, `Your plan has ${seats} seat${seats > 1 ? 's' : ''}. Upgrade to invite more people.`, 'limit_seats');
+      const taken = await billing.seatsTaken(ctx.workspace.id);
+      if (taken >= seats) {
+        const info = await billing.seatsInfo(ctx.workspace, l);
+        throw httpError(402, `You have ${seats} seat${seats > 1 ? 's' : ''} and all are in use. ${info.can_buy ? 'Add a seat in Settings → Team, or remove someone.' : 'Upgrade to invite more people.'}`, 'limit_seats', { can_buy_seats: info.can_buy });
+      }
     }
     await invitesPerDay(ctx);
     const token = randomToken(24);
@@ -183,6 +189,23 @@ module.exports = (r) => {
     await email.sendTo(mail, role === 'helper' ? 'helper_invite' : 'team_invite', vars);
     return { ok: true, link };
   }, { auth: 'workspace', rate: [30, 3600] });
+
+  /**
+   * Extra team seats: { seats: N } is the number of extra seats wanted (0–500). More = paid now for the rest of the
+   * period from the wallet; fewer = from the next renewal (not below the seats in use). Owner only (ws.team).
+   */
+  r.post('/api/app/team/seats', async (ctx) => {
+    ownerOnly(ctx);
+    const want = int(ctx.body.seats, 'Extra seats', { min: 0, max: 500 });
+    const before = Number(ctx.workspace.extra_seats) || 0;
+    const r2 = await billing.setExtraSeats(ctx.workspace.id, want);
+    await require('../services/audit').audit(ctx, 'workspace.extra_seats', 'workspace:' + ctx.workspace.id, { before, want, charged_cents: r2.charged, pending: r2.pending });
+    const info = await billing.seatsInfo(await db.one('select * from workspaces where id = $1', [ctx.workspace.id]));
+    const msg = r2.charged ? `Seats added. ${fmtUSD(r2.charged)} was paid from your wallet for the rest of this period.`
+      : r2.pending != null ? `You'll have ${r2.pending} extra seat${r2.pending === 1 ? '' : 's'} from your next renewal. Nothing more is charged.`
+        : want > before ? 'Seats added.' : 'Your seats stay as they are.';
+    return { ok: true, message: msg, charged: r2.charged / 100, extra_seats: info };
+  }, { auth: 'workspace', rate: [30, 600] });
 
   /** A one-time link to invite a setup helper (share it on Telegram or WhatsApp). The first person to accept gets it. */
   r.post('/api/app/team/helper-link', async (ctx) => {

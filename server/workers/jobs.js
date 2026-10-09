@@ -163,6 +163,9 @@ async function dripsTick() {
   }
 }
 
+/** The IP-to-country file (lib/geoip.js): download the new monthly DB-IP file when ours is older (production). */
+async function geoipTick() { return require('../lib/geoip').refresh(); }
+
 /** Trials ending, renewals, reminders and pausing. */
 async function billingTick() {
   const trial = await settings.get('trial');
@@ -212,7 +215,8 @@ async function billingTick() {
   for (const ws of await db.many(`select * from workspaces where plan_status = 'active' and not cancel_at_period_end and reminded_at is null
       and period_end between now() and now() + make_interval(days => $1) limit 200`, [b.renew_reminder_days])) {
     const plan = await settings.plan(ws.pending_plan_code || ws.plan_code);
-    const price = billing.priceOf(plan, ws.pending_cycle || ws.billing_cycle);
+    // The plan plus the extra team seats that renew with it.
+    const price = (await billing.renewalCost(ws, plan, ws.pending_cycle || ws.billing_cycle)).total;
     if (!(await db.one('update workspaces set reminded_at = now() where id = $1 and reminded_at is null returning id', [ws.id]))) continue;
     if (Number(ws.wallet_cents) + Number(ws.bonus_cents) >= price) continue;
     await email.send('renewal_low_balance', await owner(ws), {
@@ -239,7 +243,7 @@ async function billingTick() {
       const plan = await settings.plan(code);
       const r = await billing.dropToFree(ws.id, { expect: (w) => ended(w) && !w.cancel_at_period_end, remember: code, rememberCycle: cycle });
       if (r.ok) {
-        await email.send('plan_dropped_to_free', await owner(ws), { plan_name: plan ? plan.name : code, amount: fmtUSD(plan ? billing.priceOf(plan, cycle) : 0), topup_url: APP() + '/#app/wallet' });
+        await email.send('plan_dropped_to_free', await owner(ws), { plan_name: plan ? plan.name : code, amount: fmtUSD(plan ? (await billing.renewalCost(ws, plan, cycle)).total : 0), topup_url: APP() + '/#app/wallet' });
       } else if (r.reason === 'no_free_plan') {
         const p2 = await db.one("update workspaces set plan_status = 'paused' where id = $1 and plan_status = 'active' returning id", [ws.id]);
         if (p2 && plan) await email.send('plan_paused', await owner(ws), { plan_name: plan.name, amount: fmtUSD(billing.priceOf(plan, cycle)), topup_url: APP() + '/#app/wallet' });
@@ -445,4 +449,4 @@ async function cleanupTick() {
   await connections.refreshCounts(1000);
 }
 
-module.exports = { broadcastsTick, dripsTick, billingTick, salesTick, cleanupTick, purgeWorkspace };
+module.exports = { broadcastsTick, dripsTick, billingTick, salesTick, cleanupTick, purgeWorkspace, geoipTick };

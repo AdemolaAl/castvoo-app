@@ -212,7 +212,7 @@ Drafts-only members can write but not send ("Your role can write drafts. Ask the
 
   { key: 'tb-limits', title: 'Playbook: limits and "upgrade" messages', body: `- Connections: "Your plan allows N connections. Upgrade to add more." Remove one or upgrade.
 - Subscribers: above the limit sending pauses; nothing is deleted. Upgrade, or remove blocked/old bots.
-- Seats: "Your plan has N seats" when inviting. Remove a member or upgrade.
+- Seats: "You have N seats and all are in use" when inviting. Remove a member or cancel an invite, add extra seats in Settings → Team (paid plans), or upgrade.
 - AI writes: "Cas has used all N AI writes for this period. They refill on <date>." There is never an extra charge. The Free plan has no AI writes.
 - Join requests a month: see "Join requests per month". Over the limit, people are still let in but welcomes pause.
 - Welcome Flows: "Your plan includes N Welcome Flows. Upgrade to make more, or edit the one you have." / "Your plan runs N live Welcome Flows. Switch another one off first, or upgrade."
@@ -281,9 +281,17 @@ No self-referrals, fake accounts, spam, or paid ads bidding on the word "Castvoo
 Messages: "That VooSquare account is already linked to another Castvoo login", "Your Castvoo account is already linked to a different VooSquare account", "That email belongs to a different VooSquare account": log in with the matching account, or ask support.
 Castvoo works on its own; Joinvoo and Replyvoo are separate tools with their own accounts and prices.` },
 
-  { key: 'team', title: 'Team and roles', body: `Settings → Team → Invite (owner only). Roles inside a workspace: Owner (everything, including billing and connections), Can send (create and send messages and follow-ups), Drafts only (can write but an owner must send), Setup helper (sets up and runs the workspace with their own login; see the setup helper article). The number of seats depends on the plan (see the live plan list); "Your plan has N seats" means remove someone or upgrade.
+  { key: 'team', title: 'Team and roles', body: `Settings → Team → Invite (owner only). Roles inside a workspace: Owner (everything, including billing and connections), Can send (create and send messages and follow-ups), Drafts only (can write but an owner must send), Setup helper (sets up and runs the workspace with their own login; see the setup helper article). The number of seats depends on the plan (see the live plan list), plus any extra seats the owner bought (see "Extra team seats"). "You have N seats and all are in use" means remove someone, add a seat (paid plans) or upgrade. The setup helper never uses a seat.
 The invite goes by email. "This invite was sent to ... Log in with that email, or add it to your account in Settings, then open the link again."
 Ownership of a workspace cannot be moved by members; the support team handles ownership changes after checks.` },
+
+  { key: 'team-seats', title: 'Extra team seats', body: `On any paid plan the workspace owner can add team seats on top of the plan's seats: Settings → Team → Add seats. The stepper shows the price as you change the number; the price per seat is in the live plan list (yearly plans pay 12 months).
+- Adding seats: the new seats are paid now from the wallet for the days left of the current period (for example half a month left = half the price), then they renew together with the plan in the same wallet payment. The plan receipt email shows the seat line, and adding seats sends its own receipt. If the wallet is short, the dashboard offers a top-up ("Your wallet needs $X for N extra seats").
+- Fewer seats: lower the number any time; nothing is refunded and the lower number starts at the next renewal. You can't go below the seats in use (members plus open invites): remove someone or cancel an invite first ("N people use seats now ... Remove someone or cancel an invite first").
+- Seats you asked to remove can't be filled by new invites in the meantime.
+- Not on the Free plan or during the free trial ("Extra team seats come with a paid plan" / "Extra seats can be added once your paid plan starts"). If a plan ends or drops to Free, its extra seats end too; nobody is removed from the team, but nobody new can be invited above the seats left.
+- The setup helper is free on every plan and never uses a seat. Wallet → Your plan shows the seats and what renews.
+- Sharing one login between several people is not a way to save seats: every login shows in Settings → Security, and a login from a new device or country sends the owner an alert. Teammates or a setup helper use their own login.` },
 
   { key: 'setup-helper', title: 'Setup helper: let someone set up your account without your password', body: `A setup helper is one person (for example your media buyer, a freelancer or a friend) who sets up and runs your workspace with THEIR OWN Castvoo login. Nobody shares a password. Every plan includes 1 setup helper, the Free plan too, and the helper does not use a team seat. One helper per workspace at a time.
 Invite (owner only): Settings → Team → Setup helper → Invite a setup helper (also on the Home checklist, the Welcome Flows page and Help). Two ways:
@@ -313,7 +321,9 @@ Deleting the account also removes join requests, tracked links and clicks, and r
 
   { key: 'security', title: 'Security', body: `Bot tokens are encrypted at rest (AES-256-GCM) and are never shown again, not even to support. HTTPS everywhere, login codes are hashed and lock after 5 wrong tries, staff access is by role and every admin change is in the audit log.
 Castvoo staff and the AI support team will NEVER ask for your bot token, login code or password, and never ask you to send money to "unlock" anything. If someone does, it is not us: tell support.
-If you think your bot token leaked: @BotFather → /revoke, then paste the new token in Channels & bots (subscribers stay).` },
+If you think your bot token leaked: @BotFather → /revoke, then paste the new token in Channels & bots (subscribers stay).
+Settings → Security → Active devices lists every phone and computer logged in to your account: device and browser (for example "iPhone · Safari"), the country (from the internet address, approximate), first seen and last active, with a "This device" badge. "Log out" ends one device at once (its next click asks it to log in); "Log out all other devices" ends all but this one. Castvoo keeps only the country and a scrambled (hashed) form of the address for this, never the address itself.
+New-login alerts: when your account logs in from a device and country it has not used in the last 90 days, you get an email (and a Telegram message from @CastvooBot if you linked Telegram; that one can be switched off in Settings → Security). Not for the very first login of a new account. The alert has a "Log out all devices" button (works for 7 days): it logs out every device, then you log in again. If someone else has your login, use it, then secure your email and Telegram.` },
 
   { key: 'support', title: 'How support works', body: `Help in the dashboard is a live chat. AI support agents answer 24/7 in seconds, check your account for you (connections, payments, broadcasts, follow-ups, referral earnings, withdrawals, coupons and top-up bonuses) and can recheck card and Gatevoo payments with the provider. For refunds, manual payment approval, legal, data deletion, ownership or when you ask for a person, a human teammate takes over in the same chat and you also get an email. You can send up to 3 screenshots in one message (JPG, PNG or WEBP, up to 10 MB each): tap the image button, paste, or drop them on the chat. The agents read them, for example a payment receipt or an error from Telegram or BotFather. Only you and the support team can open them, and photo details such as location are removed. A screenshot never counts as proof that money moved: only the payment provider or the finance team confirms a payment. The chat on the castvoo.com website takes text only. Support email: support@castvoo.com. Billing: billing@castvoo.com. Privacy: privacy@castvoo.com.` },
 
@@ -340,7 +350,7 @@ Free trial: the trial plan for the trial length shown in the live plan list, no 
 An AI write is one time Cas writes, rewrites or translates a message, or answers one question. A follow-up sequence counts one write per message. When writes run out, Cas waits until the next billing date. There is never an extra charge.
 Subscribers = people who started your bots. Members of connected channels and groups do not count and are unlimited. Above the plan's limit, sending pauses until you upgrade. Nothing is deleted.
 People who were paying on 8 October 2026 keep their AI writes and features while they stay on the same plan.
-No add-on fees and no setup fees.` },
+No setup fees. The only optional extra is extra team seats on paid plans (price in the live plan list).` },
 
   { key: 'free-plan', title: 'The Free plan', body: `The Free plan costs nothing and needs no card. It is for welcoming people who ask to join one channel or group:
 - 1 channel or group, plus your own bot that sends the welcome (the bot does not count as a second connection on Free).

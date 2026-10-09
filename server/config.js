@@ -39,6 +39,14 @@ const config = {
   // going to a site outside Telegram and Castvoo. 0 = off.
   linkWarnNewDays: Math.max(0, num(env.LINK_WARN_NEW_DAYS, 7)),
 
+  // Country from the visitor's address (lib/geoip.js): the free DB-IP "IP to Country Lite" file, kept in
+  // UPLOAD_DIR/geo/. GEOIP_AUTO_DOWNLOAD (default on in production) fetches the new monthly file from db-ip.com.
+  // GEOIP_DOWNLOAD_BASE is for tests only and is ignored in production.
+  geoip: {
+    autoDownload: bool(env.GEOIP_AUTO_DOWNLOAD, (env.NODE_ENV || '') === 'production'),
+    downloadBase: trimSlash(((env.NODE_ENV || '') !== 'production' && env.GEOIP_DOWNLOAD_BASE) || 'https://download.db-ip.com'),
+  },
+
   telegram: {
     apiBase: trimSlash(env.TELEGRAM_API_BASE || 'https://api.telegram.org'),
     botToken: env.CASTVOO_BOT_TOKEN || '',

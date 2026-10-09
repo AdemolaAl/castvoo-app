@@ -158,11 +158,12 @@
               <dt>Trial ends</dt><dd>${w.trial_ends_at ? html`${date(w.trial_ends_at)} <span class="mut small">(${ago(w.trial_ends_at)})</span>` : '—'}</dd>
               <dt>Paid until</dt><dd>${w.period_end ? html`${date(w.period_end)} <span class="mut small">(${ago(w.period_end)})</span>` : '—'}</dd>
               <dt>Wallet</dt><dd><span class="money">${usdc(w.wallet_cents, { cents: true })}</span> cash + <span class="money">${usdc(w.bonus_cents, { cents: true })}</span> bonus</dd>
+              <dt>Extra team seats</dt><dd>${num(w.extra_seats || 0)}${w.pending_extra_seats != null ? html` <span class="bd warn">${num(w.pending_extra_seats)} from next renewal</span>` : ''} <span class="mut small">(plan ${num(p.seats || 0)} + extra = ${num((p.seats || 0) + (w.extra_seats || 0))})</span></dd>
               <dt>AI writes used</dt><dd>${num(w.ai_used)} since ${date(w.ai_period_start)}</dd>
               <dt>Time zone</dt><dd>${w.timezone}</dd>
               <dt>Workspace ID</dt><dd class="mono">${w.id}</dd>
             </dl>
-            <div class="stack">${use ? html`${meter('Connections', use.connections, p.connections || 0)}${meter('Subscribers', use.subscribers, p.subscribers || 0)}${meter('AI writes', use.ai_used, p.ai_writes || 0)}${meter('Team seats', use.seats, p.seats || 0)}` : html`<p class="mut small">Usage is shown for the first workspace only.</p>`}</div>
+            <div class="stack">${use ? html`${meter('Connections', use.connections, p.connections || 0)}${meter('Subscribers', use.subscribers, p.subscribers || 0)}${meter('AI writes', use.ai_used, p.ai_writes || 0)}${meter('Team seats', use.seats, (p.seats || 0) + (w.extra_seats || 0))}` : html`<p class="mut small">Usage is shown for the first workspace only.</p>`}</div>
           </div>
           <div class="row">
             ${canEdit ? html`<button class="btn sm" data-ws-plan="${w.id}">${icon('edit')} Change plan or dates</button>` : ''}

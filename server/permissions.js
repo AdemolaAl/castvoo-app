@@ -100,6 +100,7 @@ const WS_ROUTES = {
   'POST /api/app/team/invite': 'ws.team',
   'POST /api/app/team/remove': 'ws.team',
   'POST /api/app/team/role': 'ws.team',
+  'POST /api/app/team/seats': 'ws.team',
   'POST /api/app/team/helper-link': 'ws.team',
   'POST /api/app/team/helper/settings': 'ws.team',
   'POST /api/app/team/helper/cancel-invite': 'ws.team',

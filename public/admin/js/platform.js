@@ -141,6 +141,7 @@
           { name: 'refund_days', label: 'Refund window (days)', type: 'number', min: 0, max: 90, value: b.refund_days },
           { name: 'data_retention_days', label: 'Keep data after a plan ends (days)', type: 'number', min: 7, value: b.data_retention_days, hint: 'Only used if the Free plan is switched off. While it is on, an ended plan moves to Free and the data is kept.' },
           { name: 'renew_reminder_days', label: 'Low-balance reminder (days before renewal)', type: 'number', min: 1, max: 14, value: b.renew_reminder_days },
+          { name: 'seat_price', label: 'Extra team seat, per seat per month', type: 'number', step: '0.01', min: 0, prefix: '$', value: (b.seat_price_cents ?? 500) / 100, hint: 'Owners on a paid plan can add seats in Settings → Team, paid from the wallet with the plan (yearly plans pay 12 months). 0 = not sold; seats already bought end at their next renewal. The pricing page note follows this price; update PRODUCT-FACTS if you change it.' },
           { name: 'limit_grace_pct', label: 'Extra join requests before welcomes pause (% of the plan)', type: 'number', min: 0, max: 100, value: b.limit_grace_pct ?? 10 },
           { name: 'inactive_free_days', label: 'Clear unused Free workspaces after (days)', type: 'number', min: 90, max: 3650, value: b.inactive_free_days ?? 365, hint: 'No owner login or visit, no join requests and no money in the wallet for this long. The owner is emailed 30 and 7 days before; logging in keeps everything. The legal pages say 12 months, so change them too if you change this.' },
         ])}

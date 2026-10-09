@@ -1,5 +1,6 @@
 'use strict';
-/* Mobile fixes (9 Oct 2026): no zoom on focus on phones, and customers select their own country at sign-up. */
+/* Mobile fixes (9 Oct 2026): no zoom on focus on phones, and customers confirm their own country at sign-up
+   (the detected country is only pre-selected in the browser: test/e2e/geoip.test.js). */
 
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -15,7 +16,7 @@ before(async () => { app = await startApp(); });
 after(async () => { if (app) await app.stop(); });
 beforeEach(() => { app.rl._reset(); });
 
-describe('country: the customer selects it, nothing is pre-selected', () => {
+describe('country: the customer confirms it; the server never saves a guess', () => {
   it('an email sign-up without a country gets no country (no server default)', async () => {
     const c = await app.loginByEmail('nocountry@example.com', { name: 'No Country' });
     assert.equal(c.created, true);
@@ -34,7 +35,7 @@ describe('country: the customer selects it, nothing is pre-selected', () => {
     assert.ok(!r.body.countries.some((c) => c.selected || c.default), 'no country flagged as selected/default');
   });
 
-  it('the sign-up country step has no time-zone guess and starts empty with a searchable picker', () => {
+  it('the sign-up country step has no time-zone guess and has the searchable picker (empty when nothing is detected)', () => {
     const s = read('js/signup.js');
     assert.doesNotMatch(s, /TZ_COUNTRY|resolvedOptions\(\)\.timeZone/, 'no time-zone to country guess');
     assert.match(s, /placeholder="Select your country"/);

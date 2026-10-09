@@ -9,7 +9,9 @@ const settings = require('../services/settings');
 const email = require('../services/email');
 const rl = require('../lib/ratelimit');
 const perms = require('../permissions');
-const { str, email: vEmail, randomDigits, sha256, safeEqual, httpError, badRequest, randomToken, addDays, cleanName } = require('../lib/util');
+const security = require('../services/security');
+const { audit } = require('../services/audit');
+const { str, email: vEmail, randomDigits, sha256, safeEqual, httpError, badRequest, randomToken, addDays, cleanName, escHtml } = require('../lib/util');
 
 const codeHash = (mail, code) => sha256(`${config.appSecret}:${mail}:${code}`);
 
@@ -59,6 +61,7 @@ async function meResponse(ctx) {
     user: {
       id: u.id, name: u.name, email: u.email, email_verified: u.email_verified, country: u.country, tg_linked: !!u.tg_user_id, tg_username: u.tg_username,
       voo_linked: !!u.voo_id, ref_code: u.ref_code, staff_role: u.staff_role, marketing_opt_out: u.marketing_opt_out,
+      login_alert_tg: u.login_alert_tg !== false,
       perms: u.staff_role ? perms.permsFor(u.staff_role) : [],
     },
     workspaces,
@@ -75,7 +78,7 @@ module.exports = (r) => {
     const mail = vEmail(ctx.body.email);
     await checkCode(mail, ctx.body.code);
     const { user, created } = await auth.loginWith({ email: mail }, { name: cleanName(str(ctx.body.name, 'Name', { max: 200, required: false }) || ''), country: ctx.body.country, ref: ctx.body.ref || ctx.cookies.cv_ref });
-    await auth.createSession(ctx, user);
+    await auth.createSession(ctx, user, { created });
     return { ok: true, created };
   }, { rate: [300, 600], shared: true, csrf: true });
 
@@ -83,7 +86,7 @@ module.exports = (r) => {
     if (!(await settings.feature('login_telegram'))) throw httpError(403, 'Telegram login is switched off.', 'off');
     const t = verifyTelegram(ctx.body);
     const { user, created } = await auth.loginWith({ tg_user_id: t.tg_user_id, tg_username: t.tg_username }, { name: t.name, country: ctx.body.country, ref: ctx.body.ref || ctx.cookies.cv_ref });
-    await auth.createSession(ctx, user);
+    await auth.createSession(ctx, user, { created });
     return { ok: true, created };
   }, { rate: [300, 600], csrf: true });
 
@@ -114,7 +117,10 @@ module.exports = (r) => {
       country = c.code;
     }
     const optOut = ctx.body.marketing_opt_out !== undefined ? !!ctx.body.marketing_opt_out : ctx.user.marketing_opt_out;
-    await db.query('update users set name = $2, country = $3, marketing_opt_out = $4 where id = $1', [ctx.user.id, name, country, optOut]);
+    // New-login alerts by Telegram can be switched off; the email alert always goes.
+    const tgAlerts = ctx.body.login_alert_tg !== undefined ? !!ctx.body.login_alert_tg : ctx.user.login_alert_tg !== false;
+    await db.query('update users set name = $2, country = $3, marketing_opt_out = $4, login_alert_tg = $5 where id = $1', [ctx.user.id, name, country, optOut, tgAlerts]);
+    if (ctx.body.login_alert_tg !== undefined && tgAlerts !== (ctx.user.login_alert_tg !== false)) await audit(ctx, tgAlerts ? 'security.tg_alerts_on' : 'security.tg_alerts_off', 'user:' + ctx.user.id);
     if (ctx.body.country !== undefined) {
       const tz = auth.TZ_BY_COUNTRY[country];
       if (tz) await db.query("update workspaces set timezone = $2 where owner_user_id = $1 and created_at > now() - interval '1 day'", [ctx.user.id, tz]);
@@ -151,6 +157,59 @@ module.exports = (r) => {
     ctx.user = await db.one('select * from users where id = $1', [ctx.user.id]);
     return meResponse(ctx);
   }, { auth: 'user' });
+
+  /* ---------- Settings → Security: Active devices ---------- */
+  r.get('/api/me/sessions', async (ctx) => ({ sessions: await security.list(ctx.user.id, ctx.session && ctx.session.tokenHash) }), { auth: 'user' });
+
+  /** Log out one device. Its next request answers 401 (the session row is gone). */
+  r.post('/api/me/sessions/:id/revoke', async (ctx) => {
+    const id = String(ctx.params.id || '');
+    if (!/^\d{1,18}$/.test(id)) throw badRequest('That device was not found.');
+    const r2 = await security.revoke(ctx.user.id, id, ctx.session && ctx.session.tokenHash);
+    if (!r2.removed) throw httpError(404, 'That device is already logged out.', 'not_found');
+    await audit(ctx, 'security.session_revoked', 'user:' + ctx.user.id, { session: id, current: r2.current });
+    if (r2.current) ctx.setCookie(auth.COOKIE, '', { path: '/', maxAge: 0, httpOnly: true, sameSite: 'Lax' });
+    return { ok: true, current: r2.current };
+  }, { auth: 'user', rate: [60, 600] });
+
+  /** Log out every other device; this one stays logged in. */
+  r.post('/api/me/sessions/revoke-others', async (ctx) => {
+    const r2 = await security.revokeOthers(ctx.user.id, ctx.session && ctx.session.tokenHash);
+    await audit(ctx, 'security.sessions_revoked', 'user:' + ctx.user.id, { removed: r2.removed });
+    return { ok: true, removed: r2.removed };
+  }, { auth: 'user', rate: [20, 600] });
+
+  /*
+   * "If this wasn't you, log out all devices" (new-login email and Telegram alert). The link is signed and works for
+   * 7 days. Opening it shows one button (email scanners open links on their own, so a plain visit changes nothing);
+   * pressing it logs out EVERY device of the account, this browser too, and asks the person to log in again.
+   */
+  const secPage = (ctx, status, title, body) => ctx.html(status, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(title)} · Castvoo</title><link rel="icon" href="/img/favicon.svg"></head>
+<body style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#F6F8FC;color:#0B1430;padding:16px;box-sizing:border-box">
+<main style="max-width:440px;width:100%;background:#fff;border:1px solid #E3E8F2;border-radius:20px;padding:30px 24px;text-align:center;box-shadow:0 18px 40px -24px rgba(11,20,48,.35)">${body}</main></body></html>`);
+  const btn = 'display:inline-block;border:0;border-radius:12px;padding:14px 20px;font:600 16px system-ui,sans-serif;cursor:pointer;text-decoration:none';
+  const linkProblem = (ctx, e) => secPage(ctx, 400, 'Link expired', `<div style="font-size:38px">⏳</div><h1 style="font-size:22px;margin:10px 0">${e.message === 'expired' ? 'This link has expired' : 'This link is not valid'}</h1><p style="color:#5B6787;line-height:1.5">You can still log out other devices yourself: log in, then open <b>Settings → Security</b>.</p><p><a href="/#login" style="${btn};background:#2F6BFF;color:#fff">Log in</a></p>`);
+
+  r.get('/security/logout-all', async (ctx) => {
+    try { security.checkLogoutAll(ctx.query); } catch (e) { return linkProblem(ctx, e); }
+    const q = ctx.query;
+    return secPage(ctx, 200, 'Log out all devices', `<div style="font-size:38px">🔐</div><h1 style="font-size:22px;margin:10px 0">Log out all devices?</h1>
+<p style="color:#5B6787;line-height:1.5">Every phone and computer logged in to your Castvoo account is logged out, this one too. Then log in again with your email code or Telegram.</p>
+<form method="post" action="/security/logout-all" style="margin:20px 0 8px"><input type="hidden" name="u" value="${escHtml(q.u)}"><input type="hidden" name="e" value="${escHtml(q.e)}"><input type="hidden" name="s" value="${escHtml(q.s)}">
+<button type="submit" style="${btn};background:#E5484D;color:#fff;width:100%">Log out all devices</button></form>
+<p style="color:#5B6787;font-size:14px;line-height:1.5">Tip: never share your login. Invite teammates or a setup helper in Settings → Team instead.</p>`);
+  }, { rate: [60, 600] });
+
+  r.post('/security/logout-all', async (ctx) => {
+    let uid;
+    try { uid = security.checkLogoutAll(ctx.body || {}); } catch (e) { return linkProblem(ctx, e); }
+    const r2 = await security.revokeAll(uid);
+    await audit({ user: { id: uid }, ip: null }, 'security.logout_all_link', 'user:' + uid, { removed: r2.removed });
+    ctx.setCookie(auth.COOKIE, '', { path: '/', maxAge: 0, httpOnly: true, sameSite: 'Lax' });
+    return secPage(ctx, 200, 'All devices logged out', `<div style="font-size:38px">✅</div><h1 style="font-size:22px;margin:10px 0">All devices are logged out</h1>
+<p style="color:#5B6787;line-height:1.5">Nobody is logged in to your account now. Log in again to keep working. If you think someone knows how to get into your email or Telegram, secure those first.</p>
+<p><a href="/#login" style="${btn};background:#2F6BFF;color:#fff">Log in again</a></p>`);
+  }, { rate: [30, 600] });
 
   /** Download everything we hold about you, as JSON. */
   r.get('/api/me/export', async (ctx) => {

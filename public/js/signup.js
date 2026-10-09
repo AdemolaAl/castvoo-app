@@ -5,7 +5,7 @@
  * Steps:   1 account  ->  2 country  ->  3 connect Telegram  ->  4 plan  ->  #app
  */
 
-const SU = { mode: 'signup', email: '', codeSent: false, busy: false, guide: null, country: null, plan: null, cycle: 'month' };
+const SU = { mode: 'signup', email: '', codeSent: false, busy: false, guide: null, country: null, plan: null, cycle: 'month', geo: undefined };
 
 function suProgress(n) { $$('#suProg i').forEach((p, i) => p.classList.toggle('on', i < n)); $('#suProg').hidden = SU.mode === 'login' && n === 1; }
 function suStopGuide() { if (SU.guide) { SU.guide.stop(); SU.guide = null; } }
@@ -145,17 +145,36 @@ function suShowErr(msg) {
 }
 
 /* ---------- Step 2: country ---------- */
-/* The customer picks their own country: nothing is guessed (no time zone, IP or VooSquare default). The field starts
-   empty ("Select your country"), the list is searchable and has flags, and Continue needs a pick. */
-function suCountry() {
+/* The country detected from the visitor's connection (GET /api/public/geo: Cloudflare's header or the server's offline
+   IP database; never the time zone, never VooSquare) is shown pre-selected as "🇳🇬 Nigeria · Change". One tap on
+   Change opens the searchable list. Nothing is saved until the person presses Continue. With no detection the field
+   starts empty ("Select your country") and Continue needs a pick. The country is never used for the language. */
+async function suGeo() {
+  if (SU.geo !== undefined) return SU.geo;
+  try {
+    const r = await Promise.race([GET('/api/public/geo'), new Promise((res) => setTimeout(() => res(null), 1500))]);
+    SU.geo = r && r.country ? r.country : null;
+  } catch (_) { SU.geo = null; }
+  return SU.geo;
+}
+async function suCountry() {
   suProgress(2);
   const list = CFG.countries || [];
   if (!list.length) { location.replace('#signup/connect'); return; }
-  // Only a country this person already picked themselves (earlier in this sign-up, or saved from this step) shows.
+  // A country this person already picked (earlier in this sign-up, or saved from this step) comes first.
   SU.country = SU.country || (ME.user && ME.user.country) || null;
   if (SU.country && !list.some((c) => c.code === SU.country)) SU.country = null;
-  $('#suBody').innerHTML = '<div class="su-step"><div><h1>Where are you based?</h1><p class="muted" style="margin-top:6px">Select your country. We\'ll show the payment methods that work there.</p></div>' +
-    '<div class="field"><label for="suCtQ" id="suCtLb">Country</label>' + countryPickerHtml('suCt') + '</div>' +
+  let det = null;
+  if (!SU.country) {
+    const g = await suGeo();
+    det = g && list.find((c) => c.code === g.code && c.code !== 'XX') || null;
+    if (det) SU.country = det.code;
+    if (!$('#suBody') || !/^#signup\/country/.test(location.hash)) return;
+  }
+  $('#suBody').innerHTML = '<div class="su-step"><div><h1>Where are you based?</h1><p class="muted" style="margin-top:6px">' + (det ? 'Check your country. We\'ll show the payment methods that work there.' : 'Select your country. We\'ll show the payment methods that work there.') + '</p></div>' +
+    '<div class="field"><label for="suCtQ" id="suCtLb">Country</label>' +
+    (det ? '<div class="cdet" id="suDet"><span class="fl" aria-hidden="true">' + esc(det.flag || '🌍') + '</span><span class="nm">' + esc(det.name) + '<small>Detected from your connection</small></span><span class="sep" aria-hidden="true">·</span><button type="button" id="suDetCh" aria-label="Change country">Change</button></div>' : '') +
+    '<div id="suCtW"' + (det ? ' hidden' : '') + '>' + countryPickerHtml('suCt') + '</div></div>' +
     '<p class="ferr" id="suCtErr" role="alert" hidden></p>' +
     '<div class="pmprev"><b style="font-size:14px">You\'ll be able to pay with</b><div class="chips" id="suPmv"><p class="hint" style="margin:0">Select your country to see them.</p></div><small class="muted">You can change your country later in Settings.</small></div>' +
     '<button class="btn b-blue full" type="button" id="suNc">Continue</button></div>';
@@ -165,6 +184,9 @@ function suCountry() {
     if (code) { err.hidden = true; $('#suCtQ').removeAttribute('aria-invalid'); suMethods(code); }
     else $('#suPmv').innerHTML = '<p class="hint" style="margin:0">Select your country to see them.</p>';
   });
+  if (SU.country) suMethods(SU.country);
+  const ch = $('#suDetCh');
+  if (ch) ch.onclick = () => { $('#suDet').remove(); $('#suCtW').hidden = false; const q = $('#suCtQ'); q.focus(); q.select && q.select(); };
   $('#suNc').onclick = async () => {
     if (!SU.country) {
       err.textContent = 'Please select your country to continue.'; err.hidden = false;

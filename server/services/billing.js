@@ -6,6 +6,10 @@
  * - Plans are paid from the wallet. Bonus credit is used first, then cash.
  * - Trial = the trial plan's limits for N days, with a smaller AI allowance.
  * - Upgrading mid-period: pay the price difference for the days left. Downgrades start at the next renewal.
+ * - Extra team seats (paid plans only, billing.seat_price_cents a seat a month, yearly plans pay 12 months): bought
+ *   any time for the days left of the period, then renewed with the plan in the same wallet payment. Fewer seats
+ *   start at the next renewal (pending_extra_seats), never below the seats in use. The Free plan and a plan that
+ *   drops to Free have no extra seats. The setup helper never uses a seat.
  * - If the wallet is short at renewal, the workspace moves to the Free plan (nothing is deleted); a top-up that
  *   covers the plan starts it again.
  * - One commission per plan payment (AUD-1): the Castvoo referral OR the VooSquare affiliate, never both. The first
@@ -57,11 +61,16 @@ async function limits(ws) {
   let ai = inTrial ? trial.ai_writes : plan.ai_writes;
   if (isLegacy(ws) && ws.legacy_ai_writes > ai) ai = ws.legacy_ai_writes;
   const ab = features.includes('ab_welcome_4') ? 4 : features.includes('ab_welcome_2') ? 2 : 1;
+  const extra = extraSeatsNow(ws, plan);
   return {
     plan,
     connections: plan.connections,
     subscribers: plan.subscribers,
-    seats: plan.seats,
+    seats: Number(plan.seats) + extra,
+    plan_seats: Number(plan.seats),
+    extra_seats: extra,
+    // What new invites may fill: seats the owner already asked to remove at the next renewal can't be filled.
+    seats_for_invites: Number(plan.seats) + Math.min(extra, ws.pending_extra_seats != null ? Number(ws.pending_extra_seats) : extra),
     ai_writes: ai,
     join_requests: inTrial && trial.join_requests != null ? Number(trial.join_requests) : (plan.join_requests ?? UNLIMITED),
     flows: plan.flows ?? UNLIMITED,
@@ -443,9 +452,13 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
   const result = await db.tx(async (c) => {
     const ws = (await c.query('select * from workspaces where id = $1 for update', [wsId])).rows[0];
     if (expect && !expect(ws)) return { skipped: true };
-    const { price, couponUsed } = await priceWithCoupon(c, ws, plan, cycle);
+    const { price: planPrice, couponUsed } = await priceWithCoupon(c, ws, plan, cycle);
+    // Extra team seats renew with the plan, in the same payment (the lower number the owner asked for, if any).
+    const unit = await seatPrice(cycle);
+    const seats = unit > 0 ? seatsNext(ws) : 0;
+    const price = planPrice + seats * unit;
     const ref = `plan-${wsId}-${Date.now()}`;
-    const paid = await takePayment(c, wsId, price, `${plan.name} plan · ${cycle === 'year' ? 'yearly' : 'monthly'}`, ref);
+    const paid = await takePayment(c, wsId, price, `${plan.name} plan · ${cycle === 'year' ? 'yearly' : 'monthly'}${seats ? ` + ${plural(seats, 'extra seat')}` : ''}`, ref);
     if (!paid) return { short: true, price };
     const start = new Date();
     const end = addDays(start, periodDays(cycle));
@@ -453,8 +466,9 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
       cancel_at_period_end = false, pending_plan_code = null, pending_cycle = null, ai_used = 0, ai_period_start = now(), paid_ever = true, reminded_at = null,
       dropped_from = null, dropped_cycle = null, dropped_at = null,
       legacy_plan_code = case when plan_code = $2 and plan_status = 'active' then legacy_plan_code else null end,
-      coupon_months_left = greatest(0, coupon_months_left - $5), coupon_id = case when coupon_months_left - $5 <= 0 then null else coupon_id end
-      where id = $1`, [wsId, plan.code, cycle, end, couponUsed ? 1 : 0]);
+      coupon_months_left = greatest(0, coupon_months_left - $5), coupon_id = case when coupon_months_left - $5 <= 0 then null else coupon_id end,
+      extra_seats = $6, pending_extra_seats = null
+      where id = $1`, [wsId, plan.code, cycle, end, couponUsed ? 1 : 0, seats]);
     // AUD-8: a move to a smaller plan switches off the live flows beyond its limit (kept, paused_by_plan).
     const flowsOff = await trimFlows(c, wsId, plan, ws.keep_flow_ids);
     // One commission per payment: the Castvoo referral or the VooSquare affiliate (AUD-1).
@@ -462,7 +476,7 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
     // VooSquare: spend (cash part, net of fees) + plan_started / plan_renewed, queued in this same transaction.
     // No spend when the Castvoo referral was paid: plan_started / plan_renewed carry no commission.
     await voosquare.planPaid(c, { wsId, txId: paid.txId, plan, cycle, priceCents: price, cashCents: voo ? base : 0, first: !ws.paid_ever, at: start });
-    return { ok: true, price, start, end, commission, ref, wsName: ws.name, ownerId: ws.owner_user_id, flowsOff };
+    return { ok: true, price, planPrice, seats, seatUnit: unit, start, end, commission, ref, wsName: ws.name, ownerId: ws.owner_user_id, flowsOff };
   });
   if (result.skipped) return result;
   if (result.short) throw httpError(402, `Your wallet needs ${fmtUSD(result.price)} for this plan. Top up and try again.`, 'wallet_short', { needed: result.price / 100 });
@@ -471,6 +485,7 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
   const wsNow = await db.one('select * from workspaces where id = $1', [wsId]);
   await email.send('payment_receipt', owner, {
     plan_name: plan.name, amount: fmtUSD(result.price), period_start: fmtDate(result.start), period_end: fmtDate(result.end),
+    extra_seats: result.seats ? `${plural(result.seats, 'seat')} × ${fmtUSD(result.seatUnit)} = ${fmtUSD(result.seats * result.seatUnit)}` : 'None',
     receipt_id: result.ref, wallet_balance: fmtUSD(Number(wsNow.wallet_cents) + Number(wsNow.bonus_cents)), billing_url: require('../config').appUrl + '/#app/wallet',
   });
   if (result.commission && !result.commission.held) {
@@ -484,6 +499,94 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
 }
 
 const isFreePlan = (plan) => !!plan && Number(plan.price_month_cents) === 0 && Number(plan.price_year_cents) === 0;
+
+/* ---------- Extra team seats ---------- */
+
+/** Price of one extra seat for a billing cycle, in cents (0 = extra seats are not sold). Yearly = 12 months. */
+async function seatPrice(cycle = 'month') {
+  const b = (await settings.get('billing')) || {};
+  const m = Math.max(0, Math.round(Number(b.seat_price_cents ?? 500)) || 0);
+  return cycle === 'year' ? m * 12 : m;
+}
+/** Extra seats that count right now: only on an active paid plan (not the trial, not Free). */
+function extraSeatsNow(ws, plan) {
+  if (!ws || ws.plan_status !== 'active' || trialOver(ws) || isFreePlan(plan)) return 0;
+  return Math.max(0, Number(ws.extra_seats) || 0);
+}
+/** Extra seats the next renewal pays for. */
+const seatsNext = (ws) => Math.max(0, Number(ws.pending_extra_seats != null ? ws.pending_extra_seats : ws.extra_seats) || 0);
+/** Seats taken: every member but the setup helper, plus open invites (not for a helper). */
+async function seatsTaken(wsId, c = null) {
+  const q = c ? (sql, p) => c.query(sql, p).then((r) => r.rows[0]) : db.one;
+  const r = await q(`select (select count(*)::int from members where workspace_id = $1 and role <> 'helper')
+      + (select count(*)::int from invites where workspace_id = $1 and role <> 'helper' and accepted_at is null and declined_at is null and expires_at > now()) as n`, [wsId]);
+  return r.n;
+}
+/** What the next renewal costs: { plan, seats, total } in cents (plan price before a coupon). */
+async function renewalCost(ws, plan, cycle) {
+  const unit = await seatPrice(cycle);
+  const seats = unit > 0 && !isFreePlan(plan) ? seatsNext(ws) : 0;
+  const planCents = priceOf(plan, cycle);
+  return { plan: planCents, seats: seats * unit, seat_count: seats, unit, total: planCents + seats * unit };
+}
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + 's'}`;
+
+/**
+ * The owner sets how many extra seats the workspace has (`target`, 0–500):
+ *  - more than now: the new seats are paid now for the rest of the period (prorated, like an upgrade) and renew
+ *    with the plan. A wallet that can't cover it answers 402 wallet_short (the dashboard offers a top-up).
+ *  - fewer: nothing is refunded; the lower number applies at the next renewal (pending_extra_seats). Not below the
+ *    seats in use (members and open invites): remove someone first.
+ *  - the same: cancels a lower number asked for earlier.
+ * Paid plans only (the trial and Free answer 402 seats_paid_plan). Returns { ok, extra_seats, pending, charged }.
+ */
+async function setExtraSeats(wsId, target) {
+  const want = Number(target);
+  if (!Number.isInteger(want) || want < 0 || want > 500) throw badRequest('Pick between 0 and 500 extra seats.');
+  const result = await db.tx(async (c) => {
+    const ws = (await c.query('select * from workspaces where id = $1 for update', [wsId])).rows[0];
+    const plan = await settings.plan(ws.plan_code);
+    if (ws.plan_status === 'trial') throw httpError(402, 'Extra seats can be added once your paid plan starts. During the trial you have the trial plan\'s seats.', 'seats_paid_plan');
+    if (ws.plan_status !== 'active' || isFreePlan(plan) || trialOver(ws)) throw httpError(402, 'Extra team seats come with a paid plan. Upgrade to add seats.', 'seats_paid_plan');
+    const unit = await seatPrice(ws.billing_cycle);
+    const cur = Math.max(0, Number(ws.extra_seats) || 0);
+    if (!unit && want > cur) throw httpError(403, 'Extra seats are not available right now.', 'seats_off');
+    if (want > cur) {
+      const add = want - cur;
+      const left = Math.max(0, new Date(ws.period_end).getTime() - Date.now()) / (periodDays(ws.billing_cycle) * DAY);
+      const charge = Math.max(0, Math.round(add * unit * Math.min(1, left)));
+      const ref = `seats-${wsId}-${Date.now()}`;
+      const paid = await takePayment(c, wsId, charge, `${plural(add, 'extra team seat')} (rest of this period)`, ref);
+      if (!paid) throw httpError(402, `Your wallet needs ${fmtUSD(charge)} for ${plural(add, 'extra seat')}. Top up and try again.`, 'wallet_short', { needed: charge / 100 });
+      await c.query('update workspaces set extra_seats = $2, pending_extra_seats = null where id = $1', [wsId, want]);
+      const { voo, base } = await settleCommission(c, ws, paid, ref, ws.billing_cycle);
+      if (voo) await voosquare.seatsPaid(c, { wsId, txId: paid.txId, plan, seats: add, cashCents: base, at: new Date() });
+      return { ok: true, extra_seats: want, pending: null, charged: charge, added: add, ref, unit, periodEnd: ws.period_end, ownerId: ws.owner_user_id, cycle: ws.billing_cycle, plan };
+    }
+    if (want < cur) {
+      const taken = await seatsTaken(wsId, c);
+      const room = Number(plan.seats) + want;
+      if (taken > room) {
+        throw httpError(409, `${plural(taken, 'person uses a seat', 'people use seats')} now (invites count too) and ${plural(room, 'seat')} would be left. Remove someone or cancel an invite first, then lower your seats.`, 'seats_in_use', { taken, room });
+      }
+      await c.query('update workspaces set pending_extra_seats = $2 where id = $1', [wsId, want]);
+      return { ok: true, extra_seats: cur, pending: want, charged: 0, periodEnd: ws.period_end };
+    }
+    await c.query('update workspaces set pending_extra_seats = null where id = $1', [wsId]);
+    return { ok: true, extra_seats: cur, pending: null, charged: 0 };
+  });
+  if (result.added) {
+    const owner = await db.one('select * from users where id = $1', [result.ownerId]);
+    const wsNow = await db.one('select wallet_cents, bonus_cents from workspaces where id = $1', [wsId]);
+    await email.send('seats_receipt', owner, {
+      seats_added: plural(result.added, 'extra team seat'), extra_seats_total: String(result.extra_seats), amount: fmtUSD(result.charged),
+      seat_price: `${fmtUSD(result.unit)} a ${result.cycle === 'year' ? 'year' : 'month'} each`, period_end: fmtDate(result.periodEnd),
+      receipt_id: result.ref, wallet_balance: fmtUSD(Number(wsNow.wallet_cents) + Number(wsNow.bonus_cents)), team_url: require('../config').appUrl + '/#app/settings?tab=team',
+    });
+  }
+  return { ok: true, extra_seats: result.extra_seats, pending: result.pending, charged: result.charged || 0 };
+}
 
 /**
  * Drop a workspace to the Free plan: the trial ended unpaid, a plan ended, or the wallet could not cover a renewal.
@@ -499,7 +602,7 @@ async function dropToFree(wsId, { expect = null, remember = null, rememberCycle 
     if (!ws || (expect && !expect(ws))) return { skipped: true };
     await c.query(`update workspaces set plan_code = $2, plan_status = 'active', billing_cycle = 'month', period_end = null, trial_ends_at = null,
       cancel_at_period_end = false, pending_plan_code = null, pending_cycle = null, ai_used = 0, ai_period_start = now(), reminded_at = null,
-      dropped_from = $3, dropped_cycle = $4, dropped_at = now() where id = $1`, [wsId, free.code, remember, rememberCycle]);
+      dropped_from = $3, dropped_cycle = $4, dropped_at = now(), extra_seats = 0, pending_extra_seats = null where id = $1`, [wsId, free.code, remember, rememberCycle]);
     const off = await trimFlows(c, wsId, free, ws.keep_flow_ids);
     if (!(free.features || []).includes('drips')) await c.query("update sequences set active = false, paused_by_plan = true where workspace_id = $1 and trigger_type <> 'join_request' and active", [wsId]);
     if (!(free.features || []).includes('broadcasts')) await c.query("update broadcasts set status = 'draft' where workspace_id = $1 and status in ('scheduled','pending_approval')", [wsId]);
@@ -550,6 +653,24 @@ async function upgradeNow(wsId, planCode) {
   });
 }
 
+/** Extra seats for the dashboard: price, what renews, and whether this workspace can buy them now. */
+async function seatsInfo(ws, l = null) {
+  l = l || (await limits(ws));
+  const cycle = ws.billing_cycle || 'month';
+  const unit = await seatPrice(cycle);
+  const monthUnit = await seatPrice('month');
+  const paid = ws.plan_status === 'active' && !isFreePlan(l.plan) && !trialOver(ws);
+  const left = paid && ws.period_end ? Math.max(0, new Date(ws.period_end).getTime() - Date.now()) / (periodDays(cycle) * DAY) : 0;
+  const next = paid ? (ws.pending_extra_seats != null ? Number(ws.pending_extra_seats) : l.extra_seats) : 0;
+  return {
+    price_month: monthUnit / 100, price: unit / 100, cycle, on_sale: monthUnit > 0, can_buy: paid && monthUnit > 0,
+    reason: !paid ? (ws.plan_status === 'trial' ? 'trial' : 'free') : monthUnit > 0 ? null : 'off',
+    plan_seats: l.plan_seats, extra: l.extra_seats, next, pending: paid && ws.pending_extra_seats != null ? Number(ws.pending_extra_seats) : null,
+    taken: await seatsTaken(ws.id), period_left: Math.round(left * 10000) / 10000, period_end: paid ? ws.period_end : null,
+    renews: next * unit / 100,
+  };
+}
+
 /** What a workspace sees on the Wallet → Plan card. */
 async function planState(ws) {
   const l = await limits(ws);
@@ -565,7 +686,8 @@ async function planState(ws) {
     plan_code: l.plan.code, plan_name: l.plan.name, status: ws.plan_status, cycle: ws.billing_cycle, free: isFreePlan(l.plan),
     trial_ends_at: ws.trial_ends_at, period_end: ws.period_end, cancel_at_period_end: ws.cancel_at_period_end, ai_refill_at: aiRefillAt(ws),
     pending_plan_code: ws.pending_plan_code, dropped_from: ws.dropped_from, coupon: coupon && ws.coupon_months_left > 0 ? { ...coupon, months_left: ws.coupon_months_left } : null,
-    limits: { connections: l.connections, subscribers: l.subscribers, ai_writes: l.ai_writes, seats: l.seats, join_requests: l.join_requests, flows: l.flows, flow_steps: l.flow_steps, ab_variants: l.ab_variants },
+    limits: { connections: l.connections, subscribers: l.subscribers, ai_writes: l.ai_writes, seats: l.seats, plan_seats: l.plan_seats, extra_seats: l.extra_seats, join_requests: l.join_requests, flows: l.flows, flow_steps: l.flow_steps, ab_variants: l.ab_variants },
+    seats: await seatsInfo(ws, l),
     usage: { connections: u.connections, bots: u.bots, subscribers: u.subscribers, ai_writes: u.ai_used, seats: u.seats, join_requests: meter.used, flows: u.flows, active_flows: u.active_flows },
     features: [...featureSet(l)], branding: l.branding, welcome_only: !l.features.includes('broadcasts') && !l.legacy,
     join: meter,
@@ -575,4 +697,4 @@ async function planState(ws) {
   };
 }
 
-module.exports = { UNLIMITED, LEGACY_FEATURES, featureSet, meterBump, meterEnsure, referralSettings, attributionOf, selfReferralSignal, mailbox, feeShare, settleCommission, trimFlows, aiRefillAt, effectivePlan, limits, hasFeature, requirePlanFeature, planFor, joinMeter, meterStart, isFreePlan, dropToFree, usage, assertCanSend, assertCanConnect, useAi, refundAi, activate, upgradeNow, planState, takePayment, payCommission, priceOf, periodDays };
+module.exports = { seatPrice, seatsNext, seatsTaken, seatsInfo, setExtraSeats, renewalCost, extraSeatsNow, UNLIMITED, LEGACY_FEATURES, featureSet, meterBump, meterEnsure, referralSettings, attributionOf, selfReferralSignal, mailbox, feeShare, settleCommission, trimFlows, aiRefillAt, effectivePlan, limits, hasFeature, requirePlanFeature, planFor, joinMeter, meterStart, isFreePlan, dropToFree, usage, assertCanSend, assertCanConnect, useAi, refundAi, activate, upgradeNow, planState, takePayment, payCommission, priceOf, periodDays };

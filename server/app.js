@@ -230,7 +230,7 @@ function createServer() {
       const needUser = o.auth === 'user' || o.auth === 'workspace' || o.staff;
       if (needUser || o.auth === 'optional') {
         const s = await auth.loadSession(ctx);
-        if (s) ctx.user = s.user;
+        if (s) { ctx.user = s.user; ctx.session = s; }
         if (needUser && !ctx.user) throw new HttpError(401, 'Please log in first.', 'login_required');
         // CSRF: browsers can't add this header cross-site without our permission.
         if (ctx.user && !['GET', 'HEAD'].includes(req.method) && req.headers['x-cv'] !== '1') throw new HttpError(403, 'Request blocked. Please refresh the page and try again.', 'csrf');

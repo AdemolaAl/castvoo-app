@@ -36,6 +36,22 @@ const SITE_T = {
 };
 const SITE_EN = {};
 let siteLang = 'en';
+/*
+ * The first language on a first visit: the browser's languages (navigator.languages, in the visitor's order), the
+ * first one we have by its main part ("pt-BR" → pt, "fr-CA" → fr), else English. Pure, so it is unit tested.
+ * A language picked in the switcher (localStorage cv_lang) always wins. Never the country or the IP address.
+ */
+function browserLang(langs, supported) {
+  const list = Array.isArray(langs) ? langs : langs ? [langs] : [];
+  for (const l of list) {
+    const p = String(l || '').trim().toLowerCase().split(/[-_]/)[0];
+    if (p && Object.prototype.hasOwnProperty.call(supported, p)) return p;
+  }
+  return 'en';
+}
+function navLangs() {
+  try { return (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || navigator.userLanguage || '']); } catch (_) { return []; }
+}
 function applyLang() {
   const d = siteLang === 'en' ? SITE_EN : SITE_T[siteLang];
   $$('[data-k]').forEach((e) => { if (d[e.dataset.k] != null) e.innerHTML = d[e.dataset.k]; });
@@ -110,7 +126,8 @@ function sitePlans() {
   const trialPlan = (plans.find((p) => p.code === CFG.trial.plan) || {}).name || 'Growth';
   const bon = (CFG.topup_bonuses || []).filter((b) => b.bonus > 0);
   $('#prNotes').innerHTML =
-    '<div class="prn"><span class="prni">' + icon('check') + '</span><span><b>Every paid plan:</b> Welcome Flows with follow-ups, unlimited broadcasts, tracked clicks and Cas the AI helper. No add-on fees.</span></div>' +
+    '<div class="prn"><span class="prni">' + icon('check') + '</span><span><b>Every paid plan:</b> Welcome Flows with follow-ups, unlimited broadcasts, tracked clicks and Cas the AI helper. No setup fees.</span></div>' +
+    (CFG.billing && Number(CFG.billing.seat_price) > 0 ? '<div class="prn"><span class="prni">' + icon('plus') + '</span><span><b>Extra team seats ' + usd(CFG.billing.seat_price) + '/month on any paid plan.</b> Add them in Settings → Team, paid from your wallet with your plan. Lower the number any time.</span></div>' : '') +
     '<div class="prn"><span class="prni">' + icon('gift') + '</span><span><b>' + fmt(CFG.trial.days) + '-day free trial of ' + esc(trialPlan) + '.</b> No card needed. Pick a plan any time, or stay on Free when the trial ends: your welcome keeps running.</span></div>' +
     '<div class="prn"><span class="prni">' + icon('users') + '</span><span><b>1 setup helper included on every plan, Free too.</b> Invite your media buyer or a friend to set up your account with their own login. No password sharing, no seat used, and you remove them any time.</span></div>' +
     '<div class="prn"><span class="prni">' + icon('chat') + '</span><span><b>24/7 customer support on every plan.</b> AI support agents answer in your dashboard in seconds, day and night, and our human team steps in whenever you need a person. The Free plan includes a few instant AI chats a month.</span></div>' +
@@ -430,7 +447,9 @@ function siteStickyBar() {
 
 function siteInit() {
   $$('[data-k]').forEach((e) => { SITE_EN[e.dataset.k] = e.innerHTML; });
-  const s = store.get('cv_lang'); if (LANGS[s]) siteLang = s;
+  // A saved manual choice wins; otherwise the browser's language. store.get never throws (private windows).
+  const s = store.get('cv_lang');
+  siteLang = LANGS[s] ? s : browserLang(navLangs(), LANGS);
   applyLang();
   siteApplyConfig();
   paintAll($('#v-site'));

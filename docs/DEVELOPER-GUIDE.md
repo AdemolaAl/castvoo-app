@@ -159,6 +159,30 @@ Files: `services/support-ai.js` (queue, persona, prompt, handoff, sandbox, websi
 - Tests: `test/e2e/support-ai.test.js`; the fake Anthropic plays tool calls with `fakes.ai.script`, the OpenRouter mock
   with `mock.script`. Call `require('server/services/support-ai').tick()` to run the worker once.
 
+## Logins, devices, seats and country
+- **Sessions** (`services/auth.js`, `services/security.js`): `sessions` keeps the token hash, `id` (public), `ip_hash`
+  (HMAC of the address with APP_SECRET), `ip_country`, `user_agent`, `device_key` ("os|browser", `lib/device.js`) and
+  `last_seen_at` (written at most every 5 minutes). Never the raw address (`user_ips` keeps it only for the SEC-2
+  self-referral check). Logging a device out deletes its row, so its next request is 401. Routes: `GET /api/me/sessions`,
+  `POST /api/me/sessions/:id/revoke`, `POST /api/me/sessions/revoke-others` (Settings → Security). `ctx.session` holds
+  `{ tokenHash, sessionId }` of the current request.
+- **New-login alerts** (`security.onLogin`, called by `createSession(ctx, user, { created })`): a device + country pair not
+  in `user_devices` for 90 days sends `new_login` (email) and a @CastvooBot DM (unless `users.login_alert_tg` is off). Not
+  for a new account or the first recorded login. 3 an hour / 10 a day (`rl.hitShared`). The signed link
+  `/security/logout-all?u&e&s` (7 days) shows one button (scanners open links); its POST deletes every session.
+- **Extra seats** (`billing.setExtraSeats`, `POST /api/app/team/seats`, owner only): `workspaces.extra_seats` +
+  `pending_extra_seats`; price `settings.billing.seat_price_cents` (Admin → Settings → Billing; 0 = not sold; yearly = 12×).
+  `activate()` charges plan + `seatsNext(ws) × seatPrice(cycle)` in one payment; `dropToFree` clears seats.
+  `limits().seats` = plan + extra; invites check `limits().seats_for_invites` against `seatsTaken()` (helper never counts).
+- **Country from IP** (`lib/geoip.js`): `countryOf(ctx)` = `CF-IPCountry` header, else the DB-IP Lite CSV loaded from
+  `UPLOAD_DIR/geo/dbip-country-lite.csv.gz` (IPv4 Uint32Array, IPv6 BigUint64Array pairs, binary search). The `geoip`
+  worker (every 6 h, `GEOIP_AUTO_DOWNLOAD`, default on in production) downloads the new monthly file, validates it and
+  renames it over the old one; other instances reload when the file's mtime changes. The address is `ctx.ip`: with
+  `TRUST_PROXY` (on by default on Railway) the LAST X-Forwarded-For address, i.e. the one Railway's proxy added; the
+  first one is whatever the visitor sent. Used for the sign-up pre-select (`GET /api/public/geo`, not cached), the device
+  list and alerts. Never for language: the marketing site picks it from `navigator.languages` (`browserLang` in site.js).
+  Attribution (CC BY 4.0) is on the privacy page. Test fixture: `test/fixtures/dbip-country-lite-sample.csv`.
+
 ## Tests
 - `test/e2e/*.test.js` run the real server against a real throwaway PostgreSQL, with fake Telegram,
   Resend, Anthropic, Paystack, Flutterwave, Gatevoo and VooSquare (`test/helpers/fakes.js`).
@@ -166,7 +190,7 @@ Files: `services/support-ai.js` (queue, persona, prompt, handoff, sandbox, websi
 - `node --test test/e2e/broadcasts.test.js` runs one file.
 
 ## Security in place
-Sessions are random tokens stored hashed; HttpOnly + SameSite=Lax cookies; CSRF header on every change;
+Sessions are random tokens stored hashed (device list with log out, new-login alerts, no raw IP kept); HttpOnly + SameSite=Lax cookies; CSRF header on every change;
 strict Content-Security-Policy (no inline scripts); bot tokens AES-256-GCM encrypted; webhook signatures
 checked (Telegram secret token, Paystack HMAC-SHA512, Flutterwave hash, Gatevoo HMAC-SHA256 + 5-minute
 window, VooSquare API key, Voo ID `id_token`); rate limits on logins, codes, AI and payments (cost-related ones are

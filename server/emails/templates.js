@@ -65,6 +65,51 @@ Didn't ask for this? You can ignore this email. Nobody can log in without the co
 ${TEAM}`,
   },
 
+  new_login: {
+    category: 'transactional',
+    name: 'New login alert',
+    when: 'Sent when an account logs in from a device and country it has not used in the last 90 days (not for the first login of a new account; at most 3 an hour).',
+    subject: 'New login to your Castvoo account',
+    preheader: '{{device}} in {{country}}. If this was you, there is nothing to do.',
+    vars: ['device', 'country', 'login_time', 'logout_all_url', 'devices_url'],
+    body: [
+      h1('New login to your account'),
+      p('Hi {{first_name}}, your Castvoo account was just opened on a device we have not seen for a while.'),
+      receipt([
+        ['Device', '{{device}}'],
+        ['Country', '{{country}}'],
+        ['Time', '{{login_time}}'],
+      ]),
+      p(`${B('If this was you,')} there is nothing to do.`),
+      p(`${B("If this wasn't you,")} log out every device now, then log in again. Whoever used your login is logged out too.`),
+      button('{{logout_all_url}}', 'Log out all devices'),
+      p(`You can also see every device that is logged in, and log out one at a time, in ${link('{{devices_url}}', 'Settings → Security')}.`),
+      infoBox(`${B('Security tip:')} never share your login, even with your team. Invite teammates in Settings → Team, or invite a setup helper who uses their own login. The Castvoo team will never ask for your login code.`),
+      small('The button works for 7 days. The country comes from the internet address of the login and may be approximate.'),
+      signoff(TEAM),
+    ].join('\n'),
+    text: `New login to your account
+
+Hi {{first_name}}, your Castvoo account was just opened on a device we have not seen for a while.
+
+Device: {{device}}
+Country: {{country}}
+Time: {{login_time}}
+
+If this was you, there is nothing to do.
+
+If this wasn't you, log out every device now, then log in again. Whoever used your login is logged out too.
+Log out all devices: {{logout_all_url}}
+
+You can also see every device that is logged in, and log out one at a time, in Settings → Security: {{devices_url}}
+
+Security tip: never share your login, even with your team. Invite teammates in Settings → Team, or invite a setup helper who uses their own login. The Castvoo team will never ask for your login code.
+
+The link works for 7 days. The country comes from the internet address of the login and may be approximate.
+
+${TEAM}`,
+  },
+
   welcome: {
     category: 'transactional',
     name: 'Welcome',
@@ -353,7 +398,7 @@ ${TEAM}`,
     when: 'Sent each time a plan is paid from the wallet.',
     subject: 'Receipt for your {{plan_name}} plan',
     preheader: 'We paid {{amount}} from your wallet. Receipt {{receipt_id}}. You are all set.',
-    vars: ['plan_name', 'amount', 'period_start', 'period_end', 'receipt_id', 'wallet_balance', 'billing_url'],
+    vars: ['plan_name', 'amount', 'period_start', 'period_end', 'extra_seats', 'receipt_id', 'wallet_balance', 'billing_url'],
     body: [
       h1('Thanks, your {{plan_name}} plan is paid'),
       p('Hi {{first_name}}, we paid for your <strong>{{plan_name}}</strong> plan from your Castvoo wallet. Your welcomes and follow-ups keep running. Here is your receipt.'),
@@ -361,6 +406,7 @@ ${TEAM}`,
         ['Receipt', '{{receipt_id}}'],
         ['Plan', '{{plan_name}}'],
         ['Period', '{{period_start}} to {{period_end}}'],
+        ['Extra team seats', '{{extra_seats}}'],
         ['Wallet balance now', '{{wallet_balance}}'],
         ['Paid from wallet', '{{amount}}'],
       ], { boldLast: true }),
@@ -376,6 +422,7 @@ Hi {{first_name}}, we paid for your {{plan_name}} plan from your Castvoo wallet.
 Receipt: {{receipt_id}}
 Plan: {{plan_name}}
 Period: {{period_start}} to {{period_end}}
+Extra team seats: {{extra_seats}}
 Wallet balance now: {{wallet_balance}}
 Paid from wallet: {{amount}}
 
@@ -384,6 +431,48 @@ View billing: {{billing_url}}
 Tip: pay yearly and get 2 months free. A yearly plan costs 10 months and runs for 12. You can switch to yearly in your wallet.
 
 Plan payments cannot be refunded once a billing period starts. If you were charged twice or something looks wrong, write to {{support_email}} with your receipt number and we will put it right.
+
+${TEAM}`,
+  },
+
+  seats_receipt: {
+    category: 'transactional',
+    name: 'Extra seats receipt',
+    when: 'Sent when the owner adds extra team seats and they are paid from the wallet for the rest of the period.',
+    subject: 'Receipt for your extra team seats',
+    preheader: 'We paid {{amount}} from your wallet for {{seats_added}}. Receipt {{receipt_id}}.',
+    vars: ['seats_added', 'extra_seats_total', 'amount', 'seat_price', 'period_end', 'receipt_id', 'wallet_balance', 'team_url'],
+    body: [
+      h1('Your new seats are ready'),
+      p('Hi {{first_name}}, we added {{seats_added}} to your workspace and paid for the rest of this period from your Castvoo wallet. You can invite people now.'),
+      receipt([
+        ['Receipt', '{{receipt_id}}'],
+        ['Added', '{{seats_added}}'],
+        ['Extra seats now', '{{extra_seats_total}}'],
+        ['Price', '{{seat_price}}, renewed with your plan'],
+        ['Period ends', '{{period_end}}'],
+        ['Wallet balance now', '{{wallet_balance}}'],
+        ['Paid from wallet', '{{amount}}'],
+      ], { boldLast: true }),
+      button('{{team_url}}', 'Invite your team'),
+      small('From your next renewal, your extra seats are paid together with your plan. You can lower the number any time in Settings → Team; the change starts at your next renewal. Seat payments for a period that has started are not refunded, except double charges or billing errors. Questions: {{support_email}}.'),
+      signoff(TEAM),
+    ].join('\n'),
+    text: `Your new seats are ready
+
+Hi {{first_name}}, we added {{seats_added}} to your workspace and paid for the rest of this period from your Castvoo wallet. You can invite people now.
+
+Receipt: {{receipt_id}}
+Added: {{seats_added}}
+Extra seats now: {{extra_seats_total}}
+Price: {{seat_price}}, renewed with your plan
+Period ends: {{period_end}}
+Wallet balance now: {{wallet_balance}}
+Paid from wallet: {{amount}}
+
+Invite your team: {{team_url}}
+
+From your next renewal, your extra seats are paid together with your plan. You can lower the number any time in Settings → Team; the change starts at your next renewal. Seat payments for a period that has started are not refunded, except double charges or billing errors. Questions: {{support_email}}.
 
 ${TEAM}`,
   },

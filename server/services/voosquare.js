@@ -85,6 +85,13 @@ async function upgradePaid(c, { wsId, txId, plan, cashCents, at }) {
   await queue('spend', { eventId: voo.eventId('pay', txId), vooId: o.voo_id, valueUsd: usd(cashCents), plan: plan.name, label: `Castvoo upgrade to ${plan.name}`, country: o.country, occurredAt: at }, c);
 }
 
+/** Extra team seats bought during a period (paid from the wallet: a commissionable spend, like an upgrade). */
+async function seatsPaid(c, { wsId, txId, plan, seats, cashCents, at }) {
+  const o = await owner(wsId, c);
+  if (!o.voo_id || !txId || !(Number(cashCents) >= 1)) return;
+  await queue('spend', { eventId: voo.eventId('pay', txId), vooId: o.voo_id, valueUsd: usd(cashCents), plan: plan.name, label: `Castvoo ${seats} extra team seat${seats === 1 ? '' : 's'}`, country: o.country, occurredAt: at }, c);
+}
+
 /** A wallet top-up was paid (money in, not used yet: no commission). */
 async function topupPaid(c, { payment, label, at }) {
   const o = await owner(payment.workspace_id, c);
@@ -241,6 +248,6 @@ async function flush() {
 }
 
 module.exports = {
-  queue, planPaid, upgradePaid, topupPaid, refunded, chargedBack, spendsUsingTopup, planCancelled, activity, dripRollup,
+  queue, planPaid, upgradePaid, seatsPaid, topupPaid, refunded, chargedBack, spendsUsingTopup, planCancelled, activity, dripRollup,
   supportMessage, flush, enabled, supportEnabled,
 };

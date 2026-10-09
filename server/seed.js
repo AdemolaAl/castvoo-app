@@ -69,7 +69,7 @@ const COUNTRIES = [
 const SETTINGS = {
   company: { name: 'Zedapex', address: 'Lagos, Nigeria', support_email: 'support@castvoo.com', privacy_email: 'privacy@castvoo.com', billing_email: 'billing@castvoo.com' },
   trial: { days: 7, plan: 'growth', ai_writes: 50, join_requests: 3000, on_end: 'free' },
-  billing: { refund_days: 14, data_retention_days: 60, min_topup_cents: 1000, max_topup_cents: 500000, renew_reminder_days: 3, limit_grace_pct: 10 },
+  billing: { refund_days: 14, data_retention_days: 60, min_topup_cents: 1000, max_topup_cents: 500000, renew_reminder_days: 3, limit_grace_pct: 10, seat_price_cents: 500 },
   referral: { rates: [10, 20, 30], tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw_cents: 30000, cookie_days: 60 },
   ai: { model: 'claude-haiku-4-5-20251001', max_output_tokens: 900, temperature: 0.7, house_rules: '' },
   // Who answers for Cas. provider '' = AI_PROVIDER env. key_enc is encrypted and only used for the endpoint in key_for.
@@ -102,7 +102,7 @@ const SETTINGS = {
     // The small "Powered by Replyvoo" line under the support chat and the website chat (links to replyvoo.com).
     powered_by: true, powered_by_text: 'Powered by Replyvoo',
   },
-  legal_updated: '8 October 2026',
+  legal_updated: '9 October 2026',
 };
 
 // Earlier plan taglines, moved to the new default on start when nobody edited them.
@@ -141,7 +141,8 @@ const CONTENT_OLD = {
     'Your own bot greets each person the moment they ask to join your Telegram channel or group, lets them in and can follow up later. Start free with one channel. Paid plans add broadcasts, follow-ups and Cas, the AI helper.',
     'Your bot welcomes everyone the moment they ask to join, lets them in, and invites them to tap Start so you can follow up.'],
   hero_cta: ['Start free · 7 days on us'],
-  pricing_subtitle: ['Start free with a welcome bot for your channel. Paid plans add follow-ups, broadcasts, tracked clicks and Cas the AI helper. No add-on fees.'],
+  pricing_subtitle: ['Start free with a welcome bot for your channel. Paid plans add follow-ups, broadcasts, tracked clicks and Cas the AI helper. No add-on fees.',
+    'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup or add-on fees.'],
   footer_tagline: ['Telegram broadcasts and follow-ups that sell while you sleep.', 'Telegram welcomes, broadcasts and follow-ups, sent on time.'],
   announcement_text: ['New: Cas, your AI helper, now learns your business. Train it in two minutes.'],
   faq: [JSON.stringify(FAQ_V1)],
@@ -154,7 +155,7 @@ const CONTENT = {
   hero_subtitle: 'Greet everyone who asks to join, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links in a simple builder. Cas, the AI helper, writes the messages.',
   hero_cta: 'Start my 7-day free trial',
   pricing_title: 'Simple prices. *Start free.*',
-  pricing_subtitle: 'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup or add-on fees.',
+  pricing_subtitle: 'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup fees.',
   maintenance_message: 'Castvoo is getting an upgrade. Sending is paused for a few minutes. Nothing is lost.',
   footer_tagline: 'Every Telegram join, greeted and followed up.',
   faq: JSON.stringify(FAQ),

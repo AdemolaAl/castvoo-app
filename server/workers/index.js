@@ -11,6 +11,7 @@
  *   sales emails  every 15 min  trial follow-up emails
  *   cleanup       every hour    tidy old rows, refresh channel member counts
  *   blog          every 30 s    publishes scheduled blog posts when their time comes
+ *   geoip         every 6 h     downloads the new monthly IP-to-country file (GEOIP_AUTO_DOWNLOAD, lib/geoip.js)
  */
 
 const log = require('../lib/log');
@@ -44,6 +45,7 @@ function start() {
     loop('sales', jobs.salesTick, 15 * 60000, 60000),
     loop('cleanup', jobs.cleanupTick, 60 * 60000, 120000),
     loop('blog', () => require('../services/blog').publishDue({ force: true }), 30000, 5000),
+    loop('geoip', jobs.geoipTick, 6 * 3600000, 90000),
   ];
   // Steps due in the next minute ("Wait 2 seconds") fire at their time instead of the next 10-second poll.
   soon.start(jobs.dripsTick);

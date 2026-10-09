@@ -51,6 +51,8 @@ async function main() {
   const ran = await db.migrate();
   if (ran.length) log.info('migrations applied', { ran });
   await require('./seed').run();
+  // IP-to-country file on the volume (sign-up country pre-select, Active devices, new-login alerts). Optional.
+  require('./lib/geoip').init();
 
   const { createServer } = require('./app');
   const server = createServer();

@@ -44,7 +44,9 @@ async function publicConfig() {
     gatevoo: await settings.gatevooOn(),
     gatevoo_url: (await settings.gatevooOn()) ? config.gatevoo.url : null,
     referral: { rates: s.referral.rates, tier2_min: s.referral.tier2_min, tier3_min: s.referral.tier3_min, min_withdraw: s.referral.min_withdraw_cents / 100, settle_days: s.referral.settle_days },
-    billing: { min_topup: s.billing.min_topup_cents / 100, max_topup: s.billing.max_topup_cents / 100, refund_days: s.billing.refund_days },
+    billing: { min_topup: s.billing.min_topup_cents / 100, max_topup: s.billing.max_topup_cents / 100, refund_days: s.billing.refund_days,
+      // Extra team seats on paid plans, per seat per month (0 = not sold). Yearly plans pay 12 months.
+      seat_price: Math.max(0, Number(s.billing.seat_price_cents ?? 500)) / 100 },
     topup_bonuses: f.topups ? bonuses : [],
     banners,
     support: { reply_time: s.support.reply_time, email: s.company.support_email, telegram: s.support.telegram_username || null },
@@ -67,6 +69,19 @@ module.exports = (r) => {
     const body = JSON.stringify(await publicConfig());
     ctx.send(200, body, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=15' });
   });
+
+  /**
+   * The visitor's country, for the sign-up country step only (shown pre-selected; the person can change it and must
+   * still press Continue). Cloudflare's CF-IPCountry header or the offline DB-IP database (lib/geoip.js); only the
+   * code is used, the address is not stored. Null when unknown or not one of the active countries. Not cached by
+   * browsers or proxies (it is different for every visitor), and never used for the website language.
+   */
+  r.get('/api/public/geo', async (ctx) => {
+    const cc = require('../lib/geoip').countryOf(ctx);
+    const c = cc ? (await settings.load()).countries.find((x) => x.active && x.code === cc) : null;
+    const body = JSON.stringify({ country: c ? { code: c.code, name: c.name, flag: c.flag } : null });
+    ctx.send(200, body, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store', Vary: 'CF-IPCountry, X-Forwarded-For' });
+  }, { rate: [120, 600] });
 
   r.get('/api/public/methods', async (ctx) => {
     const list = await settings.methodsFor(String(ctx.query.country || 'XX'));

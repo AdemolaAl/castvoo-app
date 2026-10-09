@@ -90,7 +90,7 @@ module.exports = (r) => {
       const { user, created, linked } = await auth.loginWithVoo(vu, { current, ref: ctx.cookies.cv_ref || null });
       if (!current) {
         if (s && String(s.user.id) !== String(user.id)) await auth.destroySession(ctx); // someone else was logged in here
-        if (!s || String(s.user.id) !== String(user.id)) await auth.createSession(ctx, user);
+        if (!s || String(s.user.id) !== String(user.id)) await auth.createSession(ctx, user, { created });
       }
       log.info('voo login', { user: user.id, created, linked });
       if (created) return ctx.redirect('/#signup/country');

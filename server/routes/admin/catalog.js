@@ -377,7 +377,9 @@ module.exports = (r) => {
         min_topup_cents: money(v.min_topup, 'Minimum top-up'), max_topup_cents: money(v.max_topup, 'Maximum top-up'), renew_reminder_days: int(v.renew_reminder_days, 'Reminder days', { min: 1, max: 14 }),
         limit_grace_pct: v.limit_grace_pct === undefined || v.limit_grace_pct === '' ? 10 : int(v.limit_grace_pct, 'Extra join requests before welcomes pause (%)', { min: 0, max: 100 }),
         // AUD-6: a Free workspace with no login and no join requests for this long is inactive, and its data is deleted.
-        inactive_free_days: v.inactive_free_days === undefined || v.inactive_free_days === '' ? (cur.inactive_free_days ?? 365) : int(v.inactive_free_days, 'Delete inactive Free workspaces after (days)', { min: 90, max: 3650 }) };
+        inactive_free_days: v.inactive_free_days === undefined || v.inactive_free_days === '' ? (cur.inactive_free_days ?? 365) : int(v.inactive_free_days, 'Delete inactive Free workspaces after (days)', { min: 90, max: 3650 }),
+        // Extra team seats on paid plans, per seat per month (yearly plans pay 12 months). 0 = not sold.
+        seat_price_cents: v.seat_price === undefined || v.seat_price === '' ? Number(cur.seat_price_cents ?? 500) : Math.min(money(v.seat_price, 'Extra team seat price'), 100000) };
     },
     referral: async (v) => {
       // AUD-1: one commission per payment, never more than 50% of the cash (minus processor fees), 35% on yearly payments.

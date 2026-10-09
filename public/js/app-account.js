@@ -1,7 +1,8 @@
 'use strict';
 /*
- * app-account.js: Settings (profile, workspace, team, your data) and Help (support chat).
- * API: POST /api/me, /api/me/email/*, /api/app/settings, GET /api/app/team (+ invite, role, remove),
+ * app-account.js: Settings (profile, workspace, team, extra seats, security, your data) and Help (support chat).
+ * API: POST /api/me, /api/me/email/*, /api/app/settings, GET /api/app/team (+ invite, role, remove, seats),
+ *      GET /api/me/sessions, POST /api/me/sessions/:id/revoke, /api/me/sessions/revoke-others,
  *      GET /api/me/export, POST /api/me/delete, POST /api/auth/logout, GET/POST /api/support
  */
 
@@ -13,7 +14,7 @@ function timeZones(cur) {
 }
 
 PAGES.settings = {
-  title: 'Settings', sub: 'Profile, workspace, team and your data',
+  title: 'Settings', sub: 'Profile, workspace, team, security and your data',
   async render(el, q, alive) {
     el.innerHTML = '<div class="dg"><div class="c6">' + skel(1, 380) + '</div><div class="c6">' + skel(1, 380) + '</div></div>';
     const [me, team] = await Promise.all([GET('/api/me'), GET('/api/app/team').catch(() => null)]);
@@ -42,11 +43,14 @@ PAGES.settings = {
       '<div class="srow"><span class="sri">' + icon('wallet') + '</span><div style="flex:1;min-width:0"><b>Plan: ' + esc(p.plan_name) + '</b><small style="display:block">' + esc({ trial: 'Free trial', active: 'Active', paused: 'Paused', cancelled: 'No active plan' }[p.status] || p.status) + '</small></div><button type="button" class="btn b-ghost xs" data-go="wallet">Manage plan</button></div></div>' +
       // Team
       '<div class="box c6" id="stTeam"><div class="bh"><h3>' + icon('users') + 'Team</h3>' + (team ? '<span class="hint">' + fmt(team.seats_used) + ' of ' + plural(team.seats, 'seat') + ' used</span>' : '') + '</div>' +
+      (team && owner ? seatsBox(team) : '') +
       (team ? team.members.filter((m) => m.role !== 'helper').map((m) => '<div class="srow">' + ava(m.name || m.email || '?', 40) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(m.name || 'Teammate') + (m.id === u.id ? ' <span class="muted">(you)</span>' : '') + '</b><small class="ell" style="display:block">' + esc(m.email || (m.tg_username ? '@' + m.tg_username : '')) + '</small></div>' + (owner && m.role !== 'owner' ? '<select class="inp sm" data-role="' + m.id + '" aria-label="Role"><option value="sender"' + (m.role === 'sender' ? ' selected' : '') + '>Can send</option><option value="drafter"' + (m.role === 'drafter' ? ' selected' : '') + '>Drafts only</option></select><button type="button" class="x" data-rmm="' + m.id + '" aria-label="Remove ' + esc(m.name) + '"><svg width="15" height="15"><use href="#i-trash"/></svg></button>' : '<span class="pill p-grey">' + roleName(m.role) + '</span>') + '</div>').join('') +
         team.invites.map((i) => '<div class="srow"><span class="sri">' + icon('mail') + '</span><div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(i.email) + '</b><small>Invited · ' + roleName(i.role) + ' · expires ' + fmtDate(i.expires_at, false) + '</small></div><span class="pill p-warn">Waiting</span></div>').join('') : '<p class="muted">Could not load the team.</p>') +
       (owner ? '<form class="invf" id="invF" novalidate><input class="inp" id="invE" type="email" placeholder="teammate@company.com" aria-label="Teammate email"><select class="inp sm" id="invR" aria-label="Role"><option value="sender">Can send</option><option value="drafter">Drafts only</option></select><button type="submit" class="btn b-blue sm">' + icon('plus') + 'Invite</button></form><p class="ferr" id="invErr" hidden></p><div id="invOk"></div><p class="hint"><b>Can send:</b> writes and sends messages. <b>Drafts only:</b> writes, and the owner sends.</p>' : '') + '</div>' +
       // Setup helper
       (team ? helperBox(team, u) : '') +
+      // Security: active devices and login alerts
+      securityBox(u) +
       // Data
       '<div class="box c6"><div class="bh"><h3>' + icon('shield') + 'Your data</h3></div><p class="muted" style="font-size:14px">Download everything Castvoo holds about you, or delete your account. Read the <a href="/legal/privacy" target="_blank" rel="noopener">privacy policy</a>.</p>' +
       '<div class="srow"><span class="sri">' + icon('down') + '</span><div style="flex:1"><b>Download my data</b><small style="display:block">A file with your account, workspaces, subscribers and messages.</small></div><a class="btn b-ghost xs" href="/api/me/export" download>Download</a></div>' +
@@ -54,8 +58,10 @@ PAGES.settings = {
       '<button type="button" class="btn b-ghost sm" data-logout style="align-self:flex-start">' + icon('out') + 'Log out</button>' +
       '<p class="hint"><a href="/legal/terms" target="_blank" rel="noopener">Terms</a> · <a href="/legal/privacy" target="_blank" rel="noopener">Privacy</a> · <a href="/legal/refunds" target="_blank" rel="noopener">Refunds</a> · <a href="/legal/acceptable-use" target="_blank" rel="noopener">Acceptable use</a> · <a href="/legal/cookies" target="_blank" rel="noopener">Cookies</a></p></div>' +
       '</div>';
-    if (q.tab === 'team' || q.tab === 'helper') later(150, () => { const t = $(q.tab === 'helper' ? '#stHelper' : '#stTeam'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    if (q.tab === 'team' || q.tab === 'helper' || q.tab === 'security') later(150, () => { const t = $(q.tab === 'helper' ? '#stHelper' : q.tab === 'security' ? '#stSec' : '#stTeam'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
     if (team) wireHelperBox(el, team);
+    if (team && owner) wireSeats(el, team);
+    wireSecurity(el, u, alive);
 
     const ctH = () => { const c = $('#stCt').value; if (!c) return; GET('/api/public/methods?country=' + c).then((r) => { if ($('#stCtH')) $('#stCtH').textContent = r.methods.length ? 'You can pay with: ' + r.methods.map((m) => m.label + (m.detail ? ' (' + m.detail + ')' : '')).join(', ') + '.' : 'Card and crypto options appear here once payments are switched on.'; }).catch(() => {}); };
     $('#stCt').onchange = ctH; ctH();
@@ -106,6 +112,134 @@ PAGES.settings = {
     });
   },
 };
+
+/* ---------- Extra team seats (Settings → Team → Add seats) ----------
+ * Paid plans only. More seats are paid now for the rest of the period, then renew with the plan from the wallet;
+ * fewer seats start at the next renewal and can't go below the seats in use. The setup helper never uses a seat.
+ * API: GET /api/app/team (extra_seats: price, cycle, extra, next, pending, taken, period_left), POST /api/app/team/seats { seats }.
+ */
+function seatsBox(team) {
+  const X = team.extra_seats;
+  if (!X || !X.on_sale) return '';
+  const per = usd(X.price_month) + '/month each';
+  if (!X.can_buy) {
+    return '<div class="seatbx off"><span class="sri">' + icon('plus') + '</span><div style="flex:1;min-width:0"><b>Need more seats?</b><small>' +
+      (X.reason === 'trial' ? 'Extra team seats (' + per + ') can be added once your paid plan starts.' : 'Extra team seats (' + per + ') come with any paid plan.') +
+      '</small></div>' + (X.reason === 'trial' ? '' : '<button type="button" class="btn b-ghost xs" data-go="wallet">See plans</button>') + '</div>';
+  }
+  const unitTxt = usd(X.price) + (X.cycle === 'year' ? '/year' : '/month');
+  return '<div class="seatbx" id="sxBox"><div class="seat-top"><div style="min-width:0"><b>Extra seats</b><small>' + esc(unitTxt) + ' each · paid with your plan from the wallet</small></div>' +
+    '<div class="stepper" role="group" aria-label="Extra seats"><button type="button" data-sx="-1" aria-label="One seat fewer">' + icon('minus') + '</button><output id="sxN" aria-live="polite">' + X.next + '</output><button type="button" data-sx="1" aria-label="One more seat">' + icon('plus') + '</button></div></div>' +
+    '<p class="seat-q" id="sxQ"></p><p class="ferr" id="sxErr" role="alert" hidden></p>' +
+    '<button type="button" class="btn b-blue sm" id="sxGo" hidden></button></div>';
+}
+function wireSeats(el, team) {
+  const X = team.extra_seats, box = $('#sxBox', el);
+  if (!X || !box) return;
+  const minExtra = Math.max(0, (X.taken || 0) - (X.plan_seats || 0));
+  let n = X.next;
+  const money2 = (v) => '$' + (Math.round(v * 100) / 100).toFixed(2);
+  const per = X.cycle === 'year' ? 'a year' : 'a month';
+  const draw = () => {
+    $('#sxN', box).textContent = n;
+    const q = $('#sxQ', box), go = $('#sxGo', box), err = $('#sxErr', box);
+    err.hidden = true;
+    $('[data-sx="-1"]', box).disabled = n <= 0;
+    $('[data-sx="1"]', box).disabled = n >= 500;
+    go.hidden = false; go.disabled = false;
+    if (n > X.extra) {
+      const add = n - X.extra;
+      const now = add * X.price * Math.min(1, X.period_left || 0);
+      q.innerHTML = 'Add <b>' + plural(add, 'seat') + '</b>: <b>' + money2(now) + '</b> now for the rest of this period, then <b>' + money2(n * X.price) + ' ' + per + '</b> for ' + plural(n, 'extra seat') + ' with your plan.';
+      go.textContent = 'Add ' + plural(add, 'seat') + ' · ' + money2(now);
+    } else if (X.pending != null && n === X.pending) {
+      q.innerHTML = 'From your next renewal' + (X.period_end ? ' (' + esc(fmtDate(X.period_end, false)) + ')' : '') + ' you\'ll have <b>' + plural(n, 'extra seat') + '</b>. Your ' + plural(X.extra, 'seat') + ' stay until then.';
+      go.hidden = true;
+    } else if (n < X.extra) {
+      q.innerHTML = 'From your next renewal' + (X.period_end ? ' (' + esc(fmtDate(X.period_end, false)) + ')' : '') + ' you\'ll have <b>' + plural(n, 'extra seat') + '</b> (' + money2(n * X.price) + ' ' + per + '). Nothing is refunded; your seats stay until then.';
+      go.textContent = 'Lower to ' + n + ' from next renewal';
+      if (n < minExtra) {
+        err.textContent = plural(X.taken, 'person uses a seat', 'people use seats') + ' now. Remove someone or cancel an invite first.';
+        err.hidden = false; go.disabled = true;
+      }
+    } else if (X.pending != null) {
+      q.innerHTML = 'You asked for ' + plural(X.pending, 'extra seat') + ' from your next renewal. Keep <b>' + plural(n, 'seat') + '</b> instead?';
+      go.textContent = 'Keep ' + plural(n, 'seat');
+    } else {
+      q.innerHTML = n ? plural(n, 'extra seat') + ' renew with your plan for <b>' + money2(n * X.price) + ' ' + per + '</b>.' : 'Need another teammate? Add a seat for ' + money2(X.price) + ' ' + per + '.';
+      go.hidden = true;
+    }
+  };
+  box.addEventListener('click', (e) => { const b = e.target.closest('[data-sx]'); if (!b) return; n = Math.max(0, Math.min(500, n + Number(b.dataset.sx))); draw(); });
+  $('#sxGo', box).onclick = async (e) => {
+    const err = $('#sxErr', box);
+    await busy(e.currentTarget, 'Saving…', async () => {
+      try {
+        const r = await POST('/api/app/team/seats', { seats: n });
+        toast(r.message); await refreshState(); renderPage('settings', { tab: 'team' });
+      } catch (ex) {
+        err.hidden = false;
+        if (ex.code === 'wallet_short') {
+          err.innerHTML = esc(ex.message) + ' <button type="button" class="lnk" id="sxTop">Top up</button>';
+          $('#sxTop', box).onclick = () => openTopup(Math.max(10, Math.ceil(Number(ex.data && ex.data.needed) || 10)));
+        } else err.textContent = apiErr(ex, { silent: true });
+      }
+    });
+  };
+  draw();
+}
+
+/* ---------- Security (Settings → Security): active devices and login alerts ----------
+ * Every logged-in session of this person (not the workspace): device from the user agent, country from the IP
+ * (flag), first seen, last active, "This device". Log out one, or all the others; a logged-out device is refused on
+ * its next click. New-login alerts always go by email; the Telegram message can be switched off here.
+ */
+function securityBox(u) {
+  return '<div class="box c6" id="stSec"><div class="bh"><h3>' + icon('lock') + 'Security</h3><span class="hint" id="secN"></span></div>' +
+    '<p class="muted" style="font-size:14px;margin:0"><b style="color:var(--ink)">Active devices.</b> Phones and computers logged in to your account. Log out any you don\'t recognise.</p>' +
+    '<div class="devl" id="secL">' + skel(2, 54) + '</div>' +
+    '<button type="button" class="btn b-ghost sm danger" id="secAll" hidden style="align-self:flex-start">' + icon('out') + 'Log out all other devices</button>' +
+    '<div class="tg"><span><b style="font-size:14.5px">Login alerts on Telegram</b><br><small class="muted">' + (u.tg_linked ? '@CastvooBot messages you when your account logs in from a new device or country.' : 'Link Telegram in your profile to get alerts there too.') + '</small></span>' + toggleBtn('secTg', u.tg_linked && u.login_alert_tg !== false, 'Login alerts on Telegram') + '</div>' +
+    '<p class="hint" style="margin:0">' + icon('mail') + ' New-login alerts always come by email. Never share your login: invite teammates or a setup helper instead.</p></div>';
+}
+function devRow(d) {
+  const where = d.country ? '<span class="dflag" aria-hidden="true">' + esc(d.flag || '') + '</span>' + esc(d.country_name || d.country) : 'Unknown country';
+  return '<div class="devr' + (d.current ? ' cur' : '') + '"><span class="sri">' + icon(d.mobile ? 'phone' : 'laptop') + '</span><div class="devt"><b class="ell">' + esc(d.device) + (d.current ? ' <span class="pill p-ok">This device</span>' : '') + '</b>' +
+    '<small>' + where + ' · ' + (d.current ? 'Active now' : 'Active ' + esc(ago(d.last_seen_at))) + '</small><small class="mut2">First seen ' + esc(fmtDate(d.created_at, false)) + '</small></div>' +
+    (d.current ? '' : '<button type="button" class="btn b-ghost xs" data-devout="' + esc(d.id) + '" data-name="' + esc(d.device) + '">Log out</button>') + '</div>';
+}
+async function wireSecurity(el, u, alive) {
+  const L = $('#secL', el); if (!L) return;
+  const load = async () => {
+    let r;
+    try { r = await GET('/api/me/sessions'); } catch (ex) { if (alive()) L.innerHTML = '<p class="muted">Could not load your devices.</p>'; return; }
+    if (!alive() || !$('#secL')) return;
+    const list = r.sessions || [];
+    L.innerHTML = list.map(devRow).join('') || '<p class="muted">No devices.</p>';
+    $('#secN').textContent = plural(list.length, 'device');
+    $('#secAll').hidden = list.filter((d) => !d.current).length === 0;
+  };
+  L.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-devout]'); if (!b) return;
+    if (!(await confirmBox('Log out ' + b.dataset.name + '?', 'That device is logged out straight away. Whoever uses it has to log in again.', 'Log out', true))) return;
+    await busy(b, '', async () => {
+      try { const r = await POST('/api/me/sessions/' + encodeURIComponent(b.dataset.devout) + '/revoke'); toast('Logged out ' + b.dataset.name + '.'); if (r.current) location.reload(); else load(); } catch (ex) { apiErr(ex); load(); }
+    });
+  });
+  $('#secAll', el).onclick = async (e) => {
+    if (!(await confirmBox('Log out all other devices?', 'Every other phone and computer is logged out straight away. You stay logged in here.', 'Log out others', true))) return;
+    await busy(e.currentTarget, 'Logging out…', async () => {
+      try { const r = await POST('/api/me/sessions/revoke-others'); toast(r.removed ? 'Logged out ' + plural(r.removed, 'other device') + '.' : 'No other devices were logged in.'); load(); } catch (ex) { apiErr(ex); }
+    });
+  };
+  const tgb = $('#secTg', el);
+  if (tgb) tgb.onclick = async () => {
+    if (!u.tg_linked) { toast('Link Telegram in your profile first.', { kind: 'info' }); return; }
+    const on = !tgb.classList.contains('on'); setToggle(tgb, on);
+    try { ME = await POST('/api/me', { login_alert_tg: on }); toast(on ? 'Login alerts will come on Telegram too.' : 'Login alerts by email only.'); } catch (ex) { setToggle(tgb, !on); apiErr(ex); }
+  };
+  load();
+}
 
 /* ---------- Setup helper (Settings → Team) ----------
  * One person the owner invites to set up and run the workspace with their own login. Free on every plan, no seat.

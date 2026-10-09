@@ -9,6 +9,9 @@ const db = require('../db');
 const config = require('../config');
 const settings = require('./settings');
 const email = require('./email');
+const security = require('./security');
+const geoip = require('../lib/geoip');
+const device = require('../lib/device');
 const { randomToken, randomCode, sha256, addDays, fmtDate, httpError, cleanName } = require('../lib/util');
 
 const COOKIE = 'cv_session';
@@ -18,10 +21,17 @@ function cookieOpts(maxAgeSec) {
   return { httpOnly: true, sameSite: 'Lax', secure: config.appUrl.startsWith('https://'), path: '/', maxAge: maxAgeSec };
 }
 
-async function createSession(ctx, user) {
+/**
+ * Log `user` in on this browser. `created` = the account was just made (no new-login alert for it).
+ * The session keeps a keyed hash of the address and its country, never the address itself (Settings → Security).
+ */
+async function createSession(ctx, user, { created = false } = {}) {
   const token = randomToken(32);
-  await db.query('insert into sessions(token_hash, user_id, ip, user_agent, expires_at) values ($1,$2,$3,$4,$5)',
-    [sha256(token), user.id, ctx.ip, String(ctx.req.headers['user-agent'] || '').slice(0, 300), addDays(new Date(), SESSION_DAYS)]);
+  const ua = String(ctx.req.headers['user-agent'] || '').slice(0, 300);
+  const dev = device.parse(ua);
+  const country = geoip.countryOf(ctx);
+  await db.query('insert into sessions(token_hash, user_id, ip_hash, ip_country, user_agent, device_key, expires_at) values ($1,$2,$3,$4,$5,$6,$7)',
+    [sha256(token), user.id, security.ipHash(ctx.ip), country, ua, dev.key, addDays(new Date(), SESSION_DAYS)]);
   await db.query('update users set last_login_at = now() where id = $1', [user.id]);
   // SEC-2: the addresses an account logs in from (one row per address, first and last seen), for self-referral checks.
   if (ctx.ip) {
@@ -29,25 +39,29 @@ async function createSession(ctx, user) {
       .catch(() => {});
   }
   ctx.setCookie(COOKIE, token, cookieOpts(SESSION_DAYS * 86400));
+  // New device + country for this account: email (and Telegram) alert. Never fails the login.
+  await security.onLogin(ctx, user, { created, dev, country });
 }
 
 async function loadSession(ctx) {
   const token = ctx.cookies[COOKIE];
   if (!token || token.length > 100) return null;
-  const row = await db.one(`select s.token_hash, s.expires_at, u.* from sessions s join users u on u.id = s.user_id
+  // A logged-out device (Settings → Security, or "log out all devices") has no row any more: refused at once.
+  const row = await db.one(`select s.token_hash, s.expires_at, s.id as session_id, s.last_seen_at as session_seen_at, u.* from sessions s join users u on u.id = s.user_id
     where s.token_hash = $1 and s.expires_at > now()`, [sha256(token)]);
   if (!row || row.status !== 'active') return null;
   // Slide the expiry forward when less than half is left.
   if (new Date(row.expires_at).getTime() - Date.now() < (SESSION_DAYS / 2) * 86400000) {
     await db.query('update sessions set expires_at = $2 where token_hash = $1', [row.token_hash, addDays(new Date(), SESSION_DAYS)]);
   }
+  await security.touch(row.session_id, row.session_seen_at);
   // AUD-6: a dashboard visit counts as use (sessions slide, so an active owner may not log in again for a year).
   // Written at most once a day per account.
   if (!row.last_seen_at || Date.now() - new Date(row.last_seen_at).getTime() > 86400000) {
     await db.query('update users set last_seen_at = now() where id = $1', [row.id]).catch(() => {});
   }
-  const { token_hash, expires_at, ...user } = row;
-  return { user, tokenHash: token_hash };
+  const { token_hash, expires_at, session_id, session_seen_at, ...user } = row;
+  return { user, tokenHash: token_hash, sessionId: session_id };
 }
 
 async function destroySession(ctx) {

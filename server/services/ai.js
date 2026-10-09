@@ -51,7 +51,7 @@ const NOT_ON_FREE = [['drips', 'follow-ups'], ['broadcasts', 'broadcasts'], ['ta
  * scripts/check.js can check that every price and limit in seed.js reaches the AI. Knowledge articles never repeat
  * these numbers.
  */
-function formatPlans(plans, t = {}) {
+function formatPlans(plans, t = {}, billing = null) {
   const n = (v) => (v == null || Number(v) < 0 ? 'unlimited' : Number(v).toLocaleString('en-US'));
   const isFree = (p) => Number(p.price_month_cents) === 0 && Number(p.price_year_cents || 0) === 0;
   let prev = [];
@@ -74,12 +74,20 @@ function formatPlans(plans, t = {}) {
   });
   return lines.join('\n')
     + `\nEach plan includes everything in the plan before it.`
-    + (t.days ? `\nFree trial: ${t.days} days of ${(plans.find((p) => p.code === t.plan) || {}).name || t.plan}, no card needed, ${n(t.ai_writes)} AI writes and ${n(t.join_requests ?? -1)} join requests during the trial. If no plan is paid when it ends, the workspace moves to the Free plan (not paused).` : '');
+    + (t.days ? `\nFree trial: ${t.days} days of ${(plans.find((p) => p.code === t.plan) || {}).name || t.plan}, no card needed, ${n(t.ai_writes)} AI writes and ${n(t.join_requests ?? -1)} join requests during the trial. If no plan is paid when it ends, the workspace moves to the Free plan (not paused).` : '')
+    + seatLine(billing);
+}
+/** Extra team seats (Admin → Settings → Billing): one line for the live plan list, or nothing when not sold. */
+function seatLine(b) {
+  const c = b ? Math.max(0, Number(b.seat_price_cents ?? 500)) : 0;
+  if (!c) return '';
+  const usd = (x) => '$' + (x / 100).toLocaleString('en-US', { minimumFractionDigits: x % 100 ? 2 : 0, maximumFractionDigits: 2 });
+  return `\nExtra team seats: ${usd(c)} a month per seat on any paid plan (yearly plans: ${usd(c * 12)} a year per seat), added by the owner in Settings → Team and paid from the wallet together with the plan (the first payment covers the days left of the current period). Fewer seats start at the next renewal. Not on the Free plan or during the trial. The setup helper never uses a seat.`;
 }
 async function plansText() {
   const plans = await settings.plans({ activeOnly: true });
   const t = await settings.get('trial');
-  return formatPlans(plans, t || {});
+  return formatPlans(plans, t || {}, await settings.get('billing'));
 }
 
 /** plansText() that never fails a support answer (a plan edited mid-way, a missing trial plan...). */

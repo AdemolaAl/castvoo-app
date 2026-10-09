@@ -24,13 +24,17 @@ PAGES.wallet = {
     const [w, p] = await Promise.all([GET('/api/wallet'), GET('/api/app/plan')]);
     if (!alive()) return;
     APP.state.plan = p; APP.state.wallet = { cash: w.cash, bonus: w.bonus, total: w.total }; shellUI();
-    const price = planPrice(p);
+    const planOnly = planPrice(p);
+    // Extra team seats renew with the plan, in the same wallet payment.
+    const SX = p.seats || {};
+    const seatsRenew = p.status === 'active' && !p.free ? Number(SX.renews) || 0 : 0;
+    const price = planOnly != null ? planOnly + seatsRenew : null;
     const pend = (p.plans || []).find((x) => x.code === p.pending_plan_code);
     const status = p.free ? ['Free plan', 'p-blue'] : ({ trial: ['Free trial', 'p-blue'], active: ['Active', 'p-ok'], paused: ['Paused', 'p-bad'], cancelled: ['No plan', 'p-grey'] }[p.status] || [p.status, 'p-grey']);
     let renew = '';
     if (p.free) renew = 'You are on the Free plan: your welcome bot keeps running. ' + (p.dropped_from ? 'Top up and your ' + esc(((p.plans || []).find((x) => x.code === p.dropped_from) || {}).name || 'old') + ' plan starts again by itself.' : 'Pick a plan for follow-ups, broadcasts and Cas.');
     else if (p.status === 'trial') renew = 'Trial ends ' + fmtDate(p.trial_ends_at, false) + '. ' + (pend ? pend.name + ' then starts, paid from your wallet.' : 'Pick a plan to keep going after that.');
-    else if (p.status === 'active') renew = p.cancel_at_period_end ? esc(p.plan_name) + ' ends on ' + fmtDate(p.period_end, false) + '. It won\'t renew.' : esc(p.plan_name) + ' renews on ' + fmtDate(p.period_end, false) + (price != null ? ' for ' + usd(price) : '') + ', paid from your wallet.';
+    else if (p.status === 'active') renew = p.cancel_at_period_end ? esc(p.plan_name) + ' ends on ' + fmtDate(p.period_end, false) + '. It won\'t renew.' : esc(p.plan_name) + (SX.next ? ' and ' + plural(SX.next, 'extra seat') : '') + ' renew' + (SX.next ? '' : 's') + ' on ' + fmtDate(p.period_end, false) + (price != null ? ' for ' + usd(price) : '') + ', paid from your wallet.';
     else if (p.status === 'paused') renew = 'Sending is paused because the wallet was short. Top up and it restarts by itself.';
     else renew = 'You don\'t have an active plan. Choose one to start sending again.';
     const short = p.status === 'active' && !p.cancel_at_period_end && price != null && w.total < price;
@@ -41,7 +45,9 @@ PAGES.wallet = {
       (short ? '<div class="pban warn"><span class="pbi">⚠️</span><div style="flex:1"><b>Your next renewal needs ' + usd(price) + '</b><p>You have ' + money(w.total) + '. Top up before ' + fmtDate(p.period_end, false) + ' so sending doesn\'t pause.</p></div><button type="button" class="btn b-blue xs" data-topup>Top up</button></div>' : '') +
       ((w.pending || []).length ? '<div class="box"><div class="bh"><h3>Payments in progress</h3></div>' + w.pending.map((x) => '<div class="txr"><span class="ti" style="background:var(--warn-s)">⏳</span><div class="tx"><b>' + money(x.amount) + ' · ' + esc(x.provider === 'manual' ? x.method_label || PROVIDER.manual : PROVIDER[x.provider] || x.provider) + (x.coin ? ' ' + esc(x.coin) : '') + '</b><small>Started ' + ago(x.created_at) + (x.provider === 'manual_crypto' ? (x.txid ? ' · transaction ID sent, the team is checking it' : ' · waiting for your transaction ID') : x.provider === 'manual' ? (x.submitted ? ' · sent, the team is checking it' : ' · waiting for your payment') : '') + '</small></div>' + (x.provider === 'manual_crypto' ? (x.txid ? '' : '<button type="button" class="btn b-blue xs" data-txid="' + esc(x.reference) + '">Add transaction ID</button>') : x.provider === 'manual' ? (x.submitted ? '' : '<button type="button" class="btn b-blue xs" data-man="' + esc(x.reference) + '">Finish payment</button>') : '<button type="button" class="btn b-ghost xs" data-chk="' + esc(x.reference) + '">Check now</button>') + '</div>').join('') + '</div>' : '') +
       '<div class="dg"><div class="box c7"><div class="bh"><h3>Wallet activity</h3><span class="hint">Newest first</span></div><div>' + (rows.length ? rows.map((t) => { const ic = TX_ICON[t.kind] || ['•', '#F0F3FA']; const pos = t.amount > 0; return '<div class="txr"><span class="ti" style="background:' + ic[1] + ';color:' + (pos ? 'var(--ok)' : 'var(--mut)') + ';font-weight:800">' + ic[0] + '</span><div class="tx"><b>' + esc(t.note || TX_NAME[t.kind] || t.kind) + '</b><small>' + fmtDate(t.created_at) + (t.method ? ' · ' + esc(t.method) : '') + '</small></div><span class="am" style="color:' + (pos ? 'var(--ok)' : 'var(--ink)') + '">' + (pos ? '+' : '−') + money(Math.abs(t.amount)) + '</span></div>'; }).join('') : emptyBox({ plain: 1, emoji: '👛', title: 'No wallet activity yet', text: 'Top-ups and plan payments show up here.' })) + '</div></div>' +
-      '<div class="box c5" id="planBox"><div class="bh"><h3>Your plan</h3><span class="pill ' + status[1] + '">' + status[0] + '</span></div><b style="font-size:24px;letter-spacing:-.04em">' + esc(p.plan_name) + (price != null && p.status !== 'trial' && !p.free ? ' · ' + usd(price) + '/' + (p.cycle === 'year' ? 'year' : 'month') : '') + '</b>' +
+      '<div class="box c5" id="planBox"><div class="bh"><h3>Your plan</h3><span class="pill ' + status[1] + '">' + status[0] + '</span></div><b style="font-size:24px;letter-spacing:-.04em">' + esc(p.plan_name) + (planOnly != null && p.status !== 'trial' && !p.free ? ' · ' + usd(planOnly) + '/' + (p.cycle === 'year' ? 'year' : 'month') : '') + '</b>' +
+      (p.status === 'active' && !p.free && (SX.extra || SX.next) ? '<div class="seatln"><span>' + icon('users') + '<b>' + plural(SX.extra, 'extra team seat') + '</b>' + (SX.pending != null ? ' · ' + SX.pending + ' from your next renewal' : '') + '</span><span class="tnum">' + usd(seatsRenew) + '/' + (p.cycle === 'year' ? 'year' : 'month') + '</span></div>' +
+        (p.status === 'active' && price != null ? '<p class="muted" style="font-size:13.5px;margin:0">Next renewal: plan ' + usd(planOnly) + ' + seats ' + usd(seatsRenew) + ' = <b style="color:var(--ink)">' + usd(price) + '</b></p>' : '') : '') +
       (pend ? '<p class="muted" style="font-size:14px">Changes to <b>' + esc(pend.name) + '</b> ' + (p.status === 'trial' ? 'when your trial ends' : 'at your next renewal') + '.</p>' : '') +
       (p.coupon ? '<p class="muted" style="font-size:14px">Coupon ' + esc(p.coupon.code) + ': ' + p.coupon.percent + '% off the next ' + plural(p.coupon.months_left, 'payment') + '.</p>' : '') +
       '<div class="usage">' + usageRows(p).map((r) => { const unl = r[2] < 0; const pct = unl ? 0 : r[2] ? Math.min(100, r[1] / r[2] * 100) : 0; return '<div><div class="ush"><span>' + r[0] + '</span><span class="muted">' + (r[3] || (unl ? fmt(r[1]) + ' · no limit' : fmt(r[1]) + ' / ' + fmt(r[2]))) + '</span></div>' + (r[3] ? '' : '<div class="prog2' + (pct >= 80 ? ' hot' : '') + '"><i style="width:' + pct + '%"></i></div>') + '</div>'; }).join('') + '</div>' +
@@ -153,7 +159,7 @@ function usageRows(p) {
   if (L.flows != null) rows.push(['Welcome Flows', U.flows || 0, L.flows]);
   rows.push(['Bot subscribers', U.subscribers, L.subscribers, L.subscribers === 0 ? 'On Starter and up' : '']);
   rows.push(['AI writes this month', U.ai_writes, L.ai_writes, L.ai_writes === 0 ? 'On Starter and up' : '']);
-  if (L.seats > 1 || !p.free) rows.push(['Team seats', U.seats, L.seats]);
+  if (L.seats > 1 || !p.free) rows.push([L.extra_seats ? 'Team seats (' + fmt(L.plan_seats) + ' + ' + fmt(L.extra_seats) + ' extra)' : 'Team seats', U.seats, L.seats]);
   return rows;
 }
 
