@@ -220,41 +220,18 @@ function swRenderPanel() {
 }
 function swTip(h) { const t = $('#swTip'); if (!t) return; t.innerHTML = h; t.hidden = false; clearTimeout(swTip.t); swTip.t = setTimeout(() => { t.hidden = true; }, 6000); }
 
-/* Quick actions under the chat: "Talk to a person", and starter questions on the website chat. */
+/* Quick actions under the chat: starter questions on the website chat. */
 function swActs() {
   const A = $('#swA'); if (!A) return;
   const s = CFG.support || {};
   let h = '';
   if (SW.mode === 'site' && !SW.site.msgs.length) h += ['What does Castvoo do?', 'How much does it cost?', 'How do I pay from Nigeria?'].map((t) => '<button type="button" class="sw-chip" data-q>' + esc(t) + '</button>').join('');
-  if (SW.mode === 'acct') {
-    const human = SW.d && SW.d.thread && SW.d.thread.with_human;
-    h += '<button type="button" class="sw-chip hp" data-person' + (human ? ' disabled' : '') + '>' + icon('users') + (human ? 'A teammate is on this chat' : 'Talk to a person') + '</button>';
-  } else h += '<button type="button" class="sw-chip hp" data-person>' + icon('users') + 'Talk to a person</button>';
   if (SW.mode === 'contact') h = '<a class="btn b-blue sm" href="#login">Log in to chat</a><a class="btn b-ghost sm" href="mailto:' + esc(s.email) + '">' + icon('mail') + 'Email us</a>';
   A.innerHTML = h;
   A.onclick = (e) => {
     const q = e.target.closest('[data-q]'); if (q) { swSiteAsk(q.textContent); return; }
-    const pr = e.target.closest('[data-person]'); if (pr && !pr.disabled) swPerson(pr);
     if (e.target.closest('a[href^="#"]')) swClose(true);
   };
-}
-
-async function swPerson(btn) {
-  if (SW.mode === 'acct') {
-    btnBusy(btn, true, 'Asking the team…');
-    try {
-      await POST('/api/support', { body: 'I\'d like to talk to a person from the team, please.' });
-      SW.fastUntil = Date.now() + 60000;
-      await swRefresh(true);
-    } catch (ex) { apiErr(ex); btnBusy(btn, false); }
-    return;
-  }
-  // Logged out: the website chat can't reach the team, so show how to reach them.
-  const s = CFG.support || {};
-  const tg = s.telegram ? String(s.telegram).replace(/^@/, '') : '';
-  SW.site.msgs.push({ role: 'assistant', html: 'Our team is happy to help. Email <a href="mailto:' + esc(s.email) + '">' + esc(s.email) + '</a>' + (tg ? ' or message <a href="https://t.me/' + esc(tg) + '" target="_blank" rel="noopener">@' + esc(tg) + '</a> on Telegram' : '') + '. Already a customer? <a href="#login">Log in</a> and a teammate can answer right here.' });
-  swDraw(true);
-  swActs();
 }
 
 /* ---------- messages ---------- */
