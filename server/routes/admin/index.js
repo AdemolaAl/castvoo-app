@@ -65,4 +65,5 @@ module.exports = (r) => {
   require('./comms')(r);
   require('./support-ai')(r);
   require('./team')(r);
+  require('./blog')(r);
 };

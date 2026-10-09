@@ -113,7 +113,7 @@ describe('AUD-12: knowledge about the video guides', () => {
     const kb = require('../../server/knowledge-defaults');
     const guides = kb.find((k) => k.key === 'video-guides');
     assert.ok(guides, 'video-guides article exists');
-    assert.match(guides.body, /8 short video/);
+    assert.match(guides.body, /9 short video/);
     const gs = kb.find((k) => k.key === 'getting-started');
     assert.doesNotMatch(gs.body, /Help page shows each step in a 40-second video/);
     const keys = kb.map((k) => k.key);
@@ -123,7 +123,7 @@ describe('AUD-12: knowledge about the video guides', () => {
     // Every guide in the player is named in the article.
     const src = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'app-guides.js'), 'utf8');
     const titles = [...src.matchAll(/\{ id: '[^']+', title: '([^']+)'/g)].map((m) => m[1]);
-    assert.equal(titles.length, 8);
+    assert.equal(titles.length, 9);
     for (const t of titles) assert.ok(guides.body.includes(t.replace(/&amp;/g, '&')), 'article names ' + t);
   });
 });

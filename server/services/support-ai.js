@@ -325,8 +325,14 @@ const MONEY_CLAIM = /\b(i('ve| have)|we('ve| have)|has been|have been|is now|i j
  * history: neutral messages [{ role: 'user'|'assistant', content }], ending with the customer's message(s).
  * Returns { bubbles, handoff, toolsUsed, usage, credited }.
  */
+// The person writing is the workspace's setup helper (invited by the owner, own login): help them run the workspace,
+// but the owner's own login, money and account stay the owner's.
+const HELPER_NOTE = `# This person is the SETUP HELPER of this workspace, not its owner
+The owner invited them to set up and run the workspace with their own login. Help them with everything in the workspace: connecting bots, channels and groups, Welcome Flows, broadcasts, follow-ups, audiences, start links, subscribers, Cas, settings and wallet top-ups (with their own payment method).
+Never share or change the owner's email, login, Telegram link, sessions or login codes, and never give out other team members' contact details. Only the owner can: invite or remove teammates, cancel the plan, delete the workspace or account, export all data, ask for refunds, or see referral earnings and payout details. Plan changes need the owner unless the owner allowed billing for the helper (get_account shows it). For those, tell the helper kindly that the owner has to do it, from their own login.`;
+
 async function agentTurn({ persona, c, ws, user, history, scope, freshImages = [], beat = async () => {} }) {
-  const system = await systemFor({ persona, c, ws, user });
+  const system = await systemFor({ persona, c, ws, user, extra: scope.role === 'helper' ? HELPER_NOTE : '' });
   const defs = tools.definitions(tools.SUPPORT_TOOLS);
   const msgs = [...history];
   const used = [];

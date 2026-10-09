@@ -119,6 +119,97 @@ ${CAS}
 P.S. Your trial includes A/B welcomes. Test two versions of your welcome and keep the one that gets more clicks.`,
   },
 
+  helper_invite: {
+    category: 'transactional',
+    name: 'Setup helper invite',
+    when: 'Sent when a workspace owner invites someone by email to be their setup helper.',
+    // The workspace name is the owner's own text, so it stays out of the subject line (SEC-12).
+    subject: '{{inviter_name}} wants your help setting up Castvoo',
+    preheader: 'Set up their Telegram workspace with your own login. No passwords shared.',
+    vars: ['inviter_name', 'workspace_name', 'invite_url'],
+    body: [
+      h1('Help set up {{workspace_name}}'),
+      p('Hi there,'),
+      p(`${B('{{inviter_name}}')} invited you to be the ${B('setup helper')} of ${B('{{workspace_name}}')} on Castvoo. Castvoo welcomes new Telegram members, sends broadcasts and runs follow-up messages by itself.`),
+      p('As the setup helper you use your own Castvoo login, so nobody shares a password. You can connect their bots, channels and groups, build Welcome Flows and follow-ups, and send broadcasts. You can\'t see their login, change their plan or touch their earnings, and they can remove you at any time.'),
+      button('{{invite_url}}', 'See the invite'),
+      p('You\'ll see exactly what you can and can\'t do before you accept. New to Castvoo? You\'ll create your free login first.', 'font-size:15px;'),
+      small('This invite is just for you and works for 7 days. Not expecting it? You can ignore this email. Nothing happens unless you accept.'),
+      signoff(CAS),
+    ].join('\n'),
+    text: `Help set up {{workspace_name}}
+
+Hi there,
+
+{{inviter_name}} invited you to be the setup helper of {{workspace_name}} on Castvoo. Castvoo welcomes new Telegram members, sends broadcasts and runs follow-up messages by itself.
+
+As the setup helper you use your own Castvoo login, so nobody shares a password. You can connect their bots, channels and groups, build Welcome Flows and follow-ups, and send broadcasts. You can't see their login, change their plan or touch their earnings, and they can remove you at any time.
+
+See the invite: {{invite_url}}
+
+You'll see exactly what you can and can't do before you accept. New to Castvoo? You'll create your free login first.
+
+This invite is just for you and works for 7 days. Not expecting it? You can ignore this email. Nothing happens unless you accept.
+
+${CAS}`,
+  },
+
+  helper_joined: {
+    category: 'transactional',
+    name: 'Setup helper joined',
+    when: 'Sent to the workspace owner when their setup helper accepts the invite.',
+    subject: 'Your setup helper has joined Castvoo',
+    preheader: 'They can start setting up now. You can see what they do and remove them any time.',
+    vars: ['helper_name', 'helper_contact', 'workspace_name', 'team_url'],
+    body: [
+      h1('Your setup helper is in'),
+      p('Hi {{first_name}},'),
+      p(`${B('{{helper_name}}')} ({{helper_contact}}) accepted your invite and is now the setup helper of ${B('{{workspace_name}}')}. They use their own login, so your password and login codes stay yours.`),
+      listBox([['What you can do in Settings → Team', ['See everything they change in the Activity list', 'Choose if they may send broadcasts and manage the plan', 'Remove them at any time: they lose access straight away']]]),
+      button('{{team_url}}', 'See your setup helper'),
+      small('You didn\'t invite anyone? Remove them in Settings → Team and write to {{support_email}}.'),
+      signoff(CAS),
+    ].join('\n'),
+    text: `Your setup helper is in
+
+Hi {{first_name}},
+
+{{helper_name}} ({{helper_contact}}) accepted your invite and is now the setup helper of {{workspace_name}}. They use their own login, so your password and login codes stay yours.
+
+${listText([['What you can do in Settings → Team', ['See everything they change in the Activity list', 'Choose if they may send broadcasts and manage the plan', 'Remove them at any time: they lose access straight away']]])}
+
+See your setup helper: {{team_url}}
+
+You didn't invite anyone? Remove them in Settings → Team and write to {{support_email}}.
+
+${CAS}`,
+  },
+
+  helper_removed: {
+    category: 'transactional',
+    name: 'Setup helper removed',
+    when: 'Sent to a setup helper when the workspace owner removes them.',
+    subject: 'Your setup helper access has ended',
+    preheader: 'You no longer have access to a Castvoo workspace you were helping with.',
+    vars: ['owner_name', 'workspace_name'],
+    body: [
+      h1('Thanks for helping out'),
+      p('Hi {{first_name}},'),
+      p(`${B('{{owner_name}}')} removed you as the setup helper of ${B('{{workspace_name}}')}, so you no longer have access to it. Your own Castvoo login and any workspace of your own are not affected.`),
+      p('Messages and flows you set up keep running for them. If you think this was a mistake, ask the owner to invite you again.'),
+      signoff(CAS),
+    ].join('\n'),
+    text: `Thanks for helping out
+
+Hi {{first_name}},
+
+{{owner_name}} removed you as the setup helper of {{workspace_name}}, so you no longer have access to it. Your own Castvoo login and any workspace of your own are not affected.
+
+Messages and flows you set up keep running for them. If you think this was a mistake, ask the owner to invite you again.
+
+${CAS}`,
+  },
+
   team_invite: {
     category: 'transactional',
     name: 'Team invite',

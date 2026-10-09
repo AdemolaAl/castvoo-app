@@ -10,17 +10,28 @@ const billing = require('../services/billing');
 const flows = require('../services/flows');
 const { str, int, oneOf, badRequest, notFound, httpError } = require('../lib/util');
 
-const UNIT = { min: 1, hour: 60, day: 1440 };
+/**
+ * Each step's wait, in seconds. Takes { delay_value, delay_unit } (unit: sec | min | hour | day, or the long names),
+ * { delay_seconds }, or the older { delay_minutes }. All waits of a follow-up together: 365 days at most.
+ */
+function stepDelay(s, i) {
+  const what = `Wait for message ${i + 1}`;
+  if (s.delay_value == null && s.delay_seconds != null) return int(s.delay_seconds, what, { min: 0, max: flows.MAX_WAIT });
+  if (s.delay_value == null && s.delay_minutes != null) return int(s.delay_minutes, what, { min: 0, max: flows.MAX_WAIT / 60 }) * 60;
+  return flows.waitSeconds({ value: s.delay_value ?? 0, unit: s.delay_unit }, what);
+}
 
 async function cleanSteps(wsId, steps) {
   if (!Array.isArray(steps) || !steps.length) throw badRequest('Add at least one message.');
   if (steps.length > 20) throw badRequest('Use 20 messages or fewer in one follow-up.');
   const out = [];
+  let total = 0;
   for (const [i, s] of steps.entries()) {
-    const unit = oneOf(s.delay_unit || 'min', 'Wait unit', Object.keys(UNIT));
-    const value = int(s.delay_value ?? 0, `Wait for message ${i + 1}`, { min: 0, max: unit === 'day' ? 365 : unit === 'hour' ? 8760 : 525600 });
+    const delay = stepDelay(s, i);
+    total += delay;
+    if (total > flows.MAX_WAIT) throw badRequest('Waits can add up to 365 days at most.');
     const msg = await B.checkMessage(wsId, s);
-    out.push({ ...msg, delay_minutes: value * UNIT[unit] });
+    out.push({ ...msg, delay_seconds: delay });
   }
   return out;
 }
@@ -33,8 +44,9 @@ async function cleanSteps(wsId, steps) {
 function flowBodyFrom(conn, b, chatId) {
   const blocks = [];
   for (const [i, st] of (Array.isArray(b.steps) ? b.steps : []).entries()) {
-    const v = Number(st.delay_value || 0);
-    if (i > 0 && v > 0) blocks.push({ type: 'wait', value: v, unit: st.delay_unit || 'min' });
+    const sec = st.delay_value == null && st.delay_seconds != null ? Number(st.delay_seconds) || 0 : st.delay_value == null && st.delay_minutes != null ? (Number(st.delay_minutes) || 0) * 60 : null;
+    if (i > 0 && sec != null && sec > 0) blocks.push({ type: 'wait', seconds: sec });
+    else if (i > 0 && sec == null && Number(st.delay_value || 0) > 0) blocks.push({ type: 'wait', value: Number(st.delay_value), unit: st.delay_unit || 'min' });
     blocks.push({ type: 'message', body: st.body, media_id: st.media_id, buttons: st.buttons || [] });
   }
   return { name: b.name, chat_id: chatId, bot_id: conn.id, approve_mode: b.approve_join !== false ? 'after_welcome' : 'manual', blocks };
@@ -46,7 +58,7 @@ async function list(wsId) {
       (select count(*)::int from sequence_runs r where r.sequence_id = q.id and r.status = 'active') as in_progress
     from sequences q join connections c on c.id = q.connection_id where q.workspace_id = $1 and c.status <> 'removed' order by q.id`, [wsId]);
   for (const q of seqs) {
-    q.steps = await db.many(`select s.id, s.position, s.delay_minutes, s.body, s.media_id,
+    q.steps = await db.many(`select s.id, s.position, s.delay_seconds, s.delay_minutes, s.body, s.media_id,
         (select coalesce(json_agg(json_build_object('label', l.label, 'url', l.url, 'code', l.code) order by l.position, l.created_at, l.code), '[]') from links l where l.step_id = s.id) as buttons,
         (select count(*)::int from deliveries d where d.step_id = s.id and d.status = 'sent') as sent,
         (select count(*)::int from clicks k join links l on l.code = k.code where l.step_id = s.id) as clicks
@@ -119,7 +131,7 @@ module.exports = (r) => {
       const q = (await c.query(`insert into sequences(workspace_id, connection_id, name, trigger_type, trigger_value, approve_join, approve_mode, active)
         values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`, [ws.id, conn.id, name, trig.type, trig.value, b.approve_join !== false, b.approve_join !== false ? 'after_welcome' : 'manual', b.active !== false])).rows[0].id;
       for (const [i, s] of steps.entries()) {
-        const st = (await c.query('insert into sequence_steps(sequence_id, position, delay_minutes, body, media_id) values ($1,$2,$3,$4,$5) returning id', [q, i + 1, s.delay_minutes, s.body, s.media_id])).rows[0];
+        const st = (await c.query('insert into sequence_steps(sequence_id, position, delay_seconds, body, media_id) values ($1,$2,$3,$4,$5) returning id', [q, i + 1, s.delay_seconds, s.body, s.media_id])).rows[0];
         await B.makeLinks(c, ws.id, s.buttons, { stepId: st.id });
       }
       return q;
@@ -170,7 +182,7 @@ module.exports = (r) => {
         let stepId;
         if (existing) {
           stepId = existing.id;
-          await c.query('update sequence_steps set delay_minutes = $2, body = $3, media_id = $4 where id = $1', [stepId, s.delay_minutes, s.body, s.media_id]);
+          await c.query('update sequence_steps set delay_seconds = $2, body = $3, media_id = $4 where id = $1', [stepId, s.delay_seconds, s.body, s.media_id]);
           // Keep each button's short link (people may already have it in Telegram): change its text and
           // address in place, add new ones, and unhook extra ones (they keep redirecting, clicks are kept).
           const had = (await c.query('select code from links where step_id = $1 order by position, created_at, code', [stepId])).rows;
@@ -181,7 +193,7 @@ module.exports = (r) => {
           for (const extra of had.slice(s.buttons.length)) await c.query('update links set step_id = null where code = $1', [extra.code]);
           continue;
         } else {
-          stepId = (await c.query('insert into sequence_steps(sequence_id, position, delay_minutes, body, media_id) values ($1,$2,$3,$4,$5) returning id', [q.id, pos, s.delay_minutes, s.body, s.media_id])).rows[0].id;
+          stepId = (await c.query('insert into sequence_steps(sequence_id, position, delay_seconds, body, media_id) values ($1,$2,$3,$4,$5) returning id', [q.id, pos, s.delay_seconds, s.body, s.media_id])).rows[0].id;
         }
         await B.makeLinks(c, ws.id, s.buttons, { stepId });
       }

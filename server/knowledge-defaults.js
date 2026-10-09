@@ -32,9 +32,9 @@ Castvoo is made by Zedapex in Lagos. It is independent and not affiliated with T
 3. Send your first message: Send a message → pick where it goes → write it → Send now.
 4. Set up a welcome: for a channel or group that uses join requests, Welcome Flows → pick a template → switch it on. For people who press Start on your bot, Auto follow-ups → New → trigger "Someone presses Start" → first message with wait 0 minutes.
 5. Teach Cas your business: Ask Cas → Train Cas (two minutes), so its writing sounds like you.
-Video help: the Guides page in the dashboard menu has 8 short voiced videos (about a minute each) that show these steps in the real dashboard. The castvoo.com website also has a 40-second setup animation (the "Watch the 40-second setup" button).` },
+Video help: the Guides page in the dashboard menu has 9 short voiced videos (about a minute each) that show these steps in the real dashboard. The castvoo.com website also has a 40-second setup animation (the "Watch the 40-second setup" button).` },
 
-  { key: 'video-guides', title: 'Video guides (the Guides page)', body: `The dashboard menu has a Guides page with 8 short video tutorials. Each one shows the real dashboard step by step, with a voice-over and captions, and lasts about 70 to 105 seconds:
+  { key: 'video-guides', title: 'Video guides (the Guides page)', body: `The dashboard menu has a Guides page with 9 short video tutorials. Each one shows the real dashboard step by step, with a voice-over and captions, and lasts about 70 to 105 seconds:
 1. Connect your Telegram bot (making a bot with @BotFather and pasting its token)
 2. Add a channel or group (linking your Telegram, then connecting in one tap)
 3. Build a Welcome Flow (welcome, let in and follow up everyone who asks to join)
@@ -43,7 +43,8 @@ Video help: the Guides page in the dashboard menu has 8 short voiced videos (abo
 6. Audiences & start links (which ad brought each subscriber, then message just them)
 7. Wallet, plans & the Free plan (top up, pick a plan, what happens on Free)
 8. Earn with referrals & get help (your link, monthly earnings, and 24/7 support chat)
-Pages with a guide also show a "Watch the guide" button at the top (for example Channels & bots, Welcome Flows, Send a message, Wallet). The player has play/pause, speed (0.75× to 1.75×), captions on or off (CC) and full screen. Watched guides get a tick; the ticks are saved in that browser only. The Help page has a "Watch the video guides" link too.` },
+9. Invite a setup helper (let your media buyer or a friend set things up with their own login, no password sharing)
+Pages with a guide also show a "Watch the guide" button at the top (for example Channels & bots, Welcome Flows, Send a message, Wallet). The setup helper guide is on the Setup helper card in Settings → Team and on the "Get help setting up" cards. The player has play/pause, speed (0.75× to 1.75×), captions on or off (CC) and full screen. Watched guides get a tick; the ticks are saved in that browser only. The Help page has a "Watch the video guides" link too.` },
 
   { key: 'bots-channels-groups', title: 'Bots, channels and groups: the difference', body: `- Bot: people press Start on your bot. Castvoo can message each person one by one, so audiences, follow-ups, {name} and per-person click tracking work.
 - Channel: a post goes to everyone in the channel. Bots cannot see channel members, so you cannot pick part of a channel. You see the member count, and clicks as totals.
@@ -121,6 +122,7 @@ Audiences → New audience. The count updates as you add rules. Then pick it in 
 Tags: select people in Subscribers and add a tag (letters, numbers, _ and -).` },
 
   { key: 'drips', title: 'Auto follow-ups (drips)', body: `A follow-up is a list of messages with waiting times, like: welcome now, tip after 1 day, offer after 3 days. Up to 20 messages in one follow-up.
+Each message has a wait before it: "Right away" (0), or 1 to 999 seconds, minutes, hours or days (all waits together: 365 days at most). Short waits are on time: "Wait 2 seconds" sends about 2 seconds after the message before.
 Triggers:
 - Someone presses Start on your bot
 - Someone presses Start through a specific start link tag
@@ -279,9 +281,20 @@ No self-referrals, fake accounts, spam, or paid ads bidding on the word "Castvoo
 Messages: "That VooSquare account is already linked to another Castvoo login", "Your Castvoo account is already linked to a different VooSquare account", "That email belongs to a different VooSquare account": log in with the matching account, or ask support.
 Castvoo works on its own; Joinvoo and Replyvoo are separate tools with their own accounts and prices.` },
 
-  { key: 'team', title: 'Team and roles', body: `Settings → Team → Invite (owner only). Roles inside a workspace: Owner (everything, including billing and connections), Can send (create and send messages and follow-ups), Drafts only (can write but an owner must send). The number of seats depends on the plan (see the live plan list); "Your plan has N seats" means remove someone or upgrade.
+  { key: 'team', title: 'Team and roles', body: `Settings → Team → Invite (owner only). Roles inside a workspace: Owner (everything, including billing and connections), Can send (create and send messages and follow-ups), Drafts only (can write but an owner must send), Setup helper (sets up and runs the workspace with their own login; see the setup helper article). The number of seats depends on the plan (see the live plan list); "Your plan has N seats" means remove someone or upgrade.
 The invite goes by email. "This invite was sent to ... Log in with that email, or add it to your account in Settings, then open the link again."
 Ownership of a workspace cannot be moved by members; the support team handles ownership changes after checks.` },
+
+  { key: 'setup-helper', title: 'Setup helper: let someone set up your account without your password', body: `A setup helper is one person (for example your media buyer, a freelancer or a friend) who sets up and runs your workspace with THEIR OWN Castvoo login. Nobody shares a password. Every plan includes 1 setup helper, the Free plan too, and the helper does not use a team seat. One helper per workspace at a time.
+Invite (owner only): Settings → Team → Setup helper → Invite a setup helper (also on the Home checklist, the Welcome Flows page and Help). Two ways:
+- By email: only that email address can accept.
+- Invite link: a one-time link to send on Telegram or WhatsApp. The first person who opens it, logs in (email code, Telegram or VooSquare) and taps Accept becomes the helper; then the link stops working. Making a new link cancels the old one.
+Invites expire after 7 days. Before joining, the helper sees a screen with what they can and can't do, and taps Accept or Decline. The owner gets an email and a notice in the dashboard when the helper joins.
+A setup helper CAN: connect bots, channels and groups; build Welcome Flows, follow-ups, audiences and start links; write, schedule and send broadcasts; see subscribers and add tags; Train Cas and use the AI writing tools; change workspace settings; top up the wallet with their own payment method if they want; chat with support about the workspace.
+A setup helper CANNOT: see or change the owner's login, email, Telegram link, sessions or login codes; delete the workspace or the account; export all data (subscriber CSV); invite, remove or change teammates; cancel the plan; see, move or withdraw referral earnings or payout details; ask for refunds. They can change the plan and use coupons only if the owner turns on "Can manage billing & plan" (off by default).
+Owner controls on the helper card: name, email or Telegram, joined date, last active, an Activity list of what the helper changed (for example "Created Welcome Flow 'VIP welcome'"), "Can send broadcasts" (on by default; off means the helper writes and schedules and the owner approves before anything goes out) and "Can manage billing & plan". Remove helper: they lose access straight away on every device and get an email. Messages and flows they scheduled keep running unless the owner cancels them.
+The helper sees a "You're helping <workspace> as setup helper" bar with Leave, and a Helper badge in the workspace switcher. Things only the owner can do are hidden or say "Only the owner can do this".
+Video: the guide "Invite a setup helper" (about 1.5 minutes, on the Guides page) shows all of this in the real dashboard. Open it with "Watch the guide" on the Setup helper card in Settings → Team or on the "Get help setting up" cards (Home and Welcome Flows).` },
 
   { key: 'settings-account', title: 'Profile, email and country', body: `Settings → Profile: name, email, country, marketing emails on/off. Changing your email sends a 6-digit code to the new address ("That email already belongs to another Castvoo account" means it is used by another login).
 Country decides your payment methods and local currency.
@@ -334,7 +347,7 @@ No add-on fees and no setup fees.` },
 - 500 join requests a month, let in automatically.
 - 1 welcome message: text or 1 photo, up to 3 link buttons, and {name} for their first name.
 - Every Free welcome ends with "⚡ Free welcome bot by Castvoo.com". It links to your own referral link, so you can earn commission from it. It can't be removed on Free; any paid plan removes it. Because of that line, a Free welcome must be a little shorter than Telegram's normal limit.
-- Not on Free: follow-up messages, broadcasts, the "Tap to start" button, stats, audiences, start links, Cas and extra seats. Support chats: a few instant AI support chats a month, then the team answers.
+- Not on Free: follow-up messages, broadcasts, the "Tap to start" button, stats, audiences, start links, Cas and extra seats (one setup helper is included, see the setup helper article). Support chats: a few instant AI support chats a month, then the team answers.
 A workspace also moves to Free when the trial ends without a paid plan, when a plan is cancelled and its period ends, or when the wallet can't pay a renewal. Nothing is deleted. A top-up that covers the old plan starts it again by itself.` },
 
   { key: 'join-meter', title: 'Join requests per month', body: `Each plan includes a number of join requests a month (see the live plan list; the trial has its own amount). A join request is one person asking to join a channel or group that has a live Welcome Flow. The count resets on the 1st of each month (UTC); during the trial it counts the whole trial.
@@ -347,14 +360,15 @@ Setup:
 2. Connect your own bot (from @BotFather).
 3. Make that bot an admin of the channel with the "Add members" (invite users) right. Castvoo checks this and tells you how to fix it before a flow goes live ("@yourbot is not an admin of ... yet. In Telegram, open ... → Administrators → Add admin → @yourbot, and turn on Add members").
 Then pick a template (Simple welcome, Welcome + VIP link button, Tap to join, Welcome + 3-day follow-up, Free gift), change the words and switch it on. Templates start as drafts.
-A flow is a list of steps: messages (text, {name}, a photo or video, buttons, 2 side by side) and waits like "Wait 1 day". The first step is always a message. Add steps with the + button, move them by dragging or with the arrows, copy or delete them. Two waits next to each other are joined into one longer wait. On plans with Cas, each message has a "Write it with Cas" button: describe what the message is for and Cas writes it (uses 1 AI write). Templates contain example text in brackets, like "(Write one useful tip for your audience here.)": the builder asks you to replace it before saving.
+A flow is a list of steps: messages (text, {name}, a photo or video, buttons, 2 side by side) and waits like "Wait 2 seconds" or "Wait 1 day" (units: seconds, minutes, hours, days; 0 to 999 each, 365 days in all; "Send right away" means no wait). The first step is always a message. Add steps with the + button, move them by dragging or with the arrows, copy or delete them. Two waits next to each other are joined into one longer wait. On plans with Cas, each message has a "Write it with Cas" button: describe what the message is for and Cas writes it (uses 1 AI write). Templates contain example text in brackets, like "(Write one useful tip for your audience here.)": the builder asks you to replace it before saving.
 How people get in: "After the welcome" (default: they get your message first; if Telegram refuses it, they wait in Requests), "Straight away" (even if the welcome fails), "When they tap a button" (they tap Tap to join and press Start; this stops most fake accounts), or "I decide" (approve or decline in the Requests tab, many at once).
 You can make several flows (how many, and how many messages each, depends on the plan), but only one can be live per channel (or per invite link): "... is already live on ... Save this one as a draft, or switch that one off first". A flow can have its own invite link, so each ad can get its own welcome.
 Growth and up: A/B test the welcome (Scale: up to 4 versions), and send a message only to people who clicked, or didn't click, a button before. Starter shows per-step deliveries and clicks; Growth and up show the whole funnel.
 Join-request follow-ups made before Welcome Flows existed keep working and show up here.` },
 
   { key: 'five-minute-rule', title: 'The 5-minute rule and "Tap to start"', body: `Telegram's rule: after someone asks to join, your bot may message them for 5 minutes, until the request is handled. That is why Castvoo sends the welcome at once, before letting them in.
-After that, bots can only message people who pressed Start in the bot. So steps after the welcome only reach people who tapped Start.
+Messages in the first 5 minutes reach everyone who asked to join, even people who never tap Start: for example the welcome, then "Wait 10 seconds", then a second message. (The builder marks them "Reaches everyone · first 5 min"; waits after the welcome must add up to 4 minutes 40 seconds or less.) Letting someone in ends those 5 minutes, so with "After the welcome" or "Straight away" Castvoo lets them in right after the last of those quick messages, automatically. With "When they tap a button" they get in when they tap; with "I decide" you let them in (if you do it before the quick messages go out, the rest wait for Start).
+After the first 5 minutes, bots can only message people who pressed Start in the bot. So later steps only reach people who tapped Start.
 Add the "Tap to start" button to your welcome (Starter and up). It opens your bot; when they press Start, they become a bot subscriber, and the next steps go out on time. People who never tap Start don't get later steps; Castvoo keeps their steps waiting for 7 days, then stops.
 "Tap to join" (the approve mode) uses the same button: they are let in when they press Start.` },
   /* ===================================== end of the pricing block ===================================== */

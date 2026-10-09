@@ -69,7 +69,7 @@ describe('Voo ID login', () => {
     assert.ok(cleared.some((x) => x.startsWith('cv_session=') && /HttpOnly/.test(x)), 'our own session');
     const row = await app.db.one('select * from users where voo_id = $1', [u.voo_id]);
     assert.equal(row.email, u.email);
-    assert.equal(row.country, 'NG');
+    assert.equal(row.country, null, 'no country copied from VooSquare: the customer selects it in the country step');
     assert.equal(row.voo_ref, u.voo_ref);
     assert.equal(row.email_verified, true);
     assert.ok(await app.db.one('select 1 from workspaces where owner_user_id = $1', [row.id]), 'workspace with a trial');

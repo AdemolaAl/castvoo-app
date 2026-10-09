@@ -1,6 +1,6 @@
 # API reference
 
-Generated from the code by `node scripts/api-docs.js` (209 routes).
+Generated from the code by `node scripts/api-docs.js` (250 routes).
 
 Rules: JSON in and out. Every non-GET request from the browser must send the header `x-cv: 1`. A user in several workspaces sends `x-ws: <workspace id>`. Errors look like `{"error": "Friendly message", "code": "machine_code"}`.
 Each route has a comment above it in `server/routes/` explaining its input and output.
@@ -28,9 +28,16 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 | POST | `/api/app/settings` | logged in + workspace |
 | GET | `/api/app/team` | logged in + workspace |
 | POST | `/api/app/team/invite` | logged in + workspace · max 30 per 3600s per account |
+| POST | `/api/app/team/helper-link` | logged in + workspace · max 30 per 3600s per account |
+| POST | `/api/app/team/helper/cancel-invite` | logged in + workspace |
+| POST | `/api/app/team/helper/settings` | logged in + workspace |
+| POST | `/api/app/team/helper/seen` | logged in + workspace |
 | POST | `/api/app/team/remove` | logged in + workspace |
+| POST | `/api/app/team/leave` | logged in + workspace |
 | POST | `/api/app/team/role` | logged in + workspace |
+| GET | `/api/invites/:token` | logged in · max 60 per 600s per account |
 | POST | `/api/invites/accept` | logged in |
+| POST | `/api/invites/decline` | logged in · max 30 per 600s per account |
 | GET | `/api/app/plan` | logged in + workspace |
 | POST | `/api/app/plan` | logged in + workspace |
 | POST | `/api/app/plan/cancel` | logged in + workspace |
@@ -105,6 +112,7 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 | GET | `/api/support/attachments/:id` | logged in |
 | GET | `/api/auth/voosquare/start` | anyone |
 | GET | `/api/auth/voosquare/callback` | anyone |
+| GET | `/api/public/blog/latest` | anyone |
 
 ## Pages
 
@@ -113,13 +121,24 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 | GET | `/health` | anyone |
 | GET | `/dashboard` | anyone |
 | GET | `/voo-connect-browser.js` | anyone |
+| GET | `/robots.txt` | anyone |
+| GET | `/sitemap.xml` | anyone |
+| GET | `/sitemap/:file` | anyone |
+| GET | `/blog` | anyone |
+| GET | `/blog/rss.xml` | anyone |
+| GET | `/blog/og/:file` | anyone |
+| GET | `/blog/media/:file` | anyone |
+| GET | `/blog/avatars/:slug` | anyone |
+| GET | `/blog/preview/:id` | anyone |
+| GET | `/blog/category/:slug` | anyone |
+| GET | `/blog/tag/:slug` | anyone |
+| GET | `/blog/author/:slug` | anyone |
+| GET | `/blog/:slug` | anyone |
 | GET | `/legal` | anyone |
 | GET | `/legal/:slug` | anyone |
 | GET | `/r/:code` | anyone |
 | GET | `/l/:code` | anyone |
 | GET | `/email/unsubscribe` | anyone |
-| GET | `/robots.txt` | anyone |
-| GET | `/sitemap.xml` | anyone |
 
 ## Webhooks
 
@@ -243,4 +262,26 @@ Each route has a comment above it in `server/routes/` explaining its input and o
 | GET | `/api/admin/audit` | staff: `audit.view` |
 | GET | `/api/admin/system` | staff: `system.view` |
 | POST | `/api/admin/integrations/:name/test` | staff: `system.view` · max 30 per 600s per account |
+| GET | `/api/admin/blog/posts` | staff: `overview.view` |
+| GET | `/api/admin/blog/posts/:id` | staff: `overview.view` |
+| GET | `/api/admin/blog/slug` | staff: `overview.view` |
+| POST | `/api/admin/blog/posts` | staff: `blog.edit` |
+| PUT | `/api/admin/blog/posts/:id` | staff: `blog.edit` |
+| POST | `/api/admin/blog/posts/:id/publish` | staff: `blog.publish` |
+| POST | `/api/admin/blog/posts/:id/unpublish` | staff: `blog.publish` |
+| DELETE | `/api/admin/blog/posts/:id` | staff: `blog.publish` |
+| GET | `/api/admin/blog/posts/:id/preview-link` | staff: `blog.edit` |
+| POST | `/api/admin/blog/posts/:id/revisions/:rev/restore` | staff: `blog.edit` |
+| POST | `/api/admin/blog/preview` | staff: `overview.view` · max 240 per 60s per account |
+| POST | `/api/admin/blog/images` | staff: `blog.edit` · max 60 per 600s per account |
+| GET | `/api/admin/blog/categories` | staff: `overview.view` |
+| POST | `/api/admin/blog/categories` | staff: `blog.edit` |
+| PUT | `/api/admin/blog/categories/:id` | staff: `blog.edit` |
+| DELETE | `/api/admin/blog/categories/:id` | staff: `blog.edit` |
+| GET | `/api/admin/blog/authors` | staff: `overview.view` |
+| POST | `/api/admin/blog/authors` | staff: `blog.edit` |
+| PUT | `/api/admin/blog/authors/:id` | staff: `blog.edit` |
+| DELETE | `/api/admin/blog/authors/:id` | staff: `blog.edit` |
+| POST | `/api/admin/blog/authors/:id/photo` | staff: `blog.edit` · max 30 per 600s per account |
+| DELETE | `/api/admin/blog/authors/:id/photo` | staff: `blog.edit` |
 

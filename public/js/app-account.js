@@ -19,7 +19,7 @@ PAGES.settings = {
     const [me, team] = await Promise.all([GET('/api/me'), GET('/api/app/team').catch(() => null)]);
     if (!alive()) return;
     ME = me;
-    const u = me.user, ws = APP.state.workspace, owner = isOwner(), p = APP.state.plan;
+    const u = me.user, ws = APP.state.workspace, owner = isOwner(), setup = canSetup(), p = APP.state.plan;
     const ctry = (CFG.countries || []);
     const L = CFG.login || {};
     el.innerHTML = '<div class="dg">' +
@@ -33,18 +33,20 @@ PAGES.settings = {
       (L.voosquare ? '<div class="srow"><span class="sri vq">V</span><div style="flex:1;min-width:0"><b>VooSquare</b><small style="display:block">' + (u.voo_linked ? 'Linked. One Voo ID for all Zedapex tools.' : 'Connect your VooSquare account to log in with your Voo ID.') + '</small></div>' + (u.voo_linked ? '<span class="pill p-ok">Linked</span>' : '<button type="button" class="btn b-ghost xs" id="stVoo">Connect</button>') + '</div>' : '') +
       '<div class="tg"><span><b style="font-size:14.5px">Tips and offers by email</b><br><small class="muted">Helpful emails about getting more from Castvoo. Receipts and login codes always arrive.</small></span>' + toggleBtn('stMk', !u.marketing_opt_out, 'Tips and offers by email') + '</div></div>' +
       // Workspace
-      '<div class="box c6"><div class="bh"><h3>' + icon('gear') + 'Workspace</h3>' + (owner ? '' : '<span class="pill p-grey">Only the owner can change these</span>') + '</div>' +
-      '<div class="field"><label for="wsN">Workspace name</label><input class="inp" id="wsN" maxlength="60" value="' + esc(ws.name) + '"' + (owner ? '' : ' disabled') + '></div>' +
-      '<div class="field"><label for="wsTz">Time zone</label><select class="inp" id="wsTz"' + (owner ? '' : ' disabled') + '>' + timeZones(ws.timezone).map((z) => '<option' + (z === ws.timezone ? ' selected' : '') + '>' + esc(z) + '</option>').join('') + '</select><small class="hint">Used for "9am local time" and for dates in reports. Pick where most of your audience lives.</small></div>' +
-      '<div class="field"><label for="wsCap">Most messages one person gets per day</label><select class="inp" id="wsCap"' + (owner ? '' : ' disabled') + '><option value="0"' + (!ws.daily_cap ? ' selected' : '') + '>No limit</option>' + Array.from({ length: 20 }, (_, i) => '<option value="' + (i + 1) + '"' + (ws.daily_cap === i + 1 ? ' selected' : '') + '>' + (i + 1) + '</option>').join('') + '</select><small class="hint">Too many messages a day makes people block bots. 2 or 3 is a safe limit. Applies to bot broadcasts.</small></div>' +
+      '<div class="box c6"><div class="bh"><h3>' + icon('gear') + 'Workspace</h3>' + (setup ? '' : '<span class="pill p-grey">Only the owner can change these</span>') + '</div>' +
+      '<div class="field"><label for="wsN">Workspace name</label><input class="inp" id="wsN" maxlength="60" value="' + esc(ws.name) + '"' + (setup ? '' : ' disabled') + '></div>' +
+      '<div class="field"><label for="wsTz">Time zone</label><select class="inp" id="wsTz"' + (setup ? '' : ' disabled') + '>' + timeZones(ws.timezone).map((z) => '<option' + (z === ws.timezone ? ' selected' : '') + '>' + esc(z) + '</option>').join('') + '</select><small class="hint">Used for "9am local time" and for dates in reports. Pick where most of your audience lives.</small></div>' +
+      '<div class="field"><label for="wsCap">Most messages one person gets per day</label><select class="inp" id="wsCap"' + (setup ? '' : ' disabled') + '><option value="0"' + (!ws.daily_cap ? ' selected' : '') + '>No limit</option>' + Array.from({ length: 20 }, (_, i) => '<option value="' + (i + 1) + '"' + (ws.daily_cap === i + 1 ? ' selected' : '') + '>' + (i + 1) + '</option>').join('') + '</select><small class="hint">Too many messages a day makes people block bots. 2 or 3 is a safe limit. Applies to bot broadcasts.</small></div>' +
       '<div class="tg"><span><b style="font-size:14.5px">Approve before sending</b><br><small class="muted">Teammates\' messages wait for the owner to approve them.</small></span>' + toggleBtn('wsAp', ws.require_approval, 'Approve before sending') + '</div>' +
-      (owner ? '<button type="button" class="btn b-blue sm" id="wsSave" style="align-self:flex-start">Save workspace</button>' : '') +
+      (setup ? '<button type="button" class="btn b-blue sm" id="wsSave" style="align-self:flex-start">Save workspace</button>' : '') +
       '<div class="srow"><span class="sri">' + icon('wallet') + '</span><div style="flex:1;min-width:0"><b>Plan: ' + esc(p.plan_name) + '</b><small style="display:block">' + esc({ trial: 'Free trial', active: 'Active', paused: 'Paused', cancelled: 'No active plan' }[p.status] || p.status) + '</small></div><button type="button" class="btn b-ghost xs" data-go="wallet">Manage plan</button></div></div>' +
       // Team
-      '<div class="box c6" id="stTeam"><div class="bh"><h3>' + icon('users') + 'Team</h3>' + (team ? '<span class="hint">' + fmt(team.members.length + team.invites.length) + ' of ' + plural(team.seats, 'seat') + ' used</span>' : '') + '</div>' +
-      (team ? team.members.map((m) => '<div class="srow">' + ava(m.name || m.email || '?', 40) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(m.name || 'Teammate') + (m.id === u.id ? ' <span class="muted">(you)</span>' : '') + '</b><small class="ell" style="display:block">' + esc(m.email || (m.tg_username ? '@' + m.tg_username : '')) + '</small></div>' + (owner && m.role !== 'owner' ? '<select class="inp sm" data-role="' + m.id + '" aria-label="Role"><option value="sender"' + (m.role === 'sender' ? ' selected' : '') + '>Can send</option><option value="drafter"' + (m.role === 'drafter' ? ' selected' : '') + '>Drafts only</option></select><button type="button" class="x" data-rmm="' + m.id + '" aria-label="Remove ' + esc(m.name) + '"><svg width="15" height="15"><use href="#i-trash"/></svg></button>' : '<span class="pill p-grey">' + roleName(m.role) + '</span>') + '</div>').join('') +
+      '<div class="box c6" id="stTeam"><div class="bh"><h3>' + icon('users') + 'Team</h3>' + (team ? '<span class="hint">' + fmt(team.seats_used) + ' of ' + plural(team.seats, 'seat') + ' used</span>' : '') + '</div>' +
+      (team ? team.members.filter((m) => m.role !== 'helper').map((m) => '<div class="srow">' + ava(m.name || m.email || '?', 40) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(m.name || 'Teammate') + (m.id === u.id ? ' <span class="muted">(you)</span>' : '') + '</b><small class="ell" style="display:block">' + esc(m.email || (m.tg_username ? '@' + m.tg_username : '')) + '</small></div>' + (owner && m.role !== 'owner' ? '<select class="inp sm" data-role="' + m.id + '" aria-label="Role"><option value="sender"' + (m.role === 'sender' ? ' selected' : '') + '>Can send</option><option value="drafter"' + (m.role === 'drafter' ? ' selected' : '') + '>Drafts only</option></select><button type="button" class="x" data-rmm="' + m.id + '" aria-label="Remove ' + esc(m.name) + '"><svg width="15" height="15"><use href="#i-trash"/></svg></button>' : '<span class="pill p-grey">' + roleName(m.role) + '</span>') + '</div>').join('') +
         team.invites.map((i) => '<div class="srow"><span class="sri">' + icon('mail') + '</span><div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(i.email) + '</b><small>Invited · ' + roleName(i.role) + ' · expires ' + fmtDate(i.expires_at, false) + '</small></div><span class="pill p-warn">Waiting</span></div>').join('') : '<p class="muted">Could not load the team.</p>') +
       (owner ? '<form class="invf" id="invF" novalidate><input class="inp" id="invE" type="email" placeholder="teammate@company.com" aria-label="Teammate email"><select class="inp sm" id="invR" aria-label="Role"><option value="sender">Can send</option><option value="drafter">Drafts only</option></select><button type="submit" class="btn b-blue sm">' + icon('plus') + 'Invite</button></form><p class="ferr" id="invErr" hidden></p><div id="invOk"></div><p class="hint"><b>Can send:</b> writes and sends messages. <b>Drafts only:</b> writes, and the owner sends.</p>' : '') + '</div>' +
+      // Setup helper
+      (team ? helperBox(team, u) : '') +
       // Data
       '<div class="box c6"><div class="bh"><h3>' + icon('shield') + 'Your data</h3></div><p class="muted" style="font-size:14px">Download everything Castvoo holds about you, or delete your account. Read the <a href="/legal/privacy" target="_blank" rel="noopener">privacy policy</a>.</p>' +
       '<div class="srow"><span class="sri">' + icon('down') + '</span><div style="flex:1"><b>Download my data</b><small style="display:block">A file with your account, workspaces, subscribers and messages.</small></div><a class="btn b-ghost xs" href="/api/me/export" download>Download</a></div>' +
@@ -52,7 +54,8 @@ PAGES.settings = {
       '<button type="button" class="btn b-ghost sm" data-logout style="align-self:flex-start">' + icon('out') + 'Log out</button>' +
       '<p class="hint"><a href="/legal/terms" target="_blank" rel="noopener">Terms</a> · <a href="/legal/privacy" target="_blank" rel="noopener">Privacy</a> · <a href="/legal/refunds" target="_blank" rel="noopener">Refunds</a> · <a href="/legal/acceptable-use" target="_blank" rel="noopener">Acceptable use</a> · <a href="/legal/cookies" target="_blank" rel="noopener">Cookies</a></p></div>' +
       '</div>';
-    if (q.tab === 'team') later(150, () => { const t = $('#stTeam'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    if (q.tab === 'team' || q.tab === 'helper') later(150, () => { const t = $(q.tab === 'helper' ? '#stHelper' : '#stTeam'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    if (team) wireHelperBox(el, team);
 
     const ctH = () => { const c = $('#stCt').value; if (!c) return; GET('/api/public/methods?country=' + c).then((r) => { if ($('#stCtH')) $('#stCtH').textContent = r.methods.length ? 'You can pay with: ' + r.methods.map((m) => m.label + (m.detail ? ' (' + m.detail + ')' : '')).join(', ') + '.' : 'Card and crypto options appear here once payments are switched on.'; }).catch(() => {}); };
     $('#stCt').onchange = ctH; ctH();
@@ -74,7 +77,7 @@ PAGES.settings = {
     };
     const tg = $('#stTg'); if (tg) tg.onclick = () => linkTelegram(() => renderPage('settings', {}));
     $('#stEm').onclick = () => { emailMini($('#stEmBox'), () => renderPage('settings', {})); const t = $('#stEmBox b'); if (t) t.textContent = 'Your email'; const p2 = $('#stEmBox p'); if (p2) p2.textContent = 'We send a 6-digit code to check it\'s yours.'; };
-    const ap = $('#wsAp'); ap.onclick = () => { if (owner) setToggle(ap, !ap.classList.contains('on')); };
+    const ap = $('#wsAp'); ap.onclick = () => { if (setup) setToggle(ap, !ap.classList.contains('on')); };
     const wsv = $('#wsSave'); if (wsv) wsv.onclick = async (e) => {
       await busy(e.currentTarget, 'Saving…', async () => {
         try { await POST('/api/app/settings', { name: $('#wsN').value.trim(), timezone: $('#wsTz').value, daily_cap: +$('#wsCap').value, require_approval: ap.classList.contains('on') }); await refreshState(); await loadMe(); toast('Workspace saved.'); } catch (ex) { apiErr(ex); }
@@ -103,6 +106,117 @@ PAGES.settings = {
     });
   },
 };
+
+/* ---------- Setup helper (Settings → Team) ----------
+ * One person the owner invites to set up and run the workspace with their own login. Free on every plan, no seat.
+ * API: GET /api/app/team (helper: member, invite, settings, activity), POST /api/app/team/invite { role: 'helper' },
+ *      /api/app/team/helper-link, /helper/cancel-invite, /helper/settings, /team/remove, /team/leave.
+ */
+function helperLists(can, cannot, who) {
+  who = who || 'They';
+  return '<div class="hlpl"><div><b class="ok">' + icon('check') + who + ' can</b><ul>' + (can || []).map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' +
+    '<div><b class="no">' + icon('x') + who + ' can\'t</b><ul>' + (cannot || []).map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div></div>';
+}
+function helperBox(team, u) {
+  const H = team.helper || {}, m = H.member, inv = H.invite;
+  let body = '';
+  if (isHelper()) {
+    body = '<div class="srow">' + ava(u.name || u.email || '?', 40) + '<div style="flex:1;min-width:0"><b>You\'re the setup helper</b><small style="display:block">You use your own login. The owner can remove you at any time.</small></div><button type="button" class="btn b-ghost xs danger" data-helper-leave>Leave</button></div>' +
+      helperLists(H.can, H.cannot, 'You') +
+      '<p class="hint">Right now you ' + (H.settings.send ? 'can send broadcasts' : 'write and schedule broadcasts, and the owner sends them') + ', and you ' + (H.settings.billing ? 'can change the plan' : 'can\'t change the plan') + '.</p>';
+  } else if (!isOwner()) {
+    body = m ? '<div class="srow">' + ava(m.name || '?', 40) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(m.name || 'Setup helper') + '</b><small>Setup helper · joined ' + esc(fmtDate(m.joined_at, false)) + '</small></div><span class="pill p-tg">Helper</span></div>' : '<p class="muted" style="font-size:14px">No setup helper yet. The owner can invite one.</p>';
+  } else if (m) {
+    const act = H.activity || [];
+    body = '<div class="hlpm">' + ava(m.name || m.email || '?', 48) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block;font-size:15.5px">' + esc(m.name || 'Setup helper') + ' <span class="pill p-tg">Helper</span></b><small class="ell" style="display:block">' + esc([m.email, m.tg_username ? '@' + m.tg_username : ''].filter(Boolean).join(' · ')) + '</small>' +
+      '<small class="hlpd"><span>Joined ' + esc(fmtDate(m.joined_at, false)) + '</span><span>' + (m.last_active_at ? 'Active ' + esc(ago(m.last_active_at)) : 'Not active yet') + '</span></small></div></div>' +
+      '<div class="tg"><span><b style="font-size:14.5px">Can send broadcasts</b><br><small class="muted">Off: they write and schedule, and you approve before anything goes out.</small></span>' + toggleBtn('hpSend', H.settings.send, 'Can send broadcasts') + '</div>' +
+      '<div class="tg"><span><b style="font-size:14.5px">Can manage billing &amp; plan</b><br><small class="muted">Change the plan and use coupons. Cancelling, refunds and earnings stay yours.</small></span>' + toggleBtn('hpBill', H.settings.billing, 'Can manage billing and plan') + '</div>' +
+      '<div class="hlpa"><b>Activity</b>' + (act.length ? '<ol>' + act.map((a) => '<li><span>' + esc(a.line) + '</span><small>' + esc(ago(a.created_at)) + '</small></li>').join('') + '</ol>' : '<p class="muted" style="font-size:14px;margin:6px 0 0">Nothing yet. What they change shows up here.</p>') + '</div>' +
+      '<button type="button" class="btn b-ghost sm danger" id="hpRm" data-id="' + Number(m.id) + '" data-name="' + esc(m.name || 'your setup helper') + '" style="align-self:flex-start">' + icon('trash') + 'Remove helper</button>';
+  } else if (inv) {
+    body = '<div class="srow"><span class="sri">' + icon(inv.kind === 'link' ? 'link' : 'mail') + '</span><div style="flex:1;min-width:0"><b class="ell" style="display:block">' + (inv.kind === 'link' ? 'One-time invite link' : esc(inv.email)) + '</b><small>Waiting for them to accept · expires ' + esc(fmtDate(inv.expires_at, false)) + '</small></div><span class="pill p-warn">Waiting</span></div>' +
+      (inv.link ? '<div class="copy"><code>' + esc(inv.link) + '</code><button type="button" class="btn b-blue xs" data-copy="' + esc(inv.link) + '" data-msg="Invite link copied">' + icon('copy') + 'Copy</button></div>' : '') +
+      '<div class="row2b"><button type="button" class="btn b-ghost sm" id="hpCancel">Cancel invite</button><button type="button" class="btn b-blue sm" data-helper-invite>New invite</button></div>';
+  } else {
+    body = '<p class="muted" style="font-size:14.5px;margin:0">Let your media buyer, a freelancer or a friend set up your bots, Welcome Flows and broadcasts with <b>their own login</b>. No password sharing, and you can remove them any time.</p>' +
+      helperLists(H.can, H.cannot) +
+      '<button type="button" class="btn b-blue sm" data-helper-invite style="align-self:flex-start">' + icon('plus') + 'Invite a setup helper</button>';
+  }
+  // The video guide sits under the card for the owner and the helper (app-guides.js "setup-helper").
+  const vg = (isOwner() || isHelper()) && typeof guideLink === 'function' ? '<div class="hlpg">' + guideLink('setup-helper') + '</div>' : '';
+  return '<div class="box c6 hlpbox" id="stHelper"><div class="bh"><h3>' + icon('users') + 'Setup helper</h3><span class="pill p-ok">1 included, free</span></div>' + body + vg + '</div>';
+}
+function wireHelperBox(el, team) {
+  const H = team.helper || {};
+  const flip = (id, key, msgOn, msgOff) => {
+    const b = $('#' + id, el); if (!b) return;
+    b.onclick = async () => {
+      const on = !b.classList.contains('on'); setToggle(b, on);
+      try { await POST('/api/app/team/helper/settings', { [key]: on }); toast(on ? msgOn : msgOff); } catch (ex) { setToggle(b, !on); apiErr(ex); }
+    };
+  };
+  flip('hpSend', 'send', 'Your helper can send broadcasts.', 'Your helper\'s broadcasts now wait for you.');
+  flip('hpBill', 'billing', 'Your helper can manage the plan.', 'Only you can change the plan now.');
+  const c = $('#hpCancel', el); if (c) c.onclick = async () => { try { await POST('/api/app/team/helper/cancel-invite'); toast('Invite cancelled. The link no longer works.'); await refreshState(); renderPage('settings', { tab: 'helper' }); } catch (ex) { apiErr(ex); } };
+  const rm = $('#hpRm', el); if (rm) rm.onclick = () => removeHelper(+rm.dataset.id, rm.dataset.name);
+  void H;
+}
+function removeHelper(id, name) {
+  const h = sheet('Remove ' + esc(name) + '?', '<span class="spk" style="background:var(--bad)">' + icon('trash') + '</span>',
+    '<p class="muted" style="font-size:15px">They lose access to this workspace <b>straight away</b>, on every device. Things they scheduled keep running unless you cancel them in Send a message and Welcome Flows.</p>' +
+    '<p class="muted" style="font-size:14px">We\'ll email them that their access ended. You can invite a new helper any time.</p>' +
+    '<div class="row2b"><button type="button" class="btn b-ghost" data-shx>Keep helper</button><button type="button" class="btn b-bad" id="hpRmGo">Remove helper</button></div>');
+  $('#hpRmGo', h).onclick = async (e) => {
+    await busy(e.currentTarget, 'Removing…', async () => {
+      try { await POST('/api/app/team/remove', { user_id: id }); closeModal(); toast('Removed. They no longer have access.'); await refreshState(); renderPage('settings', { tab: 'helper' }); } catch (ex) { apiErr(ex); }
+    });
+  };
+}
+/* Invite a setup helper: by email (only that email can accept) or a one-time link to share on Telegram or WhatsApp. */
+function openHelperInvite() {
+  if (!isOwner()) { toast(OWNER_ONLY); return; }
+  const h = sheet('Invite a setup helper', '<span class="spk">' + icon('users') + '</span>',
+    '<p class="muted" style="font-size:14.5px;margin-top:0">They set things up with their own login. No password sharing. Free on every plan, and you can remove them any time.</p>' +
+    '<div class="seg2" role="tablist"><button type="button" class="on" data-hm="email" role="tab" aria-selected="true">' + icon('mail') + 'By email</button><button type="button" data-hm="link" role="tab" aria-selected="false">' + icon('link') + 'Invite link</button></div>' +
+    '<div data-hp="email"><div class="field"><label for="hpE">Their email</label><input class="inp" id="hpE" type="email" inputmode="email" autocomplete="off" placeholder="mediabuyer@gmail.com"></div><p class="hint">Only this email can accept. The invite works for 7 days.</p><p class="ferr" id="hpErr" hidden></p><button type="button" class="btn b-blue full" id="hpGo">' + icon('send') + 'Send invite</button></div>' +
+    '<div data-hp="link" hidden><p class="muted" style="font-size:14px">A one-time link you send on Telegram or WhatsApp. The first person who opens it, logs in and accepts becomes your helper, then the link stops working. It expires in 7 days.</p><div id="hpL"><button type="button" class="btn b-blue full" id="hpMk">' + icon('link') + 'Create invite link</button></div></div>' +
+    '<details class="hlpx"><summary>What can a setup helper do?</summary>' + helperLists(HELPER_CAN, HELPER_CANNOT) + '</details>');
+  $('.seg2', h).onclick = (e) => {
+    const b = e.target.closest('[data-hm]'); if (!b) return;
+    $$('.seg2 button', h).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', String(x === b)); });
+    $$('[data-hp]', h).forEach((x) => { x.hidden = x.dataset.hp !== b.dataset.hm; });
+  };
+  $('#hpGo', h).onclick = async (e) => {
+    const email = $('#hpE', h).value.trim(), err = $('#hpErr', h);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { err.textContent = 'Enter your helper\'s email.'; err.hidden = false; return; }
+    err.hidden = true;
+    await busy(e.currentTarget, 'Sending…', async () => {
+      try { await POST('/api/app/team/invite', { email, role: 'helper' }); closeModal(); toast('Invite sent to ' + email + '.'); await refreshState(); if (APP.page === 'settings') renderPage('settings', { tab: 'helper' }); else renderPage(APP.page, APP.q); }
+      catch (ex) { err.textContent = ex.message; err.hidden = false; apiErr(ex, { silent: true }); }
+    });
+  };
+  $('#hpMk', h).onclick = async (e) => {
+    await busy(e.currentTarget, 'Creating…', async () => {
+      try {
+        const r = await POST('/api/app/team/helper-link');
+        const msg = 'Hi! I\'d like your help setting up my Castvoo account. Open this link to accept (you\'ll use your own login): ' + r.link;
+        $('#hpL', h).innerHTML = '<div class="copy"><code>' + esc(r.link) + '</code><button type="button" class="btn b-blue xs" data-copy="' + esc(r.link) + '" data-msg="Invite link copied">' + icon('copy') + 'Copy</button></div>' +
+          '<div class="row2b"><a class="btn b-ghost sm" target="_blank" rel="noopener" href="https://t.me/share/url?url=' + encodeURIComponent(r.link) + '&text=' + encodeURIComponent('Help me set up my Castvoo account (you\'ll use your own login).') + '">' + icon('tg') + 'Telegram</a><a class="btn b-ghost sm" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(msg) + '">' + icon('chat') + 'WhatsApp</a></div>' +
+          '<p class="hint">Works once, until ' + esc(fmtDate(r.expires_at, false)) + '. Making a new link cancels this one.</p>';
+        refreshState();
+      } catch (ex) { apiErr(ex); }
+    });
+  };
+}
+/* Shown on the invite sheet before the server's list arrives (the server's GET /api/app/team has the same words). */
+const HELPER_CAN = ['Connect bots, channels and groups', 'Build Welcome Flows, follow-ups, audiences and start links', 'Write, schedule and send broadcasts', 'See subscribers and add tags', 'Train Cas and use the AI writing tools', 'Change workspace settings', 'Top up the wallet with your own payment method, if you want to', 'Chat with Castvoo support about this workspace'];
+const HELPER_CANNOT = ['See or change the owner\'s login, email or Telegram link', 'Delete the workspace or the account, or export all data', 'Invite, remove or change teammates', 'Change or cancel the plan (unless the owner allows billing)', 'See, move or withdraw referral earnings or payout details', 'Ask for refunds'];
+async function leaveAsHelper() {
+  const name = APP.state ? APP.state.workspace.name : 'this workspace';
+  if (!(await confirmBox('Leave ' + name + '?', 'You will no longer be able to open this workspace. The owner can invite you again.', 'Leave', true))) return;
+  try { await POST('/api/app/team/leave'); WS.set(null); await loadMe(); APP.booted = false; toast('You left ' + name + '.'); appGo('overview'); } catch (ex) { apiErr(ex); }
+}
 
 function deleteAccount() {
   const h = sheet('Delete your account', '<span class="spk" style="background:var(--bad)">' + icon('trash') + '</span>',
@@ -156,7 +270,7 @@ PAGES.help = {
         '<div class="chat-foot"><span>' + (ai.on ? icon('clock') + '24/7 · AI agents with our human team on call' : icon('mail') + 'We reply here and by email') + '</span>' + poweredBy(opt.powered_by) + '</div>' +
         (opt.images ? '<div class="dropz" id="hpDrop" hidden><span>' + icon('image') + 'Drop your screenshot to attach it</span></div>' : '')
         : emptyBox({ plain: 1, emoji: '✉️', title: 'Chat is offline right now', text: 'Email us at <a href="mailto:' + esc(s.email) + '">' + esc(s.email) + '</a> and we\'ll get back to you.' })) + '</div>' +
-      '<div class="box c4"><div class="bh"><h3>Quick help</h3></div><div class="qhelp"><button type="button" class="vgq" data-go="guides">' + icon('play') + '<span><b>Watch the video guides</b><small>' + (typeof VGUIDES !== 'undefined' ? VGUIDES.length + ' ' : '') + 'short tutorials with voice and captions</small></span></button>' + (aiOn() ? '<button type="button" data-go="ai">' + icon('spark') + '<span><b>Ask Cas</b><small>Help writing messages</small></span></button>' : '') + '<a href="/#faq" target="_blank" rel="noopener">' + icon('help') + '<span><b>Read the FAQ</b><small>Common questions</small></span></a><a href="/legal/refunds" target="_blank" rel="noopener">' + icon('wallet') + '<span><b>Refunds</b><small>How refunds work</small></span></a></div></div></div>';
+      '<div class="box c4"><div class="bh"><h3>Quick help</h3></div><div class="qhelp">' + (isOwner() && APP.state.helper && !APP.state.helper.active ? '<button type="button" data-helper-invite>' + icon('users') + '<span><b>Invite a setup helper</b><small>Your media buyer sets it up, no password sharing</small></span></button>' : '') + '<button type="button" class="vgq" data-go="guides">' + icon('play') + '<span><b>Watch the video guides</b><small>' + (typeof VGUIDES !== 'undefined' ? VGUIDES.length + ' ' : '') + 'short tutorials with voice and captions</small></span></button>' + (aiOn() ? '<button type="button" data-go="ai">' + icon('spark') + '<span><b>Ask Cas</b><small>Help writing messages</small></span></button>' : '') + '<a href="/#faq" target="_blank" rel="noopener">' + icon('help') + '<span><b>Read the FAQ</b><small>Common questions</small></span></a>' + (CFG.features.blog !== false ? '<a href="/blog" target="_blank" rel="noopener">' + icon('pencil') + '<span><b>Read the blog</b><small>Guides to grow on Telegram</small></span></a>' : '') + '<a href="/legal/refunds" target="_blank" rel="noopener">' + icon('wallet') + '<span><b>Refunds</b><small>How refunds work</small></span></a></div></div></div>';
     paintCas(el);
     if (!chatOn) return;
     const status = () => {

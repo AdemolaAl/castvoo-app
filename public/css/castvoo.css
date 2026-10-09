@@ -494,9 +494,9 @@ footer{padding-block:40px 56px;color:var(--mut);font-size:14.5px}
 .ctry button.on{border-color:var(--blue);background:var(--blue-s);box-shadow:0 0 0 4px rgba(47,107,255,.12)}
 .pmprev{border-radius:18px;background:var(--soft);padding:14px;display:flex;flex-direction:column;gap:10px}
 .pmprev .chips{display:flex;flex-wrap:wrap;gap:8px}
-.pmprev .chips span{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:6px 12px 6px 6px;font-size:13px;font-weight:700;animation:pop .4s var(--ease) both}
-.pmprev .chips small{font-weight:600}
-.pmprev .chips i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:#fff;font-style:normal;font-size:11px;font-weight:900}
+.pmprev .chips>span{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:6px 12px 6px 6px;font-size:13px;font-weight:700;animation:pop .4s var(--ease) both}
+.pmprev .chips>span>small{font-weight:600}
+.pmprev .chips>span>i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:#fff;font-style:normal;font-size:11px;font-weight:900}
 .tglk{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#E9F6FE;color:#11679A;font-size:13.5px;font-weight:700}
 .tbk{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
 .tbk div{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:10px 12px}
@@ -1385,7 +1385,7 @@ body.noscroll{overflow:hidden}
 .pp b{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .okbox svg{width:22px;height:22px;flex:none;color:var(--blue)}
 .tglk svg{width:22px;height:22px;flex:none}
-.pmprev .chips span{flex-wrap:wrap}
+.pmprev .chips>span{flex-wrap:wrap}
 
 /* ---------- dashboard shell ---------- */
 .pgt{display:none;flex-direction:column;gap:2px}
@@ -1979,6 +1979,9 @@ input.trigsel::placeholder{color:rgba(255,255,255,.5)}
 .wf-unit{border:1.5px solid var(--line2);border-radius:10px;padding:6px 8px;font-weight:700;font-size:14px;background:#fff}
 .wf-wt{font-size:13px;flex:1;min-width:0}
 .wf-blk.wait .wf-tools{margin-left:auto}
+.wf-now{flex:none;border:1.5px solid var(--line2);background:#fff;border-radius:999px;padding:5px 10px;font:inherit;font-size:12.5px;font-weight:700;color:var(--ink2,#3B4458);cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.wf-now:hover{border-color:var(--blue,#2F6BFF)}
+.wf-now.on{background:var(--blue,#2F6BFF);border-color:var(--blue,#2F6BFF);color:#fff}
 .wf-blk.wait .wf-tools button{width:28px;height:28px;border-radius:50%}
 .wf-line{width:2px;height:22px;background:var(--line2);align-self:center}
 .wf-add{display:flex;justify-content:center;position:relative;padding:8px 0}
@@ -2425,6 +2428,7 @@ em.sky{color:var(--sky);background:none}
 .seatr{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .seatr span{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:14px;background:var(--soft);border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--mut)}
 .seatr b{color:var(--ink);font-size:14.5px}
+.seatr span:nth-child(3){grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center;background:linear-gradient(90deg,var(--blue-s),#F1ECFF);border-color:#D9E3FF}
 .stack .more{width:36px;height:36px;margin-left:-10px;border-radius:50%;border:2.5px solid #fff;background:var(--blue-s);color:var(--blue-t);display:grid;place-items:center;font-size:12px;font-weight:800}
 
 /* Section headers: one rhythm everywhere */
@@ -2527,3 +2531,157 @@ em.sky{color:var(--sky);background:none}
 .hdr.sc{box-shadow:0 1px 0 var(--line)}
 .chip .cb{background:var(--blue-s,#EAF0FF);color:var(--blue-t,#1846DB);box-shadow:inset 0 0 0 1px rgba(47,107,255,.18)}
 .chip .cb svg{color:#29A9EB}
+
+/* Phones and in-app browsers (Telegram, Instagram, Claude): the header scrolls away with the page,
+   so it can never sit on top of the hero content. */
+@media (max-width:760px){.hdr{position:relative;top:auto}}
+
+/* ===== Country picker (sign-up): searchable list with flags, starts empty ===== */
+.cpk{position:relative;display:flex;flex-direction:column;gap:8px;min-width:0}
+.cpk-in{position:relative;display:flex;align-items:center}
+.cpk-in .inp{padding-left:50px;padding-right:76px;font-weight:700}
+.cpk-in .inp::placeholder{font-weight:500;color:var(--mut2)}
+.cpk-in .inp[aria-invalid=true]{border-color:var(--bad);box-shadow:0 0 0 4px var(--bad-s)}
+.cpk-fl{position:absolute;left:14px;width:26px;height:26px;display:grid;place-items:center;font-size:22px;line-height:1;color:var(--mut2);pointer-events:none}
+.cpk-fl svg{width:20px;height:20px}
+.cpk-cv{position:absolute;right:14px;width:18px;height:18px;color:var(--mut2);pointer-events:none;transform:rotate(90deg);transition:transform .2s}
+.cpk-cv svg{width:18px;height:18px;display:block}
+.cpk.open .cpk-cv{transform:rotate(-90deg)}
+.cpk-x{position:absolute;right:40px;width:28px;height:28px;border:0;border-radius:50%;background:var(--soft);color:var(--mut);display:grid;place-items:center;cursor:pointer;padding:0}
+.cpk-x svg{width:14px;height:14px}
+.cpk-l{max-height:min(300px,46dvh);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:#fff;border:1.5px solid var(--line2);border-radius:16px;padding:6px;box-shadow:var(--sh-s)}
+.cpk-l [role=option]{display:flex;align-items:center;gap:12px;width:100%;min-width:0;border:0;background:none;border-radius:11px;padding:11px 10px;font-weight:700;font-size:15px;color:var(--ink);text-align:left;cursor:pointer}
+.cpk-l [role=option] .fl{font-size:22px;line-height:1;flex:none}
+.cpk-l [role=option] .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cpk-l [role=option] svg{width:18px;height:18px;color:var(--blue);flex:none}
+.cpk-l [role=option]:hover,.cpk-l [role=option].act{background:var(--soft)}
+.cpk-l [role=option].on{background:var(--blue-s);color:var(--blue-t)}
+.cpk-g{font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--mut2);padding:10px 10px 4px}
+.cpk-no{margin:0;padding:12px 10px;color:var(--mut);font-size:14px}
+
+/* ===== Phones and touch screens: no zoom on focus, no sideways drift, no shake (iOS Safari and in-app web views) =====
+   iOS zooms into any field under 16px when it gets focus and stays zoomed; fixed and sticky bars then drift while
+   the zoomed page pans ("zoomed off and shaking"). Every field is 16px here; the larger ones keep their size. */
+@supports (overflow:clip){html,body{overflow-x:clip}}
+html,body{overscroll-behavior-x:none}
+@media (max-width:760px),(pointer:coarse){
+  :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=button]):not([type=submit]):not([type=reset]):not([type=image])),
+  :where(select,textarea,[contenteditable]:not([contenteditable=false])){font-size:16px!important}
+  .cust input{font-size:22px!important}
+  .codein{font-size:26px!important}
+  /* keep compact fields compact: a little less padding for the bigger text */
+  .inp.sm,.btnrow .inp,.slnew .inp,.invf .inp:first-child,.wf-bed .inp,.rule .inp{padding-top:8px;padding-bottom:8px}
+  .delay select,.delay input{padding:4px 6px}
+  .wf-cond select{padding:6px 8px}
+  .rule select{padding:8px 10px}
+  textarea{line-height:1.45}
+}
+@media (max-width:980px){
+  /* Solid bars instead of live blur: blur under a sticky/fixed bar repaints on every scrolled frame on iOS and jitters. */
+  .topb{background:rgba(245,247,252,.98);-webkit-backdrop-filter:none;backdrop-filter:none}
+  .dock{background:rgba(255,255,255,.98);-webkit-backdrop-filter:none;backdrop-filter:none;transform:translateZ(0)}
+  .mbar{background:rgba(255,255,255,.98);-webkit-backdrop-filter:none;backdrop-filter:none}
+  /* Big blurred blobs and endless motion are heavy on phones: keep them still. */
+  .mesh{animation:none;filter:blur(48px)}
+  .wpill .coin,.wart .bills,.wart .c1,.wart .c2,.wart .c3{animation:none}
+  .money i{animation-duration:9s!important}
+  /* Page entry: fade only, so nothing moves under the finger while a page loads. */
+  .pg>*{animation-name:fadein}
+  .sheet{max-height:92vh;max-height:92dvh}
+}
+/* The app's own content can never push the page wider than the screen. */
+.app,.main,.pg,.pgb{min-width:0;max-width:100%}
+.pg{overflow-wrap:break-word}
+.pg pre,.pg code,.pg .mono{overflow-wrap:anywhere}
+.dg>*,.row2b>*,.box>*{min-width:0}
+/* Heights that follow the visible screen (100vh is taller than the screen on iOS while its bars show). */
+.app{min-height:100vh;min-height:100dvh}
+.su{min-height:100vh;min-height:100dvh}
+.modal{max-height:calc(100vh - 40px);max-height:calc(100dvh - 40px)}
+@media (min-width:981px){.side{height:100vh;height:100dvh}}
+/* Dashboard: no smooth scrolling (page changes jump to the top instantly) and no scroll anchoring loops. */
+html:has(#v-app:not([hidden])){scroll-behavior:auto}
+.topb,.dock,.hdr,#appBanners{overflow-anchor:none}
+@media (prefers-reduced-motion:reduce){.mesh,.money i,.wpill .coin{animation:none!important}.cpk-cv{transition:none}}
+
+/* ===== Homepage "From the blog" (site.js siteBlog) ===== */
+.hblog-h{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+.hblog-h>div{display:flex;flex-direction:column;gap:12px}
+.hblog-all{display:inline-flex;align-items:center;gap:8px;font-weight:800;color:var(--blue-t);text-decoration:none;padding:10px 16px;border-radius:999px;background:#fff;border:1px solid var(--line)}
+.hblog-all svg{width:16px;height:16px;transition:transform .25s var(--ease)}
+.hblog-all:hover svg{transform:translateX(3px)}
+.hblog-g{display:grid;grid-template-columns:1fr;gap:18px}
+@media (min-width:700px){.hblog-g{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.hbc{background:#fff;border:1px solid var(--line);border-radius:22px;overflow:hidden;display:flex;flex-direction:column;transition:transform .3s var(--ease),box-shadow .3s}
+.hbc:hover{transform:translateY(-4px);box-shadow:var(--sh-l)}
+.hbc-i{display:block;background:var(--night);overflow:hidden}
+.hbc-i img{display:block;width:100%;height:auto;aspect-ratio:1200/630;object-fit:cover;transition:transform .7s var(--ease)}
+.hbc:hover .hbc-i img{transform:scale(1.04)}
+.hbc-b{padding:18px 18px 20px;display:flex;flex-direction:column;gap:9px;flex:1}
+.hbc-c{align-self:flex-start;font-size:12.5px;font-weight:800;color:var(--blue-t);background:var(--blue-s);border-radius:999px;padding:4px 11px}
+.hbc h3{font-size:19px;line-height:1.25;letter-spacing:-.03em}
+.hbc h3 a{text-decoration:none}
+.hbc h3 a:hover{color:var(--blue-t)}
+.hbc p{color:var(--mut);font-size:15px;line-height:1.55;flex:1}
+.hbc-m{font-size:13px;font-weight:600;color:var(--mut2)}
+
+/* ---------- Setup helper (app-account.js helperBox / openHelperInvite, main.js helperConsent, app.js helperCard) ---------- */
+.abn.hlp{background:linear-gradient(90deg,var(--tg-s),#F1ECFF);color:#0A4F75}
+.abn.ok{background:var(--ok-s);color:#0B7A55}
+.pill.hb{font-size:10.5px;padding:2px 7px;vertical-align:2px}
+.hlpc{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px 16px;border-radius:20px;border:1px solid #D9E3FF;background:linear-gradient(135deg,#F4F7FF 0%,#EEF8FF 55%,#F5F1FF 100%);position:relative;overflow:hidden;animation:rise .45s var(--ease)}
+.hlpc::after{content:"";position:absolute;right:-40px;top:-50px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(110,195,255,.35),transparent 70%);animation:hlpGlow 6s ease-in-out infinite;pointer-events:none}
+@keyframes hlpGlow{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-18px,14px) scale(1.12)}}
+.hlpc .hlpi{flex:none;width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:#fff;color:var(--blue);box-shadow:0 6px 18px -8px rgba(47,107,255,.55)}
+.hlpc .hlpi svg{width:22px;height:22px}
+.hlpc .hlpt{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:3px;position:relative;z-index:1}
+.hlpc .hlpt b{font-size:15px;letter-spacing:-.02em}
+.hlpc .hlpt small{color:var(--mut);font-size:13px;line-height:1.45}
+.hlpc .btn{position:relative;z-index:1;flex:none}
+/* Button and "Watch the guide" sit beside the text, or wrap under it in a narrow column (the Home checklist). */
+.hlpc .hlpb{position:relative;z-index:1;flex:0 1 auto;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.hlpv{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:4px 8px;border-radius:999px;font:inherit;font-size:13px;font-weight:700;color:var(--blue-t);cursor:pointer;transition:background .2s}
+.hlpv svg{width:12px;height:12px}
+.hlpv:hover{background:rgba(47,107,255,.08)}
+.hlpv:focus-visible{outline:3px solid rgba(47,107,255,.35);outline-offset:2px}
+.hlpg{padding-top:2px}
+.hlpc.ck{margin-top:2px}
+.hlpc.fl{margin:0}
+.hlpl{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hlpl>div{border-radius:16px;padding:12px 14px;background:var(--soft);border:1px solid var(--line);min-width:0}
+.hlpl b{display:flex;align-items:center;gap:6px;font-size:13.5px;margin-bottom:6px}
+.hlpl b svg{width:16px;height:16px}
+.hlpl b.ok{color:var(--ok)}.hlpl b.no{color:var(--bad)}
+.hlpl ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink2);line-height:1.4}
+.hlpm{display:flex;gap:12px;align-items:center}
+.hlpd{display:flex;gap:6px 12px;flex-wrap:wrap;color:var(--mut2);font-size:12.5px;font-weight:600;margin-top:3px}
+.hlpa{display:flex;flex-direction:column;gap:6px}
+.hlpa>b{font-size:14px}
+.hlpa ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:16px}
+.hlpa li{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;font-size:13.5px;border-top:1px solid var(--line);animation:rise .35s var(--ease) both}
+.hlpa li:first-child{border-top:0}
+.hlpa li span{min-width:0;overflow-wrap:anywhere}
+.hlpa li small{flex:none;color:var(--mut2);font-weight:600}
+.hlpa li:nth-child(2){animation-delay:.04s}.hlpa li:nth-child(3){animation-delay:.08s}.hlpa li:nth-child(4){animation-delay:.12s}
+.seg2{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:var(--soft);border:1px solid var(--line);margin-bottom:12px}
+.seg2 button{display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;border:0;border-radius:11px;background:transparent;font:inherit;font-weight:700;font-size:14px;color:var(--mut);cursor:pointer;transition:background .2s,color .2s,box-shadow .2s}
+.seg2 button svg{width:16px;height:16px}
+.seg2 button.on{background:#fff;color:var(--ink);box-shadow:0 2px 8px -3px rgba(11,20,48,.2)}
+.hlpx{margin-top:12px;font-size:14px}
+.hlpx summary{cursor:pointer;font-weight:700;color:var(--blue-t);padding:6px 0}
+.hlpx .hlpl{margin-top:8px}
+.hcons{max-width:620px;margin:24px auto;padding:28px;gap:14px;align-items:flex-start;animation:rise .5s var(--ease)}
+.hcons .hcb{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--sky),var(--blue));box-shadow:0 12px 30px -12px rgba(47,107,255,.7);animation:pop .5s var(--ease)}
+.hcons .hcb svg{width:28px;height:28px}
+.hcons h2{font-size:24px;line-height:1.25;letter-spacing:-.03em;margin:0}
+.hcons h2 em{font-style:normal;color:var(--blue-t)}
+.hcons .hlpl,.hcons .row2b{width:100%}
+@media (max-width:640px){
+  .hlpc{flex-wrap:wrap;padding:14px}
+  .hlpc .btn{width:100%;justify-content:center}
+  .hlpc .hlpb{width:100%;justify-content:center}
+  .hlpl{grid-template-columns:1fr}
+  .hcons{margin:8px 0;padding:20px}
+  .hcons h2{font-size:21px}
+}
+@media (prefers-reduced-motion:reduce){.hlpc,.hlpc::after,.hlpa li,.hcons,.hcons .hcb{animation:none}}

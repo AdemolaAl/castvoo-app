@@ -6,6 +6,7 @@ and an admin panel. Made by Zedapex.
 
 - Website, sign-up and customer dashboard: `/`, `/#signup`, `/#app`
 - Admin panel for the team: `/admin`
+- Blog (server-rendered, SEO): `/blog`, written in Admin → Blog. Guide: [docs/BLOG.md](docs/BLOG.md)
 - Legal pages: `/legal/terms`, `/legal/privacy`, `/legal/refunds`, `/legal/acceptable-use`, `/legal/referral-terms`, `/legal/cookies`
 
 **No npm packages, no build step.** It is plain Node.js 22 + PostgreSQL. `npm install` is not needed.
@@ -103,6 +104,7 @@ server/
   workers/            background loops: sending queue, follow-ups, billing, emails, cleanup
   emails/             email layout + all 35 templates
   legal/              the 6 policy pages
+  blog-seed/          starter blog posts (Markdown), added once each on start (docs/BLOG.md)
   lib/                small tools: our PostgreSQL client, router, helpers
 voo-connect/          VooSquare's Voo Connect kit, copied unchanged (login, affiliate hand-off, events). Never edit it.
 public/
@@ -122,5 +124,6 @@ docs/                 guides (start with DEVELOPER-GUIDE.md)
 | [docs/DEPLOY-RAILWAY.md](docs/DEPLOY-RAILWAY.md) | Going live, scaling, backups |
 | [docs/LAUNCH-CHECKLIST.md](docs/LAUNCH-CHECKLIST.md) | What to check before opening to the public |
 | [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Telegram, Resend, Anthropic or OpenRouter, Paystack, Flutterwave, Gatevoo, VooSquare (Voo Connect) |
+| [docs/BLOG.md](docs/BLOG.md) | Writing blog posts, the SEO checklist, Search Console / Bing, publishing cadence |
 | [docs/PRODUCT-FACTS.md](docs/PRODUCT-FACTS.md) | What Castvoo promises. Copy, emails and policies must agree with it |
 | [docs/CHANGES-FROM-TESTS.md](docs/CHANGES-FROM-TESTS.md) | Bugs the tests caught and how they were fixed |

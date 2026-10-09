@@ -12,7 +12,10 @@
  */
 
 const FL = { data: null, E: null, sel: 0, dirty: false, tab: 'build', admin: null, stats: null };
-const WF_UNIT = { min: ['minute', 'minutes'], hour: ['hour', 'hours'], day: ['day', 'days'] };
+const WF_UNIT = { sec: ['second', 'seconds'], min: ['minute', 'minutes'], hour: ['hour', 'hours'], day: ['day', 'days'] };
+const WF_SECS = { sec: 1, min: 60, hour: 3600, day: 86400 };
+/* Telegram's 5-minute window after a join request: messages due this soon after the welcome reach everyone (services/flows.js QUICK_SECONDS). */
+const WF_QUICK = 280;
 const WF_MODES = [
   ['after_welcome', 'After the welcome', 'They get your message first, then they are let in.', 'Recommended', null],
   ['instant', 'Straight away', 'Let everyone in at once, even if the welcome can\'t be sent.', '', null],
@@ -26,7 +29,21 @@ const WF_LOCK_PLAN = { ai: 'Starter', tap_to_start: 'Starter', welcome_flows: 'S
 function wfHas(k) { const p = FL.data && FL.data.plan; return !!(p && (p.features || []).includes(k)); }
 function wfLimit(k) { const p = FL.data && FL.data.plan; return p && p.limits ? p.limits[k] : null; }
 function wfWait(v, u) { v = Number(v) || 0; const n = WF_UNIT[u] || WF_UNIT.min; return v + ' ' + (v === 1 ? n[0] : n[1]); }
-function wfSplit(m) { m = Number(m) || 0; if (m && m % 1440 === 0) return [m / 1440, 'day']; if (m && m % 60 === 0) return [m / 60, 'hour']; return [m, 'min']; }
+/* Seconds → [value, unit] in the biggest whole unit: 86400 → [1, 'day'], 45 → [45, 'sec']. */
+function wfSplit(s) { s = Math.max(0, Math.round(Number(s) || 0)); if (!s) return [0, 'min']; if (s % 86400 === 0) return [s / 86400, 'day']; if (s % 3600 === 0) return [s / 3600, 'hour']; if (s % 60 === 0) return [s / 60, 'min']; return [s, 'sec']; }
+function wfSecs(b) { return (Number(b.value) || 0) * (WF_SECS[b.unit] || 60); }
+/* For each block: seconds after the welcome (waits added up). */
+function wfTimes(blocks) { let t = 0; return blocks.map((b) => { if (b.type === 'wait') t += wfSecs(b); return t; }); }
+/* Does the flow have later messages inside the first 5 minutes? */
+function wfHasQuick(blocks) { const at = wfTimes(blocks); let n = 0; return blocks.some((b, i) => b.type === 'message' && ++n > 1 && at[i] <= WF_QUICK); }
+/* The Telegram-rule box under "How people get in". */
+function wfRuleHtml(E) {
+  const quick = wfHasQuick(E.blocks || []);
+  const how = !quick ? '' : E.approve_mode === 'tap' ? ' They are let in when they tap the button and press Start.'
+    : E.approve_mode === 'manual' ? ' If you let someone in before those messages go out, the rest wait until they tap Start.'
+      : ' Letting someone in closes that window, so Castvoo lets them in right after your last message in the first 5 minutes (still automatic).';
+  return '<span>⏱️</span><p><b>Telegram\'s rule:</b> messages in the first 5 minutes reach everyone who asked to join. Later messages reach people who tapped <b>Start</b> in your bot.' + how + '</p>';
+}
 function wfLock(feature) { return '<span class="wf-lock" data-up="' + esc(feature) + '">' + icon('lock') + esc(WF_LOCK_PLAN[feature] || 'Upgrade') + '</span>'; }
 /* API buttons [{label,url,row}] → rows [[{label,url}], ...]; buttons without a row get a row each. */
 function wfRows(buttons) {
@@ -77,27 +94,30 @@ function blocksHtml(blocks, o = {}) {
   const dis = o.editable ? '' : ' disabled';
   let pos = 0;
   const out = [];
+  const at = wfTimes(blocks);
   blocks.forEach((b, i) => {
     out.push(addHtml(i, o));
     if (b.type === 'wait') {
       out.push('<div class="wf-blk wait" data-i="' + i + '"' + (o.editable ? ' draggable="true"' : '') + '><span class="wf-hd" aria-hidden="true">⋮⋮</span><span class="wf-wi">⏳</span><b>Wait</b>' +
-        '<input class="wf-num" type="number" min="0" max="525600" value="' + (Number(b.value) || 0) + '" data-wv="' + i + '" aria-label="How long to wait"' + dis + '>' +
+        '<input class="wf-num" type="number" min="0" max="999" inputmode="numeric" value="' + (Number(b.value) || 0) + '" data-wv="' + i + '" aria-label="How long to wait"' + dis + '>' +
         '<select class="wf-unit" data-wu="' + i + '" aria-label="Unit"' + dis + '>' + wfUnitOptions(b.value, b.unit) + '</select>' +
-        '<span class="muted wf-wt">before the next message</span>' + (o.editable ? blkTools(i, blocks.length, false, true) : '') + '</div>');
+        '<span class="muted wf-wt">' + (Number(b.value) ? 'before the next message' : 'the next message goes right away') + '</span>' +
+        (o.editable ? '<button type="button" class="wf-now' + (Number(b.value) ? '' : ' on') + '" data-wnow="' + i + '">⚡ Send right away</button>' : '') + (o.editable ? blkTools(i, blocks.length, false, true) : '') + '</div>');
       return;
     }
     pos++;
     const first = pos === 1;
+    const quick = !first && at[i] <= WF_QUICK;
     const vs = b.variants || [];
     const vi = Math.min(b.vsel || 0, vs.length);
     const cur = vi === 0 ? b : vs[vi - 1];
     const st = o.stats && o.stats[pos - 1];
     out.push('<div class="wf-blk msg' + (o.sel === i ? ' sel' : '') + '" data-i="' + i + '"' + (o.editable ? ' draggable="true"' : '') + '>' +
       '<div class="wf-bh"><span class="wf-hd" aria-hidden="true">⋮⋮</span><span class="wf-no">' + pos + '</span><b>' + (first ? 'Welcome message' : 'Message ' + pos) + '</b>' +
-      (first ? '<span class="pill p-blue">Sent at once</span>' : '<span class="pill p-grey">Reaches people who tapped Start</span>') + (o.editable ? blkTools(i, blocks.length, first) : '') + '</div>' +
+      (first ? '<span class="pill p-blue">Sent at once</span>' : quick ? '<span class="pill p-blue" title="Telegram lets your bot message people for 5 minutes after they ask to join">Reaches everyone · first 5 min</span>' : '<span class="pill p-grey">Reaches people who tapped Start</span>') + (o.editable ? blkTools(i, blocks.length, first) : '') + '</div>' +
       (first ? '<div class="wf-ab">' + (vs.length ? ['A'].concat(vs.map((_, k) => String.fromCharCode(66 + k))).map((l, k) => '<button type="button" class="' + (k === vi ? 'on' : '') + '" data-vt="' + i + ':' + k + '">Version ' + l + '</button>').join('') : '') +
         (o.editable ? (vs.length < 3 ? '<button type="button" class="add" data-vadd="' + i + '">' + icon('plus') + (vs.length ? 'Add a version' : 'A/B test the welcome') + (has(vs.length ? 'ab_welcome_4' : 'ab_welcome_2') ? '' : wfLock(vs.length ? 'ab_welcome_4' : 'ab_welcome_2')) + '</button>' : '') + (vs.length && vi > 0 ? '<button type="button" class="add" data-vdel="' + i + ':' + vi + '">' + icon('trash') + 'Remove this version</button>' : '') : '') + '</div>' : '') +
-      (!first ? '<label class="wf-cond"><span>Who gets it</span><select data-cond="' + i + '"' + dis + '><option value="">Everyone who tapped Start</option><option value="clicked"' + (b.condition === 'clicked' ? ' selected' : '') + '>Only people who clicked a button before</option><option value="not_clicked"' + (b.condition === 'not_clicked' ? ' selected' : '') + '>Only people who did not click</option></select>' + (has('condition_clicked') ? '' : wfLock('condition_clicked')) + '</label>' : '') +
+      (!first ? '<label class="wf-cond"><span>Who gets it</span><select data-cond="' + i + '"' + dis + '><option value="">' + (quick ? 'Everyone' : 'Everyone who tapped Start') + '</option><option value="clicked"' + (b.condition === 'clicked' ? ' selected' : '') + '>Only people who clicked a button before</option><option value="not_clicked"' + (b.condition === 'not_clicked' ? ' selected' : '') + '>Only people who did not click</option></select>' + (has('condition_clicked') ? '' : wfLock('condition_clicked')) + '</label>' : '') +
       (cur.media ? '<div class="nmed">' + (typeof mediaThumb === 'function' ? mediaThumb(cur.media) : '') + (o.editable ? '<button type="button" class="x" data-mx="' + i + '" aria-label="Remove photo or video">×</button>' : '') + '</div>' : '') +
       '<textarea class="inp wf-ta" rows="4" data-body="' + i + '" placeholder="Write your message… Use {name} for their first name."' + dis + '>' + esc(cur.body || '') + '</textarea>' +
       '<div class="cc" data-cc="' + i + '"></div>' +
@@ -127,8 +147,7 @@ function wfMergeWaits(blocks) {
   for (let k = blocks.length - 1; k > 0; k--) {
     const a = blocks[k - 1], b = blocks[k];
     if (a.type !== 'wait' || b.type !== 'wait') continue;
-    const mins = (x) => (Number(x.value) || 0) * ({ min: 1, hour: 60, day: 1440 }[x.unit] || 1);
-    const [v, u] = wfSplit(mins(a) + mins(b));
+    const [v, u] = wfSplit(wfSecs(a) + wfSecs(b));
     blocks.splice(k - 1, 2, { type: 'wait', value: v, unit: u });
     said.push(wfWait(v, u));
   }
@@ -205,6 +224,7 @@ function wfList(el, q, alive) {
     el.innerHTML = '<div class="wf-hero"><div class="wf-hl"><span class="kick">Welcome Flows</span><h2>Greet everyone who asks to join.</h2><p>Your bot welcomes each person the moment they ask to join your channel, lets them in, and can follow up later.</p>' +
       '<div class="wf-ha"><button type="button" class="btn b-blue" data-new>' + icon('plus') + 'Create your first welcome flow</button></div></div><div class="wf-hp"><div class="phone2 wf-mini"><div class="scr">' + tgPreviewHtml({ bot: 'yourbot', chat: 'your channel', body: 'Hi {name} 👋\n\nThanks for asking to join. You are in!', buttons: [{ label: '⭐ VIP group', url: '#', row: 0 }, { label: '🛍️ Shop', url: '#', row: 0 }], first: true, branding: plan.branding }) + '</div></div><span class="wf-ex">Example</span></div></div>' +
       (d.chats.length && d.bots.length ? '' : wfSetupHtml(d)) +
+      helperCard('fl') +
       '<div class="box"><div class="bh"><h3>' + icon('spark') + 'Start from a template</h3><span class="hint">Pick one, change the words, switch it on.</span></div>' + wfTemplatesHtml(d) + '</div>' + wfMeterHtml(d.meter, plan) + branding;
   } else {
     el.innerHTML = '<div class="wf-top"><div class="wf-topl">' + wfMeterHtml(d.meter, plan) + '</div><div class="wf-topr box"><small class="muted">Your flows</small><b class="tnum">' + fmt(flows.length) + (plan.limits.flows >= 0 ? ' <span>/ ' + fmt(plan.limits.flows) + '</span>' : '') + '</b><p class="muted">' + plural(flows.filter((f) => f.active).length, 'live flow') + '. One flow can be live per channel; the others wait as drafts.</p>' +
@@ -284,6 +304,14 @@ function wfCheck(E) {
   if (!E.bot_id) return 'Pick the bot that sends the welcome.';
   if (!E.blocks.length || E.blocks[0].type !== 'message') return 'A flow starts with a message. Telegram allows the welcome only in the first 5 minutes.';
   if (E.blocks[E.blocks.length - 1].type === 'wait') return 'The last wait has no message after it. Add a message or remove the wait.';
+  let total = 0;
+  for (const b of E.blocks) {
+    if (b.type !== 'wait') continue;
+    const v = Number(b.value);
+    if (!Number.isInteger(v) || v < 0 || v > 999) return 'A wait can be 0 to 999 ' + (WF_UNIT[b.unit] || WF_UNIT.min)[1] + '.';
+    total += wfSecs(b);
+  }
+  if (total > 365 * 86400) return 'Waits can add up to 365 days at most.';
   let n = 0;
   for (const b of E.blocks) {
     if (b.type !== 'message') continue;
@@ -378,7 +406,7 @@ function wfBuild(pane, alive, editable) {
       const locked = m[4] && !wfHas(m[4]);
       return '<button type="button" class="wf-mode' + (E.approve_mode === m[0] ? ' on' : '') + (locked ? ' locked' : '') + '" data-mode="' + m[0] + '"' + dis + '><span class="wf-rad"></span><span><b>' + m[1] + (m[3] ? ' <span class="pill p-blue">' + m[3] + '</span>' : '') + (locked ? ' ' + wfLock(m[4]) : '') + '</b><small>' + m[2] + '</small></span></button>';
     }).join('') + '</div></div>' +
-    '<div class="wf-rule"><span>⏱️</span><p><b>Telegram\'s rule:</b> your bot can message someone for 5 minutes after they ask to join, so your welcome goes out at once. Later messages only reach people who tap <b>Start</b> in your bot.</p></div>' +
+    '<div class="wf-rule" id="wfRule">' + wfRuleHtml(E) + '</div>' +
     '<div class="tg wf-sb"><span><b>"Tap to start" button</b>' + (wfHas('tap_to_start') ? '' : ' ' + wfLock('tap_to_start')) + '<br><small class="muted">' + (E.approve_mode === 'tap' ? 'Needed for "When they tap a button". It lets them in and makes them a bot subscriber.' : 'Opens your bot so people can tap Start. Then your later messages can reach them.') + '</small></span>' + toggleBtn('wfStart', startOn, '"Tap to start" button') + '</div>' +
     (startOn ? '<div class="field"><label for="wfStartL">Button text</label><input class="inp" id="wfStartL" maxlength="40" value="' + esc(E.start_label || (E.approve_mode === 'tap' ? '✅ Tap to join' : '👉 Tap Start for more')) + '"' + dis + '></div>' : '') +
     '<details class="wf-more"' + (E.invite_link ? ' open' : '') + '><summary>More options</summary><div class="field"><label for="wfLink">Only for people who use this invite link <span class="hint">(optional)</span></label><div class="slnew"><input class="inp" id="wfLink" placeholder="https://t.me/+AbC123xyz" value="' + esc(E.invite_link) + '"' + dis + '>' + (E.id && editable ? '<button type="button" class="btn b-ghost sm" id="wfMkLink">Make a link</button>' : '') + '</div><small class="hint">Give each ad its own link and its own flow. Leave empty to welcome everyone who asks to join.</small></div></details>' +
@@ -411,12 +439,13 @@ function wfPreview() {
   const cur = b.vsel ? b.variants[b.vsel - 1] : b;
   const first = idx === 0;
   let wait = 0;
-  for (let k = idx - 1; k >= 0 && E.blocks[k].type === 'wait'; k--) wait += (Number(E.blocks[k].value) || 0) * ({ min: 1, hour: 60, day: 1440 }[E.blocks[k].unit] || 1);
+  for (let k = idx - 1; k >= 0 && E.blocks[k].type === 'wait'; k--) wait += wfSecs(E.blocks[k]);
   const [wv, wu] = wfSplit(wait);
   const chat = d.chats.find((c) => String(c.id) === String(E.chat_id));
   const bot = d.bots.find((x) => String(x.id) === String(E.bot_id));
   const startOn = (E.approve_mode === 'tap' || E.start_button) && wfHas('tap_to_start');
   $('#wfPv').innerHTML = tgPreviewHtml({ bot: bot ? bot.username : '', chat: chat ? chat.title : '', body: cur.body, media: cur.media, buttons: cur.buttons, startLabel: first && startOn ? (E.start_label || (E.approve_mode === 'tap' ? '✅ Tap to join' : '👉 Tap Start for more')) : '', branding: first && d.plan.branding, first, delay: !first && wait ? wfWait(wv, wu) : '' });
+  const rule = $('#wfRule'); if (rule) rule.innerHTML = wfRuleHtml(E);
   $('#wfPvL').textContent = first ? 'Welcome message' + (b.variants && b.variants.length ? ' · version ' + String.fromCharCode(65 + (b.vsel || 0)) : '') : 'Message ' + E.blocks.slice(0, idx + 1).filter((x) => x.type === 'message').length;
 }
 
@@ -452,8 +481,8 @@ function wfWire(pane, alive, editable) {
     const t = e.target;
     if (t.id === 'wfChat') { E.chat_id = t.value; wfMark(); wfAdminCheck(); wfPreview(); }
     if (t.id === 'wfBot') { E.bot_id = t.value; wfMark(); wfAdminCheck(); wfPreview(); }
-    if (t.dataset.wu != null) { E.blocks[+t.dataset.wu].unit = t.value; wfMark(); wfPreview(); }
-    if (t.dataset.wv != null) { const w = E.blocks[+t.dataset.wv]; w.value = Math.max(0, parseInt(t.value, 10) || 0); wfMark(); wfPreview(); const sel = $('[data-wu="' + t.dataset.wv + '"]', st); if (sel) sel.innerHTML = wfUnitOptions(w.value, w.unit); }
+    if (t.dataset.wu != null) { E.blocks[+t.dataset.wu].unit = t.value; wfMark(); wfDrawStack(editable); wfPreview(); }
+    if (t.dataset.wv != null) { const w = E.blocks[+t.dataset.wv]; w.value = Math.min(999, Math.max(0, parseInt(t.value, 10) || 0)); wfMark(); wfDrawStack(editable); wfPreview(); }
     if (t.dataset.cond != null) {
       if (t.value && !wfHas('condition_clicked')) { t.value = ''; wfUpgrade('condition_clicked'); return; }
       E.blocks[+t.dataset.cond].condition = t.value || null; wfMark();
@@ -502,6 +531,7 @@ function wfWire(pane, alive, editable) {
     const blk = t.closest('.wf-blk.msg');
     if (blk && !t.closest('button,input,select,textarea') && +blk.dataset.i !== FL.sel) { FL.sel = +blk.dataset.i; $$('.wf-blk.msg', st).forEach((x) => x.classList.toggle('sel', +x.dataset.i === FL.sel)); wfPreview(); }
     if (!editable) { if (t.closest('#wfSave')) return; }
+    const now = t.closest('[data-wnow]'); if (now) { const w = E.blocks[+now.dataset.wnow]; w.value = 0; w.unit = 'sec'; wfMark(); redraw(); return; }
     const add = t.closest('[data-add]'); if (add) { wfAddMenu(+add.dataset.add, add, redraw); return; }
     const u2 = t.closest('[data-up2]'); if (u2) { wfMove(+u2.dataset.up2, -1); redraw(); return; }
     const dn = t.closest('[data-dn]'); if (dn) { wfMove(+dn.dataset.dn, 1); redraw(); return; }

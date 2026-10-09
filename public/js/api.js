@@ -79,6 +79,7 @@ async function api(method, path, body, opts = {}) {
     const msg = (data && data.error) || (res.status >= 500 ? 'Something went wrong on our side. Please try again.' : 'That did not work. Please try again.');
     const err = new ApiError(res.status, msg, data && data.code, data);
     if (res.status === 401 && !opts.quiet401 && typeof onLoggedOut === 'function') onLoggedOut();
+    if (err.code === 'access_removed' && typeof onAccessRemoved === 'function') onAccessRemoved(msg);
     throw err;
   }
   return data || {};

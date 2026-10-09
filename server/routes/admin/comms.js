@@ -135,7 +135,7 @@ module.exports = (r) => {
       support_url: '#', broadcast_title: 'Weekend sale', delivered: '9,640', failed: '12', clicks: '1,104', report_url: '#', limit_name: 'subscribers', upgrade_url: '#', download_url: '#',
       connect_url: '#', broadcast_url: '#', drips_url: '#', train_url: '#', pricing_url: '#', coupon_code: 'COMEBACK20', coupon_percent: '20', coupon_expiry: '17 October 2026', reply_url: '#', first_name: 'Ejiro', unsubscribe_url: '#', old_price: '$49.00', new_price: '$59.00', billing_period: 'month', start_date: '2 November 2026',
       used: '412', limit: '500', reset_date: '1 November 2026', plans_url: '#', welcomed: '238',
-      delete_date: '7 November 2026', days_left: '30', login_url: '#' };
+      delete_date: '7 November 2026', days_left: '30', login_url: '#', helper_name: 'Tunde', helper_contact: 'tu•••e@gmail.com', owner_name: 'Ejiro', team_url: '#' };
     return Object.fromEntries([...base.vars, 'first_name', 'unsubscribe_url'].map((v) => [v, S[v] ?? '']));
   }
 

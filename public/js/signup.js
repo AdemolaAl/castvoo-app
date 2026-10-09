@@ -145,38 +145,106 @@ function suShowErr(msg) {
 }
 
 /* ---------- Step 2: country ---------- */
-const TZ_COUNTRY = { 'Africa/Lagos': 'NG', 'Africa/Nairobi': 'KE', 'Africa/Accra': 'GH', 'Africa/Johannesburg': 'ZA', 'Africa/Douala': 'CM' };
+/* The customer picks their own country: nothing is guessed (no time zone, IP or VooSquare default). The field starts
+   empty ("Select your country"), the list is searchable and has flags, and Continue needs a pick. */
 function suCountry() {
   suProgress(2);
   const list = CFG.countries || [];
   if (!list.length) { location.replace('#signup/connect'); return; }
-  let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_) { tz = ''; }
-  SU.country = (ME.user && ME.user.country) || SU.country || TZ_COUNTRY[tz] || null;
-  const featured = list.filter((c) => c.featured);
-  const others = list.filter((c) => !c.featured);
-  $('#suBody').innerHTML = '<div class="su-step"><div><h1>Where are you based?</h1><p class="muted" style="margin-top:6px">We\'ll show the payment methods that work in your country.</p></div>' +
-    '<div class="ctry" id="suCt">' + featured.map((c) => '<button type="button" data-c="' + esc(c.code) + '"><span class="fl">' + esc(c.flag) + '</span>' + esc(c.name) + '</button>').join('') + '</div>' +
-    '<div class="field"><label for="suCtO">Somewhere else?</label><select class="inp" id="suCtO"><option value="">Choose another country</option>' + others.map((c) => '<option value="' + esc(c.code) + '">' + esc(c.flag + ' ' + c.name) + '</option>').join('') + '</select></div>' +
-    '<div class="pmprev"><b style="font-size:14px">You\'ll be able to pay with</b><div class="chips" id="suPmv"><p class="hint" style="margin:0">Pick your country above.</p></div><small class="muted">You can change your country later in Settings.</small></div>' +
-    '<p class="ferr" id="suCtErr" hidden></p>' +
+  // Only a country this person already picked themselves (earlier in this sign-up, or saved from this step) shows.
+  SU.country = SU.country || (ME.user && ME.user.country) || null;
+  if (SU.country && !list.some((c) => c.code === SU.country)) SU.country = null;
+  $('#suBody').innerHTML = '<div class="su-step"><div><h1>Where are you based?</h1><p class="muted" style="margin-top:6px">Select your country. We\'ll show the payment methods that work there.</p></div>' +
+    '<div class="field"><label for="suCtQ" id="suCtLb">Country</label>' + countryPickerHtml('suCt') + '</div>' +
+    '<p class="ferr" id="suCtErr" role="alert" hidden></p>' +
+    '<div class="pmprev"><b style="font-size:14px">You\'ll be able to pay with</b><div class="chips" id="suPmv"><p class="hint" style="margin:0">Select your country to see them.</p></div><small class="muted">You can change your country later in Settings.</small></div>' +
     '<button class="btn b-blue full" type="button" id="suNc">Continue</button></div>';
-  const pick = (code) => {
+  const err = $('#suCtErr');
+  countryPicker('suCt', list, SU.country, (code) => {
     SU.country = code;
-    $$('#suCt button').forEach((b) => b.classList.toggle('on', b.dataset.c === code));
-    $('#suCtO').value = featured.some((c) => c.code === code) ? '' : (code || '');
-    suMethods(code);
-  };
-  $('#suCt').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) pick(b.dataset.c); };
-  $('#suCtO').onchange = (e) => { if (e.target.value) pick(e.target.value); };
-  if (SU.country) pick(SU.country);
+    if (code) { err.hidden = true; $('#suCtQ').removeAttribute('aria-invalid'); suMethods(code); }
+    else $('#suPmv').innerHTML = '<p class="hint" style="margin:0">Select your country to see them.</p>';
+  });
   $('#suNc').onclick = async () => {
-    const err = $('#suCtErr');
-    if (!SU.country) { err.textContent = 'Pick your country first.'; err.hidden = false; return; }
+    if (!SU.country) {
+      err.textContent = 'Please select your country to continue.'; err.hidden = false;
+      $('#suCtQ').setAttribute('aria-invalid', 'true'); $('#suCtQ').setAttribute('aria-describedby', 'suCtErr');
+      return;
+    }
     const b = $('#suNc'); b.disabled = true;
     try { ME = await POST('/api/me', { country: SU.country }); location.hash = '#signup/connect'; } catch (e) { err.textContent = e.message; err.hidden = false; }
     b.disabled = false;
   };
   window.scrollTo(0, 0);
+}
+
+/* A searchable country list with flags (combobox). id is the prefix: <id>Q input, <id>L list, <id>F flag. */
+function countryPickerHtml(id) {
+  return '<div class="cpk" id="' + id + 'P"><div class="cpk-in"><span class="cpk-fl" id="' + id + 'F" aria-hidden="true">' + icon('globe') + '</span>' +
+    '<input class="inp" id="' + id + 'Q" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="' + id + 'L" placeholder="Select your country" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done">' +
+    '<button type="button" class="cpk-x" id="' + id + 'X" aria-label="Clear" hidden>' + icon('x') + '</button><span class="cpk-cv" aria-hidden="true">' + icon('chev') + '</span></div>' +
+    '<div class="cpk-l" id="' + id + 'L" role="listbox" aria-label="Countries" hidden></div></div>';
+}
+function countryPicker(id, list, value, onPick) {
+  const q = $('#' + id + 'Q'), box = $('#' + id + 'L'), fl = $('#' + id + 'F'), x = $('#' + id + 'X'), wrap = $('#' + id + 'P');
+  const norm = (t) => String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').trim();
+  const byName = (a, b) => (a.code === 'XX') - (b.code === 'XX') || a.name.localeCompare(b.name);
+  const featured = list.filter((c) => c.featured && c.code !== 'XX');
+  const all = list.slice().sort(byName);
+  let cur = value || null, act = -1;
+  const show = (c) => {
+    q.value = c ? c.name : '';
+    fl.innerHTML = c ? esc(c.flag || '🌍') : icon('globe');
+    fl.classList.toggle('on', !!c);
+    x.hidden = !c && !q.value;
+  };
+  const opt = (c) => '<button type="button" role="option" tabindex="-1" data-c="' + esc(c.code) + '" aria-selected="' + (c.code === cur) + '"' + (c.code === cur ? ' class="on"' : '') + '><span class="fl">' + esc(c.flag || '🌍') + '</span><span class="nm">' + esc(c.name) + '</span>' + (c.code === cur ? icon('check') : '') + '</button>';
+  const draw = () => {
+    const t = norm(q.value === ((list.find((c) => c.code === cur) || {}).name) ? '' : q.value);
+    let h;
+    if (!t) h = (featured.length ? '<div class="cpk-g">Popular</div>' + featured.map(opt).join('') + '<div class="cpk-g">All countries</div>' : '') + all.map(opt).join('');
+    else {
+      const hit = all.filter((c) => norm(c.name).includes(t) || norm(c.code) === t).sort((a, b) => (norm(b.name).startsWith(t)) - (norm(a.name).startsWith(t)));
+      h = hit.length ? hit.map(opt).join('') : '<p class="cpk-no">No country matches "' + esc(q.value.trim()) + '". Try another spelling, or pick "Another country".</p>';
+    }
+    box.innerHTML = h; act = -1;
+  };
+  const open = () => { if (!box.hidden) return; draw(); box.hidden = false; q.setAttribute('aria-expanded', 'true'); wrap.classList.add('open'); const on = $('[aria-selected=true]', box); if (on) box.scrollTop = Math.max(0, on.offsetTop - 60); };
+  const close = () => { box.hidden = true; q.setAttribute('aria-expanded', 'false'); wrap.classList.remove('open'); q.removeAttribute('aria-activedescendant'); };
+  const pick = (code) => {
+    const c = list.find((k) => k.code === code) || null;
+    cur = c ? c.code : null; show(c); close(); onPick(cur);
+  };
+  const move = (d) => {
+    const o = $$('[role=option]', box); if (!o.length) return;
+    act = (act + d + o.length) % o.length;
+    o.forEach((b, i) => b.classList.toggle('act', i === act));
+    o[act].scrollIntoView({ block: 'nearest' });
+  };
+  show(list.find((c) => c.code === cur) || null);
+  q.addEventListener('focus', open);
+  q.addEventListener('click', open);
+  q.addEventListener('input', () => {
+    if (cur) { cur = null; fl.innerHTML = icon('globe'); fl.classList.remove('on'); onPick(null); }
+    x.hidden = !q.value; box.hidden ? open() : draw();
+  });
+  q.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); open(); move(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+    else if (e.key === 'Enter') { e.preventDefault(); const o = $$('[role=option]', box); const b = o[act] || (norm(q.value) && o[0]); if (b) { pick(b.dataset.c); q.blur(); } }
+    else if (e.key === 'Escape') { close(); }
+  });
+  // Tap or click an option (mousedown keeps the focus in the field so the list does not close first).
+  box.addEventListener('mousedown', (e) => e.preventDefault());
+  box.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) { pick(b.dataset.c); q.blur(); } });
+  x.onclick = () => { cur = null; show(null); onPick(null); q.focus(); open(); draw(); };
+  q.addEventListener('blur', () => setTimeout(() => {
+    if (wrap.contains(document.activeElement)) return;
+    close();
+    // Typed the exact name and left the field: that counts as a pick. Anything else that is not a pick is cleared.
+    if (!cur) { const t = norm(q.value); const c = t && list.find((k) => norm(k.name) === t); if (c) pick(c.code); else show(null); }
+  }, 120));
+  return { set: (code) => pick(code), get: () => cur };
 }
 async function suMethods(code) {
   const box = $('#suPmv'); if (!box || !code) return;

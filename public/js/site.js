@@ -25,13 +25,13 @@ const emph = (s) => esc(s).replace(/\*([^*]+)\*/g, '<em class="gtext">$1</em>');
 /* ---------- Language switcher (marketing texts only) ---------- */
 const LANGS = { en: ['🇬🇧', 'English'], fr: ['🇫🇷', 'Français'], pt: ['🇵🇹', 'Português'], es: ['🇪🇸', 'Español'], ru: ['🇷🇺', 'Русский'] };
 const SITE_T = {
-  fr: { nf: 'Fonctionnalités', nh: 'Guide', na: 'IA', np: 'Tarifs', nq: 'FAQ', nl: 'Connexion', ns: 'Essai gratuit', hc: 'Accueil · Diffusions · Relances', hw: 'Voir comment ça marche', h2c: 'Voir la mise en route en 40 s', t1: 'Sans carte bancaire', t2: 'Offre gratuite pour 1 canal', t3: 'Prêt en 5 minutes environ',
+  fr: { nf: 'Fonctionnalités', nh: 'Guide', na: 'IA', np: 'Tarifs', nb: 'Blog', nq: 'FAQ', nl: 'Connexion', ns: 'Essai gratuit', hc: 'Accueil · Diffusions · Relances', hw: 'Voir comment ça marche', h2c: 'Voir la mise en route en 40 s', t1: 'Sans carte bancaire', t2: 'Offre gratuite pour 1 canal', t3: 'Prêt en 5 minutes environ',
     h1: 'Accueillez. Diffusez. Relancez. <em class="gtext">Tout en pilote automatique.</em>', hs: 'Accueillez chaque personne qui demande à rejoindre, envoyez des diffusions à tous vos abonnés et créez des relances programmées avec boutons et liens dans un éditeur simple. Cas, l\'assistant IA, écrit les messages.', cta: 'Essai gratuit de 7 jours', f1: 'Bot d\'accueil', f2: 'Diffusions', f3: 'Relances programmées', f4: 'Éditeur de flux', f5: 'Rédacteur IA' },
-  pt: { nf: 'Recursos', nh: 'Guia', na: 'IA', np: 'Preços', nq: 'FAQ', nl: 'Entrar', ns: 'Começar grátis', hc: 'Boas-vindas · Transmissões · Follow-ups', hw: 'Ver como funciona', h2c: 'Ver a configuração em 40 s', t1: 'Sem cartão', t2: 'Plano grátis para 1 canal', t3: 'Pronto em cerca de 5 minutos',
+  pt: { nf: 'Recursos', nh: 'Guia', na: 'IA', np: 'Preços', nb: 'Blog', nq: 'FAQ', nl: 'Entrar', ns: 'Começar grátis', hc: 'Boas-vindas · Transmissões · Follow-ups', hw: 'Ver como funciona', h2c: 'Ver a configuração em 40 s', t1: 'Sem cartão', t2: 'Plano grátis para 1 canal', t3: 'Pronto em cerca de 5 minutos',
     h1: 'Dê boas-vindas. Transmita. Faça follow-up. <em class="gtext">Tudo no automático.</em>', hs: 'Dê boas-vindas a todos que pedem para entrar, envie transmissões para todos os seus inscritos e crie follow-ups programados com botões e links num editor simples. Cas, o assistente de IA, escreve as mensagens.', cta: 'Teste grátis de 7 dias', f1: 'Bot de boas-vindas', f2: 'Transmissões', f3: 'Follow-ups', f4: 'Editor de fluxos', f5: 'Redator IA' },
-  es: { nf: 'Funciones', nh: 'Guía', na: 'IA', np: 'Precios', nq: 'FAQ', nl: 'Entrar', ns: 'Empezar gratis', hc: 'Bienvenida · Difusiones · Seguimientos', hw: 'Ver cómo funciona', h2c: 'Ver la configuración en 40 s', t1: 'Sin tarjeta', t2: 'Plan gratis para 1 canal', t3: 'Listo en unos 5 minutos',
+  es: { nf: 'Funciones', nh: 'Guía', na: 'IA', np: 'Precios', nb: 'Blog', nq: 'FAQ', nl: 'Entrar', ns: 'Empezar gratis', hc: 'Bienvenida · Difusiones · Seguimientos', hw: 'Ver cómo funciona', h2c: 'Ver la configuración en 40 s', t1: 'Sin tarjeta', t2: 'Plan gratis para 1 canal', t3: 'Listo en unos 5 minutos',
     h1: 'Saluda. Difunde. Haz seguimiento. <em class="gtext">Todo en automático.</em>', hs: 'Da la bienvenida a quien pide unirse, envía difusiones a todos tus suscriptores y crea seguimientos programados con botones y enlaces en un editor sencillo. Cas, el asistente de IA, escribe los mensajes.', cta: 'Prueba gratis de 7 días', f1: 'Bot de bienvenida', f2: 'Difusiones', f3: 'Seguimientos', f4: 'Editor de flujos', f5: 'Redactor IA' },
-  ru: { nf: 'Возможности', nh: 'Инструкция', na: 'ИИ', np: 'Цены', nq: 'FAQ', nl: 'Войти', ns: 'Начать бесплатно', hc: 'Приветствие · Рассылки · Цепочки', hw: 'Как это работает', h2c: 'Настройка за 40 секунд', t1: 'Без карты', t2: 'Бесплатный план для 1 канала', t3: 'Запуск примерно за 5 минут',
+  ru: { nf: 'Возможности', nh: 'Инструкция', na: 'ИИ', np: 'Цены', nb: 'Блог', nq: 'FAQ', nl: 'Войти', ns: 'Начать бесплатно', hc: 'Приветствие · Рассылки · Цепочки', hw: 'Как это работает', h2c: 'Настройка за 40 секунд', t1: 'Без карты', t2: 'Бесплатный план для 1 канала', t3: 'Запуск примерно за 5 минут',
     h1: 'Приветствуйте. Рассылайте. Напоминайте. <em class="gtext">Всё на автопилоте.</em>', hs: 'Приветствуйте каждого, кто подал заявку, отправляйте рассылки всем подписчикам и собирайте цепочки сообщений по расписанию с кнопками и ссылками в простом конструкторе. Cas, ИИ-помощник, пишет тексты.', cta: '7 дней бесплатно', f1: 'Бот-приветствие', f2: 'Рассылки', f3: 'Цепочки', f4: 'Конструктор', f5: 'ИИ-копирайтер' },
 };
 const SITE_EN = {};
@@ -112,6 +112,7 @@ function sitePlans() {
   $('#prNotes').innerHTML =
     '<div class="prn"><span class="prni">' + icon('check') + '</span><span><b>Every paid plan:</b> Welcome Flows with follow-ups, unlimited broadcasts, tracked clicks and Cas the AI helper. No add-on fees.</span></div>' +
     '<div class="prn"><span class="prni">' + icon('gift') + '</span><span><b>' + fmt(CFG.trial.days) + '-day free trial of ' + esc(trialPlan) + '.</b> No card needed. Pick a plan any time, or stay on Free when the trial ends: your welcome keeps running.</span></div>' +
+    '<div class="prn"><span class="prni">' + icon('users') + '</span><span><b>1 setup helper included on every plan, Free too.</b> Invite your media buyer or a friend to set up your account with their own login. No password sharing, no seat used, and you remove them any time.</span></div>' +
     '<div class="prn"><span class="prni">' + icon('chat') + '</span><span><b>24/7 customer support on every plan.</b> AI support agents answer in your dashboard in seconds, day and night, and our human team steps in whenever you need a person. The Free plan includes a few instant AI chats a month.</span></div>' +
     '<div class="prn"><span class="prni">' + icon('clock') + '</span><span><b>Join requests reset every month.</b> Over your plan\'s number (plus a little extra), people are still let in, but your welcome pauses until next month or an upgrade.</span></div>' +
     '<div class="prn pay"><span class="prni">' + icon('wallet') + '</span><span><b>Pay from your Castvoo wallet</b> with the payment methods for your country' + (CFG.features.crypto !== false ? ', or crypto (USDT or Bitcoin)' : '') + '. Plans renew from the wallet.' +
@@ -175,7 +176,25 @@ function maintenanceBar() {
   if (on) $('#maintText').textContent = CFG.content.maintenance_message || 'Castvoo is getting an upgrade. Sending is paused for a few minutes.';
 }
 
+/* "From the blog": the 3 newest posts (GET /api/public/blog/latest), as plain links crawlers can follow. */
+let blogLoaded = false;
+function siteBlog() {
+  const sec = $('#fromBlog');
+  if (!sec || blogLoaded || !CFG.features || !CFG.features.blog) { if (sec && CFG.features && CFG.features.blog === false) sec.hidden = true; return; }
+  blogLoaded = true;
+  fetch('/api/public/blog/latest', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : { posts: [] })).then((d) => {
+    const posts = (d && d.posts) || [];
+    if (!posts.length) return;
+    const day = (x) => { const t = new Date(x); return isNaN(t) ? '' : t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); };
+    $('#blogLatest').innerHTML = posts.map((p) => '<article class="hbc"><a class="hbc-i" href="' + esc(p.url) + '" tabindex="-1" aria-hidden="true"><img src="' + esc(p.image) + '" alt="" width="1200" height="630" loading="lazy" decoding="async"></a>' +
+      '<div class="hbc-b">' + (p.category ? '<span class="hbc-c">' + esc(p.category) + '</span>' : '') + '<h3><a href="' + esc(p.url) + '">' + esc(p.title) + '</a></h3><p>' + esc(p.description) + '</p>' +
+      '<span class="hbc-m">' + esc(day(p.date)) + ' · ' + esc(p.reading_time) + ' min read</span></div></article>').join('');
+    sec.hidden = false;
+  }).catch(() => {});
+}
+
 function siteApplyConfig() {
+  siteBlog();
   siteHero(); siteAnnouncement(); sitePlans(); siteFaq(); siteReferral(); siteBanners(); siteFooter(); maintenanceBar(); vooLinks();
   $('#prTitle').innerHTML = emph(CFG.content.pricing_title || '');
   $('#prSub').textContent = CFG.content.pricing_subtitle || '';
@@ -418,13 +437,24 @@ function siteInit() {
 
   // Scroll can happen on the window or on <body> (some embedded/iOS web views), so read every source.
   const scrolledBy = () => Math.max(window.scrollY || 0, (document.scrollingElement && document.scrollingElement.scrollTop) || 0, document.documentElement.scrollTop || 0, document.body.scrollTop || 0);
-  const onScroll = () => { const y = scrolledBy(); $('#hdr').classList.toggle('sc', y > 8); const hb = $('#helpB'); if (hb) hb.classList.toggle('show', y > 600); };
+  // One read and at most one class change per frame (scroll fires many times a frame on iOS); classes only change
+  // when the state really flips, so nothing near the scroll position is re-laid out while the finger moves.
+  let scQ = false, scS = null, hbS = null;
+  const onScroll = () => {
+    if (scQ) return; scQ = true;
+    requestAnimationFrame(() => {
+      scQ = false;
+      const y = scrolledBy(), s = y > 8, h = y > 600;
+      if (s !== scS) { scS = s; $('#hdr').classList.toggle('sc', s); }
+      const hb = $('#helpB'); if (hb && h !== hbS) { hbS = h; hb.classList.toggle('show', h); }
+    });
+  };
   document.addEventListener('scroll', onScroll, { passive: true, capture: true });
   addEventListener('scroll', onScroll, { passive: true });
   if ('IntersectionObserver' in window) {
     const top = document.createElement('div'); top.setAttribute('aria-hidden', 'true'); top.style.cssText = 'height:8px;margin-bottom:-8px;pointer-events:none';
     const hdr = $('#hdr'); hdr.parentNode.insertBefore(top, hdr);
-    new IntersectionObserver((es) => { $('#hdr').classList.toggle('sc', !es[0].isIntersecting); }).observe(top);
+    new IntersectionObserver((es) => { scS = !es[0].isIntersecting; $('#hdr').classList.toggle('sc', scS); }).observe(top);
   }
   onScroll();
   $('#burger').onclick = () => $('#mnav').classList.add('open');

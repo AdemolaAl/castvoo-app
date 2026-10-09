@@ -69,7 +69,7 @@ function openConnect(type, opts = {}) {
   const ic = '<span class="ci" style="width:44px;height:44px;border-radius:14px;background:' + k.b + ';display:grid;place-items:center;font-size:21px;flex:none">' + k.e + '</span>';
   const back = '<div class="row2b"><button type="button" class="btn b-ghost sm" data-cback>' + icon('chev').replace('<svg', '<svg style="transform:rotate(180deg)"') + 'Back</button><button type="button" class="btn b-ghost sm" data-cwatch>' + icon('play') + 'Show me how</button></div>';
   const wireBack = (h, ch) => { $('[data-cback]', h).onclick = () => openConnect('', opts); $('[data-cwatch]', h).onclick = () => openGuide(ch, () => openConnect(type, opts)); };
-  if (!isOwner()) { sheet('Add a ' + type, ic, '<div class="note2"><span>🔒</span><span>Only the workspace owner can connect bots, channels and groups.</span></div>'); return; }
+  if (!canSetup()) { sheet('Add a ' + type, ic, '<div class="note2"><span>🔒</span><span>Only the workspace owner (or their setup helper) can connect bots, channels and groups.</span></div>'); return; }
 
   if (type === 'bot') {
     const h = sheet('Add a bot', ic, '<div class="cst" style="--c:' + k.c + '">' +
@@ -159,7 +159,7 @@ PAGES.bots = {
     const d = await GET('/api/connections');
     if (!alive()) return;
     const p = APP.state.plan;
-    const owner = isOwner();
+    const owner = canSetup();
     el.innerHTML = '<div class="addrow">' + ['channel', 'group', 'bot'].map((t) => { const k = KIND[t]; return '<button type="button" class="addc" style="--c:' + k.c + '" data-connect="' + t + '"><span class="ci" style="background:' + k.b + '">' + k.e + '<span class="tb"><svg><use href="#i-tg"/></svg></span></span><b>Add a ' + t + '</b><small>' + KIND_TXT[t][1] + '</small><span class="go">Connect →</span></button>'; }).join('') + '</div>' +
       (!d.tg_linked && CFG.bot_username ? '<div class="note2"><span>' + icon('tg') + '</span><span style="flex:1"><b>Link your Telegram</b> to add channels and groups in one tap and get test messages.</span><button type="button" class="btn b-ghost xs" id="bLk">Link Telegram</button></div>' : '') +
       '<div class="bh"><h3 style="font-size:18px">Connected</h3><span class="hint">' + fmt(p.usage.connections) + ' of ' + fmt(p.limits.connections) + ' on your ' + esc(p.plan_name) + ' plan</span></div>' +

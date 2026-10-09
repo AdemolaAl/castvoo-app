@@ -6,7 +6,7 @@ const config = require('../config');
 const connections = require('../services/connections');
 const settings = require('../services/settings');
 const billing = require('../services/billing');
-const { ownerOnly } = require('./workspace');
+const { canSetup } = require('./workspace');
 const { str, int, oneOf, randomToken, badRequest, httpError, notFound } = require('../lib/util');
 
 const TAG_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -23,14 +23,14 @@ module.exports = (r) => {
   }, { auth: 'workspace' });
 
   r.post('/api/connections/bot', async (ctx) => {
-    ownerOnly(ctx);
+    canSetup(ctx);
     const conn = await connections.connectBot(ctx.workspace, ctx.body.token);
     return { ok: true, reconnected: !!conn.reconnected, connection: { id: conn.id, kind: conn.kind, username: conn.username, title: conn.title } };
   }, { auth: 'workspace', rate: [20, 600] });
 
   /** One-tap channel/group: remember the request, give back the Telegram link. */
   r.post('/api/connections/request', async (ctx) => {
-    ownerOnly(ctx);
+    canSetup(ctx);
     const kind = oneOf(ctx.body.kind, 'Type', ['channel', 'group']);
     if (!config.telegram.botToken || !config.telegram.botUsername) throw httpError(503, 'Channel connections are not set up yet on this server.', 'not_configured');
     if (!ctx.user.tg_user_id) throw httpError(409, 'Link your Telegram account first, so Castvoo knows the channel is yours.', 'tg_not_linked');
@@ -40,7 +40,7 @@ module.exports = (r) => {
   }, { auth: 'workspace' });
 
   r.delete('/api/connections/:id', async (ctx) => {
-    ownerOnly(ctx);
+    canSetup(ctx);
     return connections.remove(ctx.workspace, int(ctx.params.id, 'Connection'));
   }, { auth: 'workspace' });
 

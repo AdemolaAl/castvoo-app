@@ -225,6 +225,8 @@ async function run() {
     }
     await syncKnowledge(c);
   });
+  // Blog posts in server/blog-seed/*.md: each slug is added once, ever (never overwrites edits or brings back deletions).
+  await require('./services/blog').syncSeed();
 }
 
 /*

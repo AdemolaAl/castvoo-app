@@ -21,6 +21,8 @@ const VGUIDES = [
   { id: 'audiences-start-links', title: 'Audiences & start links', text: 'See which ad brought each subscriber, then message just them.', dur: 71, pages: ['audiences', 'subscribers', 'clicks'] },
   { id: 'wallet-plans', title: 'Wallet, plans & the Free plan', text: 'Top up, pick a plan, and what happens on Free.', dur: 84, pages: ['wallet'] },
   { id: 'referrals-help', title: 'Earn with referrals & get help', text: 'Share your link, earn monthly, and chat with support 24/7.', dur: 85, pages: ['earn', 'help'] },
+  // Linked from the Setup helper card (Settings → Team) and the "Get help setting up" cards, not from a page header.
+  { id: 'setup-helper', title: 'Invite a setup helper', text: 'Let your media buyer set things up with their own login. No password sharing.', dur: 84, pages: [] },
 ];
 /* Smaller sets of guides for places outside the dashboard. */
 const VG_SETS = { site: ['welcome-flow', 'connect-bot', 'send-broadcast', 'wallet-plans'] };
@@ -61,7 +63,7 @@ PAGES.guides = {
       '<div class="vgh-a"><button type="button" class="btn b-w" data-vguide="' + esc(next.id) + '">' + icon('play') + (n ? 'Continue: ' + esc(next.title) : 'Start with guide 1') + '</button></div></div>' +
       '<div class="vgh-r"><div class="vgring" style="--p:' + Math.round(n / VGUIDES.length * 100) + '"><b class="tnum"><span>' + n + '<small>/' + VGUIDES.length + '</small></span></b></div><small>watched</small></div></div>' +
       '<div class="vgg">' + VGUIDES.map((g, i) => vgCard(g, i, seen[g.id])).join('') + '</div>' +
-      '<p class="hint" style="text-align:center">Ticks are saved in this browser. Questions after watching? <a href="#app/help">Chat with us</a>.</p>';
+      '<p class="hint" style="text-align:center">Ticks are saved in this browser. Questions after watching? <a href="#app/help">Chat with us</a>.' + (CFG.features.blog !== false ? ' Want more? <a href="/blog" target="_blank" rel="noopener">Read the blog</a> for step-by-step guides.' : '') + '</p>';
     if (q.play) { history.replaceState(null, '', '#app/guides'); openVideoGuide(q.play); }
   },
 };

@@ -7,7 +7,8 @@
  *   3. prices, AI writes, join requests, flows, referral rates and limits say the same thing everywhere (incl. the Free plan)
  *   4. email templates and legal pages only use variables that exist
  *   5. every environment variable the server reads is documented in .env.example
- *   6. every API route is protected (admin routes need a staff permission, app routes need a login)
+ *   6. every API route is protected (admin routes need a staff permission, app routes need a login, workspace routes
+ *      are in the workspace role map)
  *   7. links and files referenced by the website exist
  *   8. feature switches used by the website exist on the server
  *   9. migrations split into valid statements
@@ -203,6 +204,21 @@ process.env.QUIET_LOGS = '1';
     // only inside the handler). Previews and integration tests send a body with POST but change nothing.
     if (rt.pattern.startsWith('/api/admin') && rt.method !== 'GET' && /\.view$/.test(o.staff || '') && !/\/(preview|test)$/.test(rt.pattern)) fail('routes', `${rt.method} ${rt.pattern} changes data but only needs ${o.staff}`);
   }
+  // Workspace routes: every one is in the workspace role map (server/permissions.js WS_ROUTES), with a known permission.
+  {
+    const P = require('../server/permissions');
+    const keys = new Set();
+    for (const rt of r.routes.filter((x) => (x.opts || {}).auth === 'workspace')) {
+      const k = `${rt.method} ${rt.pattern}`;
+      keys.add(k);
+      if (!P.WS_ROUTES[k]) fail('routes', `${k} is a workspace route missing from WS_ROUTES in server/permissions.js (say which roles may use it)`);
+    }
+    for (const [k, perm] of Object.entries(P.WS_ROUTES)) {
+      if (!keys.has(k)) fail('routes', `WS_ROUTES lists ${k}, which is not a workspace route`);
+      if (!P.WS_PERMS[perm]) fail('routes', `WS_ROUTES ${k} uses unknown workspace permission ${perm}`);
+    }
+    for (const perm of ['ws.team', 'ws.export', 'ws.earnings', 'ws.cancel', 'ws.approve', 'ws.billing']) if (P.WS_PERMS[perm].includes('helper')) fail('routes', `the setup helper must never have ${perm}`);
+  }
   const vs = read('server/routes/voosquare.js');
   if ((vs.match(/requireKey\(ctx\)/g) || []).length < 5) fail('routes', 'every VooSquare route must call requireKey(ctx)');
   passed.push(`routes: ${n} routes checked for login / permission`);
@@ -215,6 +231,7 @@ process.env.QUIET_LOGS = '1';
   for (const m of html.matchAll(/(?:href|src)="(\/[^"#?]*)/g)) {
     const p = m[1];
     if (p === '/' || p.startsWith('/api/') || p === '/admin' || p === '/voo-connect-browser.js') continue; // served by routes/voo-connect.js
+    if (p === '/blog' || p.startsWith('/blog/')) continue; // server-rendered by routes/blog.js
     if (p.startsWith('/legal/')) { if (!legalSlugs.includes(p.slice(7))) fail('links', `index.html links to unknown legal page ${p}`); continue; }
     if (!fs.existsSync(path.join(ROOT, 'public', p))) fail('links', `index.html references missing file ${p}`);
   }

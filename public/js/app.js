@@ -39,6 +39,20 @@ function onLoggedOut() {
   location.hash = '#login';
 }
 
+/* A setup helper the owner removed: forget that workspace and open their own. */
+let accessGone = false;
+async function onAccessRemoved(msg) {
+  if (accessGone) return;
+  accessGone = true;
+  WS.set(null);
+  closeModal();
+  toast(msg || 'The owner removed your access to this workspace.', { kind: 'info' });
+  await loadMe();
+  APP.booted = false;
+  accessGone = false;
+  if (location.hash.startsWith('#app')) appRoute('overview', {});
+}
+
 /* Called by main.js for #app and #app/<page>?query */
 async function appRoute(sub, q) {
   if (!ME.user) { store.sset('cv_back', location.hash || '#app'); location.replace('#login'); return; }
@@ -117,7 +131,7 @@ function shellUI() {
   $$('.walBal').forEach((e) => { e.textContent = money(s.wallet.total); });
   const nConn = s.connections.length;
   const multi = (ME.workspaces || []).length > 1;
-  $('#wsBox').innerHTML = '<' + (multi ? 'button type="button" data-ws-switch' : 'div') + ' class="ws' + (multi ? ' sw' : '') + '"><span class="wi">' + esc((s.workspace.name || 'W')[0].toUpperCase()) + '</span><div style="min-width:0;flex:1"><b class="ell" style="font-size:14.5px;display:block">' + esc(s.workspace.name) + '</b><small>' + TG.replace('class="tgi"', 'class="tgi" style="width:14px;height:14px"') + (nConn ? plural(nConn, 'Telegram connection') : 'Nothing connected yet') + '</small></div>' + (multi ? '<svg class="chv2"><use href="#i-swap"/></svg>' : '') + '</' + (multi ? 'button' : 'div') + '>';
+  $('#wsBox').innerHTML = '<' + (multi ? 'button type="button" data-ws-switch' : 'div') + ' class="ws' + (multi ? ' sw' : '') + '"><span class="wi">' + esc((s.workspace.name || 'W')[0].toUpperCase()) + '</span><div style="min-width:0;flex:1"><b class="ell" style="font-size:14.5px;display:block">' + esc(s.workspace.name) + (isHelper() ? ' <span class="pill p-tg hb">Helper</span>' : '') + '</b><small>' + TG.replace('class="tgi"', 'class="tgi" style="width:14px;height:14px"') + (nConn ? plural(nConn, 'Telegram connection') : 'Nothing connected yet') + '</small></div>' + (multi ? '<svg class="chv2"><use href="#i-swap"/></svg>' : '') + '</' + (multi ? 'button' : 'div') + '>';
   $('#meRow').innerHTML = ava(u.name || u.email || '?', 42) + '<div style="min-width:0;flex:1"><b class="ell" style="font-size:14.5px;display:block">' + esc(u.name || 'You') + '</b><small class="ell" style="display:block">' + esc(u.email || (u.tg_username ? '@' + u.tg_username : roleName(s.workspace.role))) + '</small></div><button type="button" class="ib" data-logout aria-label="Log out" title="Log out"><svg><use href="#i-out"/></svg></button>';
   $('#topAva').innerHTML = ava(u.name || u.email || '?', 40);
   $('#navHelp').hidden = !(s.support_unread > 0);
@@ -126,14 +140,31 @@ function shellUI() {
   $('#navEarn').textContent = ref; $('#navEarn').hidden = !ref;
   appBanners();
   applyFeatures(document);
+  // Referral earnings belong to each person's own workspace, so the helper does not see Earn here.
+  $$('#snav [data-v="earn"]').forEach((e) => { if (isHelper()) e.hidden = true; });
   if (typeof vgNavTag === 'function') vgNavTag();
 }
-function roleName(r) { return { owner: 'Owner', sender: 'Can send', drafter: 'Drafts only' }[r] || r || ''; }
+function roleName(r) { return { owner: 'Owner', sender: 'Can send', drafter: 'Drafts only', helper: 'Setup helper' }[r] || r || ''; }
 const isOwner = () => APP.state && APP.state.workspace.role === 'owner';
-const canSend = () => APP.state && APP.state.workspace.role !== 'drafter';
+const canSend = () => APP.state && APP.state.workspace.role !== 'drafter' && !(APP.state.workspace.role === 'helper' && APP.state.helper && APP.state.helper.send === false);
+/* Setup helper (server/permissions.js WS_PERMS): sets up the workspace like the owner, without the owner's account, team or earnings. */
+const isHelper = () => APP.state && APP.state.workspace.role === 'helper';
+const canSetup = () => isOwner() || isHelper();
+const canBilling = () => isOwner() || (isHelper() && !!(APP.state.helper && APP.state.helper.billing));
+const OWNER_ONLY = 'Only the owner can do this.';
+/* The owner's "invite a setup helper" card (Home checklist, Welcome Flows, Help), with a "Watch the guide" link to the
+ * setup-helper video (app-guides.js). Empty when it does not apply. */
+function helperCard(where) {
+  const s = APP.state;
+  if (!isOwner() || !s.helper || s.helper.active) return '';
+  const pend = s.helper.pending;
+  return '<div class="hlpc' + (where ? ' ' + where : '') + '"><span class="hlpi" aria-hidden="true">' + icon('users') + '</span><div class="hlpt"><b>' + (pend ? 'Your setup helper is invited' : 'Get help setting up') + '</b><small>' + (pend ? 'Waiting for them to accept. You can copy the invite link again in Settings → Team.' : 'Invite your media buyer or a friend to set everything up with their own login. No password sharing, free on every plan, remove them any time.') + '</small></div><div class="hlpb"><button type="button" class="btn ' + (pend ? 'b-ghost' : 'b-blue') + ' sm" data-helper-invite>' + (pend ? 'See invite' : icon('plus') + 'Invite a setup helper') + '</button>' + (typeof VGUIDES !== 'undefined' ? '<button type="button" class="hlpv" data-vguide="setup-helper">' + icon('play') + 'Watch the guide</button>' : '') + '</div></div>';
+}
 
 function appBanners() {
   const s = APP.state, b = [];
+  if (s && isHelper()) b.push('<div class="abn hlp"><span>🤝</span><span>You\'re helping <b>' + esc(s.workspace.name) + '</b> as setup helper.</span><button type="button" class="btn b-ghost xs" data-helper-leave>Leave</button></div>');
+  if (s && isOwner() && s.helper && s.helper.notice) b.push('<div class="abn ok"><span>🎉</span><span><b>' + esc(s.helper.notice.name) + '</b> joined as your setup helper. See what they do in Settings → Team.</span><button type="button" class="btn b-blue xs" data-helper-seen>Got it</button></div>');
   if (CFG.features.maintenance) b.push('<div class="abn warn"><span>🔧</span><span>' + esc(CFG.content.maintenance_message || 'Castvoo is getting an upgrade. Sending is paused for a few minutes.') + '</span></div>');
   if (s && s.plan.join && s.plan.join.paused) b.push('<div class="abn warn"><span>⏸️</span><span><b>Welcomes are paused for this month.</b> People who ask to join are still let in, but they don\'t get your welcome.</span><button type="button" class="btn b-blue xs" data-go="flows">See why</button></div>');
   if (s && s.plan.status === 'paused') b.push('<div class="abn bad"><span>⏸️</span><span><b>Sending is paused.</b> Your wallet did not cover the plan. Top up to restart; nothing was deleted.</span><button type="button" class="btn b-blue xs" data-topup>Top up</button></div>');
@@ -161,7 +192,7 @@ async function logout() {
 
 function switchWorkspace() {
   const cur = APP.state.workspace.id;
-  const h = sheet('Switch workspace', '<span class="spk">' + icon('swap') + '</span>', '<div class="ckl">' + (ME.workspaces || []).map((w) => '<button type="button" class="ckc" data-w="' + w.id + '" style="--c:var(--blue)"><span class="ci" style="background:var(--blue-s);font-size:20px;font-weight:800;color:var(--blue-t)">' + esc((w.name || 'W')[0].toUpperCase()) + '</span><span class="ct"><b>' + esc(w.name) + (String(w.id) === String(cur) ? ' <span class="pill p-ok">Open now</span>' : '') + '</b><small>' + esc(roleName(w.role)) + '</small></span><svg class="chv"><use href="#i-chev"/></svg></button>').join('') + '</div>');
+  const h = sheet('Switch workspace', '<span class="spk">' + icon('swap') + '</span>', '<div class="ckl">' + (ME.workspaces || []).map((w) => '<button type="button" class="ckc" data-w="' + w.id + '" style="--c:var(--blue)"><span class="ci" style="background:var(--blue-s);font-size:20px;font-weight:800;color:var(--blue-t)">' + esc((w.name || 'W')[0].toUpperCase()) + '</span><span class="ct"><b>' + esc(w.name) + (w.role === 'helper' ? ' <span class="pill p-tg">Helper</span>' : '') + (String(w.id) === String(cur) ? ' <span class="pill p-ok">Open now</span>' : '') + '</b><small>' + esc(w.role === 'helper' ? 'You\'re the setup helper' : roleName(w.role)) + '</small></span><svg class="chv"><use href="#i-chev"/></svg></button>').join('') + '</div>');
   $('.ckl', h).onclick = async (e) => {
     const b = e.target.closest('[data-w]'); if (!b) return;
     WS.set(b.dataset.w); closeModal();
@@ -258,6 +289,9 @@ function appInit() {
     const gd = t.closest('[data-guide]'); if (gd) { e.preventDefault(); openGuide(+gd.dataset.guide || 0); return; }
     const ws = t.closest('[data-ws-switch]'); if (ws) { e.preventDefault(); closeDrawer(); switchWorkspace(); return; }
     const cp = t.closest('[data-copy]'); if (cp) { e.preventDefault(); copyText(cp.dataset.copy, cp.dataset.msg || 'Copied'); }
+    if (t.closest('[data-helper-invite]')) { e.preventDefault(); closeModal(); openHelperInvite(); return; }
+    if (t.closest('[data-helper-leave]')) { e.preventDefault(); leaveAsHelper(); return; }
+    if (t.closest('[data-helper-seen]')) { e.preventDefault(); if (APP.state.helper) APP.state.helper.notice = null; appBanners(); POST('/api/app/team/helper/seen').catch(() => {}); return; }
   });
   paintAll($('#app'));
 }

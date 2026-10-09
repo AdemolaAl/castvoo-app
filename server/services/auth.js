@@ -138,7 +138,8 @@ async function loginWith(identity, extra = {}) {
  *   3. Owner's rule: an existing Castvoo account whose email is verified on BOTH sides (VooSquare says
  *      email_verified, and Castvoo verified it with a code or a provider) and that has no Voo ID yet is linked.
  *      An unverified email is never used to join accounts.
- *   4. Otherwise create a new account (free trial, workspace), with country and VooSquare's referral code.
+ *   4. Otherwise create a new account (free trial, workspace) with VooSquare's referral code. The country is NOT
+ *      copied from VooSquare: the customer selects it themselves in the sign-up country step (#signup/country).
  * Returns { user, created, linked }.
  */
 async function loginWithVoo(vu, { current = null, ref = null } = {}) {
@@ -186,7 +187,7 @@ async function loginWithVoo(vu, { current = null, ref = null } = {}) {
       // Verified elsewhere but not here, or already linked to another Voo ID: a new account without that email.
     }
   }
-  const { user, created } = await loginWith({ voo_id: vooId, ...(mailFree ? { email: mail } : {}) }, { name: vu.name || '', country: vu.country ? String(vu.country).toUpperCase().slice(0, 2) : null, ref });
+  const { user, created } = await loginWith({ voo_id: vooId, ...(mailFree ? { email: mail } : {}) }, { name: vu.name || '', country: null, ref });
   if (created) await db.query('update users set voo_ref = $2, voo_linked_at = now() where id = $1', [user.id, vooRef]);
   return { user: await db.one('select * from users where id = $1', [user.id]), created, linked: false };
 }

@@ -13,6 +13,7 @@ const email = require('../services/email');
 const B = require('../services/broadcasts');
 const connections = require('../services/connections');
 const { fmtUSD, fmtDate } = require('../lib/util');
+const soon = require('./soon');
 
 const APP = () => config.appUrl;
 
@@ -55,14 +56,19 @@ async function broadcastsTick() {
 
 /**
  * Follow-up steps that are due → queue one delivery each. Covers auto follow-ups and the later steps of
- * Welcome Flows. People who only asked to join (never pressed Start) can't be messaged: their run waits
- * ('waiting') until they press Start (services/flows.js onStart wakes it), and stops after 7 days.
+ * Welcome Flows. Waits are in seconds (sequence_steps.delay_seconds); short ones are fired on time by
+ * workers/soon.js, with this job's 10-second poll as the fallback.
+ * People who only asked to join (never pressed Start):
+ *  - inside Telegram's 5-minute window, while their request is still open, a step goes to them through the join
+ *    request's user_chat_id (a "quick" step, deliveries.join_request_id),
+ *  - after that their run waits ('waiting') until they press Start (services/flows.js onStart wakes it), and stops after 7 days.
  */
 async function dripsTick() {
   const f = await settings.features();
   const dripsOn = !!f.drips, flowsOn = !!(f.welcome_flows && f.join_welcome);
   if (!dripsOn && !flowsOn) return;
   if (f.maintenance) return; // maintenance pauses all sending
+  const flows = require('../services/flows');
 
   await db.query("update sequence_runs set status = 'stopped' where status = 'waiting' and created_at < now() - interval '7 days'");
   const plans = new Map();
@@ -77,6 +83,7 @@ async function dripsTick() {
     return plans.get(ws.id);
   };
 
+  let soonest = null; // the next due time this run set (to fire the fast path)
   await db.tx(async (c) => {
     const runs = (await c.query(`select r.*, q.connection_id, q.workspace_id, q.active as seq_active, q.trigger_type, s.status as sub_status, s.tg_user_id, s.joined_at,
         w.plan_code, w.plan_status, w.trial_ends_at, w.created_at as ws_created_at, w.legacy_plan_code, w.legacy_ai_writes, w.legacy_until, w.dropped_at
@@ -87,16 +94,24 @@ async function dripsTick() {
       const later = (mins) => c.query('update sequence_runs set due_at = now() + make_interval(mins => $2) where id = $1', [r.id, mins]);
       const done = () => c.query("update sequence_runs set status = 'done' where id = $1", [r.id]);
       if (r.sub_status === 'blocked' || r.sub_status === 'stopped') { await c.query("update sequence_runs set status = 'stopped' where id = $1", [r.id]); continue; }
+      const isFlow = r.trigger_type === 'join_request';
+      let quick = null; // the open join request this step can still reach them through (Telegram's 5-minute window)
       if (r.sub_status === 'joinreq') {
-        // Telegram: no messages to people who never pressed Start. Wait for them (onStart wakes the run).
-        await c.query("update sequence_runs set status = 'waiting' where id = $1", [r.id]);
-        continue;
+        if (isFlow) {
+          quick = (await c.query(`select id, user_chat_id, tg_user_id, hold_position from join_requests
+            where sequence_id = $1 and subscriber_id = $2 and status = 'pending' and requested_at > now() - make_interval(secs => $3)
+            order by id desc limit 1`, [r.sequence_id, r.subscriber_id, flows.WINDOW_SECONDS])).rows[0] || null;
+        }
+        if (!quick) {
+          // Telegram: no messages to people who never pressed Start (after the window). Wait for them (onStart wakes the run).
+          await c.query("update sequence_runs set status = 'waiting' where id = $1", [r.id]);
+          continue;
+        }
       }
       if (r.plan_status === 'paused' || r.plan_status === 'cancelled') { await later(60); continue; }
       if (!r.seq_active) { await later(60); continue; }
       const ws = { id: r.workspace_id, plan_code: r.plan_code, plan_status: r.plan_status, trial_ends_at: r.trial_ends_at, created_at: r.ws_created_at, legacy_plan_code: r.legacy_plan_code, legacy_ai_writes: r.legacy_ai_writes, legacy_until: r.legacy_until, dropped_at: r.dropped_at };
       const P = await planOf(ws);
-      const isFlow = r.trigger_type === 'join_request';
       if (isFlow) {
         // The plan decides how much of a flow runs: Free sends only the welcome; others up to their steps per flow.
         if (!P.has('welcome_flows')) { await done(); continue; }
@@ -106,7 +121,7 @@ async function dripsTick() {
       const step = (await c.query('select * from sequence_steps where sequence_id = $1 and position = $2 and variant = 0', [r.sequence_id, r.next_position])).rows[0];
       if (!step) { await done(); continue; }
       // QA-4: a step that still has a template's "(Write ... here)" placeholder is never sent.
-      let skip = !!require('../services/flows').placeholderIn(step.body);
+      let skip = !!flows.placeholderIn(step.body);
       if (!skip && step.condition) {
         // "Only if they clicked / didn't click a button in the previous message" (any version of it, for A/B welcomes).
         if (!P.has('condition_clicked')) skip = true;
@@ -119,15 +134,33 @@ async function dripsTick() {
           skip = step.condition === 'clicked' ? !clicked : clicked;
         }
       }
+      // A held join request ("let them in after the quick messages") is let in once its last quick step is done.
+      const holdHere = !!(quick && quick.hold_position && step.position >= quick.hold_position);
       if (!skip) {
-        await c.query(`insert into deliveries(workspace_id, sender_key, step_id, subscriber_id, chat_id, priority, due_at) values ($1,$2,$3,$4,$5,4, now())`,
-          [r.workspace_id, 'bot:' + r.connection_id, step.id, r.subscriber_id, r.tg_user_id]);
+        // Quick steps go first in the bot's queue (priority 1): the window is short.
+        await c.query(`insert into deliveries(workspace_id, sender_key, step_id, subscriber_id, chat_id, priority, due_at, join_request_id, then_approve)
+            values ($1,$2,$3,$4,$5,$6, now(), $7, $8)`,
+          [r.workspace_id, 'bot:' + r.connection_id, step.id, r.subscriber_id, quick ? (quick.user_chat_id || quick.tg_user_id) : r.tg_user_id, quick ? 1 : 4, quick ? quick.id : null, holdHere]);
+      } else if (holdHere) {
+        await c.query("update join_requests set approve_at = now() where id = $1 and status = 'pending' and approve_at is not null", [quick.id]);
       }
-      const next = (await c.query('select position, delay_minutes from sequence_steps where sequence_id = $1 and position > $2 and variant = 0 order by position limit 1', [r.sequence_id, step.position])).rows[0];
-      if (next) await c.query('update sequence_runs set next_position = $2, due_at = now() + make_interval(mins => $3) where id = $1', [r.id, next.position, next.delay_minutes]);
-      else await done();
+      const next = (await c.query('select position, delay_seconds from sequence_steps where sequence_id = $1 and position > $2 and variant = 0 order by position limit 1', [r.sequence_id, step.position])).rows[0];
+      if (next) {
+        const due = (await c.query('update sequence_runs set next_position = $2, due_at = now() + make_interval(secs => $3) where id = $1 returning due_at', [r.id, next.position, next.delay_seconds])).rows[0].due_at;
+        if (!soonest || due < soonest) soonest = due;
+      } else await done();
     }
   });
+  // Held join requests whose quick steps are done (or whose time is up) are let in. Cheap when there are none.
+  await flows.releaseHeld().catch((e) => log.warn('held join requests', { err: e.message }));
+  // The fast path: the earliest step due in the next minute (set just now, or by another server) fires on time.
+  if (soon.active()) {
+    // "Just due" counts too: a timer that fired a moment before the database's clock reached the due time found nothing.
+    // Those are tried again in 250 ms (not at once, so a row another server holds never makes a busy loop).
+    const n = await db.one("select min(due_at) as t from sequence_runs where status = 'active' and due_at > now() - interval '3 seconds' and due_at <= now() + interval '60 seconds'");
+    const times = [soonest, n && n.t].filter(Boolean).map((t) => new Date(t).getTime());
+    if (times.length) { const t = Math.min(...times); soon.at(t <= Date.now() && !soonest ? Date.now() + 250 : t); }
+  }
 }
 
 /** Trials ending, renewals, reminders and pausing. */

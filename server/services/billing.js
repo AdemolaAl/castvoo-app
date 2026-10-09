@@ -185,7 +185,7 @@ async function usage(wsId) {
       (select count(*)::int from connections where workspace_id = $1 and status <> 'removed' and kind = 'bot') as bots,
       (select count(*)::int from subscribers s join connections c on c.id = s.connection_id where c.workspace_id = $1 and c.status <> 'removed' and c.kind = 'bot' and s.status = 'active') as bot_subscribers,
       (select coalesce(sum(member_count), 0)::int from connections where workspace_id = $1 and status <> 'removed' and kind <> 'bot') as chat_members,
-      (select count(*)::int from members where workspace_id = $1) as seats,
+      (select count(*)::int from members where workspace_id = $1 and role <> 'helper') as seats, -- the setup helper is free
       (select count(*)::int from sequences q join connections c on c.id = q.connection_id where q.workspace_id = $1 and q.trigger_type = 'join_request' and c.status <> 'removed') as flows,
       (select count(*)::int from sequences q join connections c on c.id = q.connection_id where q.workspace_id = $1 and q.trigger_type = 'join_request' and q.active and c.status <> 'removed'
         and exists (select 1 from connections ch where ch.workspace_id = q.workspace_id and ch.kind <> 'bot' and ch.status <> 'removed' and ch.tg_chat_id::text = q.trigger_value)) as active_flows,

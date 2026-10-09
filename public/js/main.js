@@ -71,11 +71,19 @@ async function acceptInvite(token) {
     showView('signup');
     SU.mode = 'login';
     signupRoute('login', {});
-    const b = $('#suBody .su-step > div:nth-child(2) p'); if (b) b.textContent = 'Log in or create an account to join your team\'s workspace.';
+    const b = $('#suBody .su-step > div:nth-child(2) p'); if (b) b.textContent = 'Log in or create a free account to open your invite. You\'ll use your own login, nobody shares a password.';
     return;
   }
   store.sset('cv_join', null);
   showView('app');
+  $('#pg').innerHTML = '<div class="pgload"><span class="spin"></span><span class="muted">Opening your invite…</span></div>';
+  let inv = null;
+  try { inv = await GET('/api/invites/' + encodeURIComponent(token)); } catch (e) {
+    location.replace('#app');
+    setTimeout(() => toast(e.status === 404 ? 'That invite has expired or was already used. Ask for a new one.' : e.message, { kind: 'err' }), 400);
+    return;
+  }
+  if (inv.role === 'helper') return helperConsent(token, inv);
   $('#pg').innerHTML = '<div class="pgload"><span class="spin"></span><span class="muted">Joining the workspace…</span></div>';
   try {
     const r = await POST('/api/invites/accept', { token });
@@ -88,6 +96,36 @@ async function acceptInvite(token) {
     location.replace('#app');
     setTimeout(() => toast(e.status === 404 ? 'That invite has expired or was already used. Ask for a new one.' : e.message, { kind: 'err' }), 400);
   }
+}
+
+/* The setup helper's consent screen: who invites them, what they can and can't do, Accept / Decline. */
+function helperConsent(token, inv) {
+  const pg = $('#pg');
+  document.title = 'Setup helper invite · Castvoo';
+  pg.innerHTML = '<div class="hcons box"><span class="hcb">' + icon('users') + '</span><span class="kick">Setup helper invite</span>' +
+    '<h2>' + esc(inv.owner_name) + '\'s workspace <em>"' + esc(inv.workspace_name) + '"</em> invites you as setup helper</h2>' +
+    '<p class="muted">You\'ll set things up with <b>your own login</b>. Nobody shares a password, and ' + esc(inv.owner_name) + ' can remove you at any time.</p>' +
+    helperLists(inv.can, inv.cannot, 'You') +
+    (inv.already_member ? '<div class="note2"><span>ℹ️</span><span>You are already in this workspace.</span></div>' : '') +
+    '<p class="ferr" id="hcE" hidden></p><div class="row2b"><button type="button" class="btn b-ghost" id="hcNo">Decline</button><button type="button" class="btn b-blue" id="hcYes"' + (inv.already_member ? ' disabled' : '') + '>' + icon('check') + 'Accept</button></div>' +
+    '<small class="muted">Expires ' + esc(fmtDate(inv.expires_at, false)) + '. ' + (inv.kind === 'link' ? 'This link works once.' : 'This invite is for your email only.') + '</small></div>';
+  $('#hcYes').onclick = async (e) => {
+    await busy(e.currentTarget, 'Joining…', async () => {
+      try {
+        const r = await POST('/api/invites/accept', { token, consent: true });
+        WS.set(r.workspace_id); await loadMe(); APP.booted = false;
+        location.replace('#app');
+        setTimeout(() => { confetti(); toast('You\'re now helping ' + inv.workspace_name + '. Let\'s set it up!'); }, 600);
+      } catch (ex) { const er = $('#hcE'); er.textContent = ex.status === 404 ? 'That invite has expired or was already used. Ask for a new one.' : ex.message; er.hidden = false; }
+    });
+  };
+  $('#hcNo').onclick = async (e) => {
+    await busy(e.currentTarget, 'Declining…', async () => {
+      try { await POST('/api/invites/decline', { token }); } catch (_) { /* gone already */ }
+      location.replace('#app');
+      setTimeout(() => toast('Invite declined. Nothing changed.'), 400);
+    });
+  };
 }
 
 function boot() {

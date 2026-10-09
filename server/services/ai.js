@@ -163,7 +163,7 @@ ${b.language ? 'Language: ' + b.language : ''}
 The first message is sent straight away (wait 0 minutes) and welcomes the person. Space the rest out sensibly (for example 1 day, 3 days, 7 days). Each message under 700 characters with one clear next step.
 Reply with ONLY a JSON array, no other text, like:
 [{"delay_value":0,"delay_unit":"min","body":"..."},{"delay_value":1,"delay_unit":"day","body":"..."}]
-delay_unit is one of "min", "hour", "day".`,
+delay_unit is one of "sec", "min", "hour", "day" (use "sec" only when the goal asks for a message a few seconds after the one before).`,
 };
 
 /** Workspace stats Cas can see when answering "how did my sends go?" questions. */

@@ -12,6 +12,8 @@ const { count: segmentCount } = require('./segments');
 const { str, int, oneOf, badRequest, notFound, forbidden, httpError } = require('../lib/util');
 
 const PER_SECOND = () => config.telegram.sendPerSecond;
+/** The owner switched the setup helper's "Can send broadcasts" off: the helper writes and schedules, the owner sends. */
+const noHelperSend = (ctx) => ctx.member.role === 'helper' && ctx.workspace.helper_send === false;
 
 async function getOwn(ctx) {
   const b = await db.one('select * from broadcasts where id = $1 and workspace_id = $2', [int(ctx.params.id, 'Broadcast'), ctx.workspace.id]);
@@ -104,7 +106,9 @@ module.exports = (r) => {
     }
     const asDraft = !!b.draft;
     let status = asDraft ? 'draft' : (mode === 'at' ? 'scheduled' : 'sending');
-    if (!asDraft && (ctx.member.role === 'drafter' || (ws.require_approval && ctx.member.role !== 'owner'))) status = 'pending_approval';
+    // The setup helper sends like a teammate, unless the owner switched "Can send broadcasts" off: then the owner approves.
+    const helperWaits = ctx.member.role === 'helper' && ws.helper_send === false;
+    if (!asDraft && (ctx.member.role === 'drafter' || helperWaits || (ws.require_approval && ctx.member.role !== 'owner'))) status = 'pending_approval';
     if (!asDraft && status !== 'pending_approval') await billing.assertCanSend(ws);
 
     const title = str(b.title, 'Title', { max: 80, required: false }) || msg.body.replace(/[*_]/g, '').split('\n').find((l) => l.trim()).trim().slice(0, 60);
@@ -142,7 +146,7 @@ module.exports = (r) => {
     await settings.requireFeature('broadcasts');
     const b = await getOwn(ctx);
     if (b.status !== 'draft') throw badRequest('Only drafts can be sent from here.');
-    if (ctx.member.role === 'drafter') throw forbidden('Ask the owner to send this.');
+    if (ctx.member.role === 'drafter' || noHelperSend(ctx)) throw forbidden('Ask the owner to send this.');
     await billing.assertCanSend(ctx.workspace);
     const n = await B.enqueue(b);
     return { ok: true, status: 'sending', queued: n };
@@ -152,7 +156,7 @@ module.exports = (r) => {
     const b = await getOwn(ctx);
     if (!['scheduled', 'pending_approval', 'sending', 'draft'].includes(b.status)) throw badRequest('This message has already gone out.');
     // Drafters may drop drafts and messages waiting for approval, not messages that are scheduled or going out.
-    if (ctx.member.role === 'drafter' && !['draft', 'pending_approval'].includes(b.status)) throw forbidden('Ask the owner to cancel this message.');
+    if ((ctx.member.role === 'drafter' || noHelperSend(ctx)) && !['draft', 'pending_approval'].includes(b.status)) throw forbidden('Ask the owner to cancel this message.');
     await db.tx(async (c) => {
       await c.query("update broadcasts set status = 'cancelled', finished_at = now() where id = $1", [b.id]);
       await c.query("update deliveries set status = 'skipped', error = 'Cancelled' where broadcast_id = $1 and status = 'queued'", [b.id]);
@@ -163,7 +167,7 @@ module.exports = (r) => {
   /** Edit text: drafts/scheduled change in place; sent messages are edited in Telegram for everyone. */
   r.post('/api/broadcasts/:id/edit', async (ctx) => {
     const b = await getOwn(ctx);
-    if (ctx.member.role === 'drafter' && !['draft', 'pending_approval'].includes(b.status)) throw forbidden('Ask the owner to edit sent messages.');
+    if ((ctx.member.role === 'drafter' || noHelperSend(ctx)) && !['draft', 'pending_approval'].includes(b.status)) throw forbidden('Ask the owner to edit sent messages.');
     // Editing halfway through would leave some people with the old text and some with the new one.
     if (b.status === 'sending') throw badRequest('This message is still going out. You can edit it as soon as it has finished sending.', 'still_sending');
     const body = str(ctx.body.body, 'Message', { min: 1, max: 20000, trim: false }).replace(/\r\n/g, '\n'); // real limit checked below
@@ -182,14 +186,14 @@ module.exports = (r) => {
 
   r.post('/api/broadcasts/:id/pin', async (ctx) => {
     const b = await getOwn(ctx);
-    if (ctx.member.role === 'drafter') throw forbidden('Ask the owner to pin sent messages.');
+    if (ctx.member.role === 'drafter' || noHelperSend(ctx)) throw forbidden('Ask the owner to pin sent messages.');
     if (!['sent', 'sending'].includes(b.status)) throw badRequest('Only sent messages can be pinned.');
     return { ok: true, pinning: await B.queueAction(b, 'pin') };
   }, { auth: 'workspace' });
 
   r.post('/api/broadcasts/:id/delete', async (ctx) => {
     const b = await getOwn(ctx);
-    if (ctx.member.role === 'drafter') throw forbidden('Ask the owner to delete sent messages.');
+    if (ctx.member.role === 'drafter' || noHelperSend(ctx)) throw forbidden('Ask the owner to delete sent messages.');
     if (!['sent', 'sending'].includes(b.status)) throw badRequest('Only sent messages can be deleted from Telegram.');
     if (b.started_at && Date.now() - new Date(b.started_at).getTime() > 47.5 * 3600000) throw badRequest('Telegram only lets bots delete messages for 48 hours after sending.');
     await db.query("update deliveries set status = 'skipped', error = 'Deleted' where broadcast_id = $1 and status = 'queued' and action = 'send'", [b.id]);

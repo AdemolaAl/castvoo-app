@@ -31,6 +31,8 @@ r.post('/api/subscribers/:id/note', async (ctx) => {
 }, { auth: 'workspace' });
 ```
 (Add `const settings = require('../services/settings');` and `notFound` to the imports at the top if missing.)
+Then say who may use it in `server/permissions.js` → `WS_ROUTES`: `'POST /api/subscribers/:id/note': 'ws.run',` (the setup helper
+and teammates may; `npm run check` fails until the route is there).
 
 ## 4. Return it in the list
 In the same file, add `s.note` to the `select` of `GET /api/subscribers`.

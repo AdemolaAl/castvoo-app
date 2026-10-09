@@ -10,9 +10,11 @@ const TRIG = {
   join_request: 'Someone asks to join your channel or group',
   tag: 'A tag is added to someone',
 };
-const UNIT_MIN = { min: 1, hour: 60, day: 1440 };
-function splitDelay(m) { m = Number(m) || 0; if (m && m % 1440 === 0) return [m / 1440, 'day']; if (m && m % 60 === 0) return [m / 60, 'hour']; return [m, 'min']; }
-function delayText(v, u) { v = Number(v) || 0; if (!v) return 'Instantly'; const n = { min: ['minute', 'minutes'], hour: ['hour', 'hours'], day: ['day', 'days'] }[u]; return 'Wait ' + v + ' ' + (v === 1 ? n[0] : n[1]); }
+const UNIT_SEC = { sec: 1, min: 60, hour: 3600, day: 86400 };
+const UNIT_NAMES = { sec: ['second', 'seconds'], min: ['minute', 'minutes'], hour: ['hour', 'hours'], day: ['day', 'days'] };
+/* Seconds → [value, unit] in the biggest whole unit (86400 → [1, 'day'], 2 → [2, 'sec']). */
+function splitDelay(s) { s = Math.max(0, Math.round(Number(s) || 0)); if (!s) return [0, 'min']; if (s % 86400 === 0) return [s / 86400, 'day']; if (s % 3600 === 0) return [s / 3600, 'hour']; if (s % 60 === 0) return [s / 60, 'min']; return [s, 'sec']; }
+function delayText(v, u) { v = Number(v) || 0; if (!v) return 'Right away'; const n = UNIT_NAMES[u] || UNIT_NAMES.min; return 'Wait ' + v + ' ' + (v === 1 ? n[0] : n[1]); }
 function blankStep(first) { return { delay_value: first ? 0 : 1, delay_unit: first ? 'min' : 'day', body: '', media: null, buttons: [], sent: 0, clicks: 0 }; }
 
 let DRIP = { list: [], sel: null, E: null, dirty: false };
@@ -21,7 +23,7 @@ function dripFromApi(q) {
   return {
     id: q.id, name: q.name, connection_id: q.connection_id, trigger_type: q.trigger_type, trigger_value: q.trigger_value || '',
     join_connection_id: q.join_chat ? q.join_chat.id : '', approve_join: q.approve_join !== false, active: !!q.active, people: q.people, in_progress: q.in_progress,
-    steps: q.steps.map((s) => { const [v, u] = splitDelay(s.delay_minutes); return { delay_value: v, delay_unit: u, body: s.body, media: s.media_id ? { id: s.media_id } : null, buttons: (s.buttons || []).map((b) => ({ label: b.label, url: b.url })), sent: s.sent, clicks: s.clicks }; }),
+    steps: q.steps.map((s) => { const [v, u] = splitDelay(s.delay_seconds != null ? s.delay_seconds : (s.delay_minutes || 0) * 60); return { delay_value: v, delay_unit: u, body: s.body, media: s.media_id ? { id: s.media_id } : null, buttons: (s.buttons || []).map((b) => ({ label: b.label, url: b.url })), sent: s.sent, clicks: s.clicks }; }),
   };
 }
 
@@ -120,6 +122,13 @@ function checkDrip(E) {
   if ((E.trigger_type === 'start_tag' || E.trigger_type === 'tag') && !/^[A-Za-z0-9_-]{1,64}$/.test(E.trigger_value || '')) return E.trigger_type === 'tag' ? 'Type the tag, using only letters, numbers, _ and -.' : 'Type the start link name, using only letters, numbers, _ and -.';
   if (E.trigger_type === 'join_request' && !E.join_connection_id) return 'Pick the channel or group that uses join requests.';
   if (!E.steps.length) return 'Add at least one message.';
+  let total = 0;
+  for (const [i, s] of E.steps.entries()) {
+    const v = Number(s.delay_value) || 0;
+    if (v < 0 || v > 999) return 'The wait for message ' + (i + 1) + ' can be 0 to 999 ' + (UNIT_NAMES[s.delay_unit] || UNIT_NAMES.min)[1] + '.';
+    total += v * (UNIT_SEC[s.delay_unit] || 60);
+  }
+  if (total > 365 * 86400) return 'Waits can add up to 365 days at most.';
   for (const [i, s] of E.steps.entries()) {
     if (!s.body.trim()) return 'Message ' + (i + 1) + ' is empty.';
     const lim = s.media ? 1024 : 4096;
@@ -140,11 +149,11 @@ function drawCanvas(bots, chats, editable) {
     (E.trigger_type === 'tag' ? '<label class="tlab" for="dTv">Tag</label><input class="trigsel" id="dTv" value="' + esc(E.trigger_value) + '" placeholder="for example buyer" maxlength="64"' + dis + '><div class="trignote">Starts when you add this tag to someone on the Subscribers page.</div>' : '') +
     (E.trigger_type === 'join_request' ? (chats.length ? '<label class="tlab">Channel or group</label><select class="trigsel" id="dJc"' + dis + '><option value="">Choose…</option>' + chats.map((c) => '<option value="' + c.id + '"' + (String(c.id) === String(E.join_connection_id) ? ' selected' : '') + '>' + esc(connName(c)) + '</option>').join('') + '</select>' +
       '<div class="tg tgd"><span><b>Let them in automatically</b><br><small>Approve each join request after the welcome.</small></span>' + toggleBtn('dAp', E.approve_join, 'Let them in automatically') + '</div>' +
-      '<div class="trignote"><b>How this works:</b> Telegram lets your bot message a person for 5 minutes after they ask to join. So message 1 goes out straight away and invites them to tap Start. Only people who tap Start get the later messages. Your bot must be an admin of the channel or group with the "Add members" right.</div>'
+      '<div class="trignote"><b>How this works:</b> Telegram lets your bot message a person for 5 minutes after they ask to join. So message 1 goes out straight away and invites them to tap Start. Messages in the first 5 minutes reach everyone who asked to join; later messages reach people who tapped Start. Your bot must be an admin of the channel or group with the "Add members" right.</div>'
       : '<div class="trignote">Connect the channel or group first (Channels &amp; bots page), and make your bot an admin there.</div>') : '') +
     '</div>';
   const steps = E.steps.map((s, i) => '<div class="conn"><span>' + delayText(s.delay_value, s.delay_unit) + '</span></div>' +
-    '<div class="node" data-step="' + i + '"><div class="nh"><b>Message ' + (i + 1) + '</b><div class="nhr"><div class="delay"><span class="hint">' + (i === 0 ? 'Send after' : 'Wait') + '</span><input type="number" min="0" max="525600" value="' + (Number(s.delay_value) || 0) + '" data-dv="' + i + '" aria-label="Wait time"' + dis + '><select data-du="' + i + '" aria-label="Unit"' + dis + '><option value="min"' + (s.delay_unit === 'min' ? ' selected' : '') + '>min</option><option value="hour"' + (s.delay_unit === 'hour' ? ' selected' : '') + '>hours</option><option value="day"' + (s.delay_unit === 'day' ? ' selected' : '') + '>days</option></select></div>' + (editable && E.steps.length > 1 ? '<button type="button" class="x" data-del="' + i + '" aria-label="Delete message ' + (i + 1) + '"><svg width="15" height="15"><use href="#i-trash"/></svg></button>' : '') + '</div></div>' +
+    '<div class="node" data-step="' + i + '"><div class="nh"><b>Message ' + (i + 1) + '</b><div class="nhr"><div class="delay"><span class="hint">' + (i === 0 ? 'Send after' : 'Wait') + '</span><input type="number" min="0" max="999" inputmode="numeric" value="' + (Number(s.delay_value) || 0) + '" data-dv="' + i + '" aria-label="Wait time"' + dis + '><select data-du="' + i + '" aria-label="Unit"' + dis + '>' + Object.keys(UNIT_NAMES).map((u) => '<option value="' + u + '"' + (s.delay_unit === u ? ' selected' : '') + '>' + UNIT_NAMES[u][Number(s.delay_value) === 1 ? 0 : 1] + '</option>').join('') + '</select>' + (editable ? '<button type="button" class="wf-now' + (Number(s.delay_value) ? '' : ' on') + '" data-dnow="' + i + '">⚡ Right away</button>' : '') + '</div>' + (editable && E.steps.length > 1 ? '<button type="button" class="x" data-del="' + i + '" aria-label="Delete message ' + (i + 1) + '"><svg width="15" height="15"><use href="#i-trash"/></svg></button>' : '') + '</div></div>' +
     (s.media ? '<div class="nmed">' + (s.media.url ? (s.media.kind === 'video' ? '<video src="' + esc(s.media.url) + '" muted playsinline></video>' : '<img src="' + esc(s.media.url) + '" alt="">') : '<img class="mimg" src="' + esc(mediaUrl(s.media.id)) + '" alt="">') + (editable ? '<button type="button" class="x" data-dmx="' + i + '" aria-label="Remove photo or video">×</button>' : '') + '</div>' : '') +
     '<textarea class="inp" rows="4" data-body="' + i + '" placeholder="Write message ' + (i + 1) + '…"' + dis + '>' + esc(s.body) + '</textarea><div class="cc" data-cc="' + i + '">' + counterHtml(s.body, !!s.media) + '</div>' +
     '<div class="btnl" data-btns="' + i + '">' + btnRows(s.buttons) + '</div>' +
@@ -162,7 +171,7 @@ function drawCanvas(bots, chats, editable) {
     if (t.id === 'dTrig') { E.trigger_type = t.value; E.trigger_value = ''; mark(); drawCanvas(bots, chats, editable); }
     if (t.id === 'dJc') { E.join_connection_id = t.value; mark(); }
     if (t.dataset.du != null) { E.steps[t.dataset.du].delay_unit = t.value; mark(); drawCanvas(bots, chats, editable); }
-    if (t.dataset.dv != null) { E.steps[t.dataset.dv].delay_value = Math.max(0, parseInt(t.value, 10) || 0); mark(); drawCanvas(bots, chats, editable); }
+    if (t.dataset.dv != null) { E.steps[t.dataset.dv].delay_value = Math.min(999, Math.max(0, parseInt(t.value, 10) || 0)); mark(); drawCanvas(bots, chats, editable); }
   };
   cv.oninput = (e) => {
     const t = e.target;
@@ -173,6 +182,7 @@ function drawCanvas(bots, chats, editable) {
   };
   cv.onclick = async (e) => {
     const t = e.target;
+    const now = t.closest('[data-dnow]'); if (now && editable) { const st = E.steps[+now.dataset.dnow]; st.delay_value = 0; st.delay_unit = 'sec'; mark(); drawCanvas(bots, chats, editable); return; }
     const ap = t.closest('#dAp'); if (ap) { E.approve_join = !E.approve_join; setToggle(ap, E.approve_join); mark(); return; }
     const nm = t.closest('[data-dname]');
     if (nm) {

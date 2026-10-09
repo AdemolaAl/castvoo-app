@@ -30,6 +30,7 @@ const FEATURES = [
   { key: 'support_chat',   group: 'Support',   name: 'Support chat',            about: 'Chat with the team from the dashboard.', default: true },
   { key: 'support_ai',     group: 'Support',   name: 'AI support team',         about: '24/7 AI agents answer the support chat and hand over to the team when needed (Admin → Support AI).', default: true },
   { key: 'site_chat',      group: 'Support',   name: 'Website chat',            about: 'A chat bubble on the public website that answers product and pricing questions (no account access).', default: true },
+  { key: 'blog',           group: 'Website',   name: 'Blog',                    about: 'The public blog at /blog, its RSS feed, its sitemap entries and the "From the blog" section on the homepage (Admin → Blog).', default: true },
   { key: 'sales_emails',   group: 'Emails',    name: 'Trial follow-up emails',  about: 'The 7 helpful sales emails during and after the trial.', default: true },
   { key: 'maintenance',    group: 'Platform',  name: 'Maintenance mode',        about: 'Pause all sending and sign-ups and show the maintenance message.', default: false },
 ];

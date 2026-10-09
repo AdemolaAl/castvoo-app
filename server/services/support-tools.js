@@ -4,9 +4,10 @@
  *
  *   scope = { userId, workspaceId, role, threadId, sandbox, log }
  *
- * role is the person's CURRENT role in that workspace (owner / sender / drafter), read by support-ai.js from members
- * just before the turn. Tools marked owner: true (they change something, like the dashboard keeps for owners) only
- * run for owners (SEC-1).
+ * role is the person's CURRENT role in that workspace (owner / sender / drafter / helper), read by support-ai.js from
+ * members just before the turn. Tools marked owner: true (they change something, like the dashboard keeps for owners)
+ * only run for owners and the setup helper (SEC-1). Tools marked personal: true (referral money) don't run for a setup
+ * helper, and get_account hides the other members' emails from them: a helper gets workspace facts, never owner-private data.
  *
  * The scope comes from the logged-in session / the support thread, never from the model. Tools take no user or
  * workspace id, and every id the model may pass (a connection id, a payment reference) is looked up with
@@ -31,6 +32,8 @@ const settings = require('./settings');
 const billing = require('./billing');
 const tg = require('./telegram');
 const { decrypt, fmtUSD } = require('../lib/util');
+const HELPER = require('./helper');
+const ROLE_NAMES = { owner: 'Owner', sender: 'Can send', drafter: 'Drafts only', helper: 'Setup helper' };
 
 /* ---------------- redaction ---------------- */
 // Keys that are never shown, wherever they appear in a tool's output.
@@ -101,13 +104,16 @@ const TOOLS = {
     async run(scope) {
       const { ws, user } = await scopeRows(scope);
       const l = await billing.limits(ws);
-      const members = await db.many('select u.name, u.email, m.role from members m join users u on u.id = m.user_id where m.workspace_id = $1 order by m.created_at', [ws.id]);
+      const members = await db.many('select u.id, u.name, u.email, m.role from members m join users u on u.id = m.user_id where m.workspace_id = $1 order by m.created_at', [ws.id]);
       const pending = ws.pending_plan_code ? await settings.plan(ws.pending_plan_code) : null;
+      const helperView = scope.role === 'helper';
       return {
+        // A setup helper is not the owner: they get the workspace, never the owner's login details (SEC-1).
+        ...(helperView ? { you_are: 'the setup helper of this workspace, not its owner', helper_rules: { can: HELPER.CAN, cannot: HELPER.CANNOT, can_change_plan: !!ws.helper_billing, can_send_broadcasts: ws.helper_send !== false } } : {}),
         user: { first_name: (user.name || '').split(' ')[0] || null, email: maskEmail(user.email), email_verified: user.email_verified, country: user.country, telegram_linked: !!user.tg_user_id, telegram_username: user.tg_username || null, voosquare_linked: !!user.voo_id, since: day(user.created_at) },
         workspace: { name: ws.name, plan: l.plan.name, plan_status: ws.plan_status, billing_cycle: ws.billing_cycle, trial_ends_at: day(ws.trial_ends_at), renewal_date: ws.plan_status === 'active' ? day(ws.period_end) : null, cancel_at_period_end: ws.cancel_at_period_end, next_plan: pending ? pending.name : null, timezone: ws.timezone || null },
-        seats: { used: members.length, limit: l.seats },
-        members: members.map((m) => ({ name: (m.name || '').split(' ')[0] || 'Teammate', email: maskEmail(m.email), role: { owner: 'Owner', sender: 'Can send', drafter: 'Drafts only' }[m.role] || m.role })),
+        seats: { used: members.filter((m) => m.role !== 'helper').length, limit: l.seats, setup_helper: 'one free on every plan, does not use a seat' },
+        members: members.map((m) => ({ name: (m.name || '').split(' ')[0] || 'Teammate', ...(helperView && Number(m.id) !== Number(scope.userId) ? {} : { email: maskEmail(m.email) }), role: ROLE_NAMES[m.role] || m.role })),
       };
     },
   },
@@ -421,6 +427,7 @@ const TOOLS = {
 
   get_referrals: {
     description: "The customer's own referral programme: their rate and tier, sign-ups and paying referrals, earnings that are pending (not settled yet), ready to use or withdraw, already used on plans, and why an earning was cancelled. Read-only.",
+    personal: true,
     parameters: S(),
     async run(scope) {
       const { user } = await scopeRows(scope);
@@ -445,6 +452,7 @@ const TOOLS = {
 
   get_withdrawals: {
     description: "The customer's referral withdrawals (USDT or Bitcoin): amount, coin, status (requested, paid, rejected), the end of the wallet address and of the transaction id, the reason if rejected, and dates. Read-only: only the finance team pays withdrawals.",
+    personal: true,
     parameters: S(),
     async run(scope) {
       const rows = await db.many('select amount_cents, coin, address, status, txid, reason, created_at, processed_at from withdrawals where user_id = $1 order by id desc limit 10', [scope.userId]);
@@ -527,7 +535,10 @@ async function run(name, input, scope) {
   let ok = true, output;
   if (!tool || (scope.allowed && !scope.allowed.includes(name))) { ok = false; output = { error: `There is no tool called ${String(name).slice(0, 40)}.` }; }
   // Owner-only tools (they change something): refused for senders and drafters, as in the dashboard (SEC-1).
-  else if (tool.owner && !scope.sandbox && scope.role !== 'owner') { ok = true; output = { done: false, not_allowed: true, message: 'Only the workspace owner can do this. Ask the owner to write to support, or to do it in Channels & bots.' }; }
+  // The setup helper connects and fixes bots in the dashboard, so the bot tools work for them too.
+  else if (tool.owner && !scope.sandbox && !['owner', 'helper'].includes(scope.role)) { ok = true; output = { done: false, not_allowed: true, message: 'Only the workspace owner can do this. Ask the owner to write to support, or to do it in Channels & bots.' }; }
+  // Referral money belongs to each person's own account; while helping a customer, the helper's own earnings are not shown.
+  else if (tool.personal && !scope.sandbox && scope.role === 'helper') { ok = true; output = { not_available: true, message: 'This chat is about the workspace this person helps set up. Referral earnings and withdrawals are only shown in their own workspace.' }; }
   else {
     try { output = await tool.run(scope, args); } catch (e) {
       ok = false;

@@ -354,7 +354,8 @@ describe('VooSquare login (Voo Connect kit)', () => {
     assert.equal(r.headers.get('location'), '/#signup/country');
     const me = (await c.get('/api/me')).body.user;
     assert.equal(me.email, 'vslogin@example.com');
-    assert.equal(me.country, 'KE');
+    assert.equal(me.country, null, 'country starts empty; the sign-up country step asks for it');
+    assert.equal((await c.post('/api/me', { country: 'KE' })).body.user.country, 'KE');
     assert.equal(me.voo_linked, true);
     assert.equal((await app.db.one("select voo_id from users where id = $1", [me.id])).voo_id, 'vs_login1');
     const out = await c.post('/api/auth/logout');

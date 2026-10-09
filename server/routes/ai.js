@@ -39,6 +39,14 @@ async function run(ctx, kind, writes, fn) {
   return { ...out.result, ai_writes_left: Math.max(0, left.ai_writes - used) };
 }
 
+/** Cas's wait for one step → { delay_value, delay_unit } the follow-up editor understands. */
+function seqDelay(s) {
+  const unit = require('../services/flows').normUnit(s.delay_unit);
+  const u = ['sec', 'min', 'hour', 'day'].includes(unit) ? unit : 'day';
+  const max = u === 'sec' ? 999 : u === 'min' ? 999 : u === 'hour' ? 999 : 365;
+  return { delay_value: Math.max(0, Math.min(max, parseInt(s.delay_value, 10) || 0)), delay_unit: u };
+}
+
 module.exports = (r) => {
   r.post('/api/ai/write', async (ctx) => {
     const b = ctx.body;
@@ -78,7 +86,8 @@ module.exports = (r) => {
       let arr;
       try { arr = JSON.parse(m ? m[0] : res.text); } catch { throw badRequest('Cas wrote something unexpected. Please try again.'); }
       const out = (Array.isArray(arr) ? arr : []).slice(0, steps).map((s) => ({
-        delay_value: Math.max(0, Math.min(365, parseInt(s.delay_value, 10) || 0)), delay_unit: ['min', 'hour', 'day'].includes(s.delay_unit) ? s.delay_unit : 'day', body: ai.clean(s.body).slice(0, 1000),
+        // Units: sec | min | hour | day (Cas may also write "seconds", "minutes"...). Seconds stay within 0–999, days 0–365.
+        ...seqDelay(s), body: ai.clean(s.body).slice(0, 1000),
       })).filter((s) => s.body);
       if (!out.length) throw badRequest('Cas could not write that sequence. Try describing the goal differently.');
       out[0].delay_value = 0; out[0].delay_unit = 'min';

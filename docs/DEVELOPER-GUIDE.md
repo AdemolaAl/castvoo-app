@@ -47,6 +47,7 @@ same process, in loops that never overlap.
 | Change the AI support agents, their photos, rules and limits | Admin → Support AI |
 | Pick payment methods for a country | Admin → Countries & payments |
 | Add a bank transfer, mobile money or wallet method | Admin → Countries & payments → Add payment method |
+| Write, schedule or edit a blog post | Admin → Blog ([BLOG.md](BLOG.md)) |
 | Give someone admin access | Admin → Team |
 
 ## Common changes (code)
@@ -59,6 +60,11 @@ same process, in loops that never overlap.
 - **New feature switch**: one line in `server/features.js`; check it with `await settings.requireFeature('key')`
   on the server and `CFG.features.key` in the browser.
 - **New team permission**: one line in `server/permissions.js`.
+- **New workspace route** (`{ auth: 'workspace' }`): add `'METHOD /pattern': 'ws.<perm>'` to `WS_ROUTES` in `server/permissions.js`.
+  The router checks it for every role (owner, sender, drafter, setup helper) before the handler; a route missing from
+  the map is owner-only and `npm run check` fails. `test/e2e/setup-helper.test.js` calls every workspace route as a
+  setup helper and checks the answer against the map. Changes a setup helper makes are written to `workspace_activity`
+  (`services/activity.js`; add a plain-words line for your route in `LINES`).
 - **New payment method checked by hand** (bank, mobile money...): no code, Admin → Countries & payments → Add payment method.
 - **New automatic payment gateway**: `server/payments/index.js` (start + verify, added to `GATEWAYS`), a webhook in
   `server/routes/payment-webhooks.js`, a row in `payment_methods` (migration or seed), then pick it per country in admin.
@@ -72,8 +78,15 @@ same process, in loops that never overlap.
 - Bots can delete their messages for 48 hours.
 - After a join request, the bot may message that person for 5 minutes (`user_chat_id`), until the request is
   approved or declined. So Welcome Flows send the welcome first, then approve (`services/flows.js`).
-- Bots can't message people who never pressed Start: later Welcome Flow steps wait (`sequence_runs.status = 'waiting'`)
+- Quick steps: later Welcome Flow messages due within `flows.QUICK_SECONDS` (280 s) of the welcome also go through
+  `user_chat_id` while the request is open (`deliveries.join_request_id`, priority 1). Approving ends the window, so
+  "after_welcome" / "instant" flows hold the approval (`join_requests.hold_position`, `approve_at`) until the last
+  quick delivery is done (`deliveries.then_approve` → `flows.quickStepDone` → `releaseHeld`), or `approve_at` passes.
+- Bots can't message people who never pressed Start: after that window, later Welcome Flow steps wait (`sequence_runs.status = 'waiting'`)
   until `/start` (the welcome's "Tap to start" button sends `?start=j_<code>`), and stop after 7 days.
+- Waits are seconds (`sequence_steps.delay_seconds`; `delay_minutes` is kept in step by a trigger for older code).
+  The drips job polls every 10 s; steps due within 60 s are fired on time by `workers/soon.js` (call `soon.at(dueAt)`
+  wherever you set a near due time). Row claims (`for update skip locked`) keep it safe on several servers.
 - Plans: limits and features live in the `plans` table (Admin → Pricing). Check them with `billing.limits(ws)`,
   `billing.hasFeature(ws, key)` / `requirePlanFeature(ws, key)` (402 `plan_feature`) and `billing.joinMeter(ws)`.
   A workspace whose trial or plan ends unpaid drops to the Free plan (`billing.dropToFree`), it is not paused.

@@ -81,10 +81,25 @@ async function finish(d, fields) {
     [d.id, fields.status, fields.message_id || null, fields.error || null]);
 }
 
+/**
+ * Send one delivery. A "quick" Welcome Flow step (join_request_id) goes to someone who asked to join and has not
+ * tapped Start yet, inside Telegram's 5-minute window; once it is done (sent or failed, not requeued), a join request
+ * held for it is let in (then_approve, services/flows.js quickStepDone).
+ */
 async function deliver(token, key, d, cache) {
+  const res = await deliverOne(token, key, d, cache);
+  if (d.then_approve && d.join_request_id) {
+    const now = await db.one('select status from deliveries where id = $1', [d.id]);
+    if (!now || (now.status !== 'queued' && now.status !== 'sending')) await require('../services/flows').quickStepDone(d.join_request_id).catch((e) => log.warn('held join request', { err: e.message }));
+  }
+  return res;
+}
+
+async function deliverOne(token, key, d, cache) {
   const content = await contentFor(cache, d);
   if (!content || content.cancelled) return finish(d, { status: 'skipped', error: 'Message no longer exists' });
-  if (d.subscriber_id && d.action === 'send' && d.sub_status && d.sub_status !== 'active') return finish(d, { status: 'skipped', error: 'Subscriber stopped or blocked' });
+  const quick = !!d.join_request_id && d.sub_status === 'joinreq';
+  if (d.subscriber_id && d.action === 'send' && d.sub_status && d.sub_status !== 'active' && !quick) return finish(d, { status: 'skipped', error: 'Subscriber stopped or blocked' });
   const isPrivate = !!d.subscriber_id;
   try {
     if (d.action === 'send') {
@@ -107,6 +122,10 @@ async function deliver(token, key, d, cache) {
       return { pause: Math.max(1, e.retryAfter || 5) };
     }
     if (/message is not modified|message to delete not found|message to pin not found/i.test(desc)) return finish(d, { status: 'sent' });
+    if (e.code === 403 && quick) {
+      // The window closed (or they cancelled the request): not a block. Their later steps wait for Start.
+      return finish(d, { status: 'failed', error: 'Telegram\'s 5-minute window ended before they tapped Start' });
+    }
     if (e.code === 403) {
       if (isPrivate) {
         await db.query("update subscribers set status = 'blocked' where id = $1", [d.subscriber_id]);

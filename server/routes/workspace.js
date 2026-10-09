@@ -8,8 +8,41 @@ const settings = require('../services/settings');
 const email = require('../services/email');
 const { str, int, oneOf, email: vEmail, randomToken, badRequest, forbidden, notFound, httpError, fmtUSD, cleanName, LOOKS_LIKE_URL } = require('../lib/util');
 const rl = require('../lib/ratelimit');
+const perms = require('../permissions');
+const helper = require('../services/helper');
+const helperLog = require('../services/activity');
 
 const ownerOnly = (ctx) => { if (ctx.member.role !== 'owner') throw forbidden('Only the workspace owner can do that.'); };
+/** Connecting Telegram and workspace settings: the owner and the setup helper. */
+const canSetup = (ctx) => { if (!perms.wsCan(ctx.member.role, 'ws.setup', ctx.workspace)) throw forbidden('Only the workspace owner can do that.'); };
+/** Plan and coupons: the owner, and the setup helper when the owner allows billing. */
+const canBilling = (ctx) => { if (!perms.wsCan(ctx.member.role, 'ws.billing', ctx.workspace)) throw forbidden(ctx.member.role === 'helper' ? 'Only the owner can change the plan. They can allow it in Settings → Team.' : 'Only the workspace owner can do that.'); };
+const safeName = (v, fallback) => { const x = cleanName(v, 60); return x && !LOOKS_LIKE_URL.test(x) ? x : fallback; };
+const maskEmail = (e) => { if (!e) return null; const [u, d] = String(e).split('@'); if (!d) return '•••'; return (u.length <= 2 ? u[0] + '•' : u.slice(0, 2) + '•••' + u.slice(-1)) + '@' + d; };
+const seatsUsed = (members, invites) => members + invites;
+
+/** Room for a setup helper: one per workspace (free on every plan, no seat). */
+async function helperRoom(ctx) {
+  const h = await helper.current(ctx.workspace.id);
+  if (h) throw httpError(409, 'You already have a setup helper. Remove them first to invite someone else.', 'helper_exists');
+}
+/** SEC-12: invites are emails from Castvoo's domain with text the owner chose. New accounts may send fewer per day. */
+async function invitesPerDay(ctx) {
+  const ageDays = (Date.now() - new Date(ctx.user.created_at || Date.now()).getTime()) / 86400000;
+  const perDay = ctx.workspace.paid_ever ? 100 : ageDays < 2 ? 5 : ageDays < 14 ? 15 : 40;
+  if (!(await rl.hitShared('invite-day:' + ctx.user.id, perDay, 86400)).ok) throw httpError(429, 'That is a lot of invites for one day. Try again tomorrow.', 'rate_limited');
+}
+/** An invite that can still be used by this person. Email invites only work for the email they were sent to. */
+async function openInvite(ctx, token) {
+  const inv = await db.one('select * from invites where token = $1 and accepted_at is null and declined_at is null and expires_at > now()', [str(token, 'Invite', { min: 10, max: 100 })]);
+  if (!inv) throw notFound('That invite');
+  // The invite only works for the email it was sent to, so a forwarded link can't be used by someone else.
+  if (inv.kind === 'email' && (!ctx.user.email || ctx.user.email.toLowerCase() !== String(inv.email).toLowerCase())) {
+    const hint = String(inv.email).replace(/^(.).*(@.*)$/, '$1•••$2');
+    throw httpError(403, `This invite was sent to ${hint}. Log in with that email, or add it to your account in Settings, then open the link again.`, 'invite_email');
+  }
+  return inv;
+}
 const canSend = (ctx) => { if (ctx.member.role === 'drafter') throw forbidden('Your role can write drafts. Ask the owner to send.'); };
 
 async function stats(wsId) {
@@ -54,10 +87,18 @@ module.exports = (r) => {
     const anyDrip = await db.one("select 1 from sequences where workspace_id = $1 and active and trigger_type <> 'join_request' limit 1", [ws.id]);
     const anyFlow = await db.one("select 1 from sequences where workspace_id = $1 and active and trigger_type = 'join_request' limit 1", [ws.id]);
     const pendingJoins = await db.one("select count(*)::int n from join_requests where workspace_id = $1 and status = 'pending'", [ws.id]);
-    const teammates = await db.one('select count(*)::int n from members where workspace_id = $1', [ws.id]);
+    const teammates = await db.one("select count(*)::int n from members where workspace_id = $1 and role <> 'helper'", [ws.id]);
     const anyTopup = await db.one("select 1 from wallet_tx where workspace_id = $1 and kind = 'topup' limit 1", [ws.id]);
+    // Setup helper: for the owner, whether one is invited or working (and the "they joined" notice);
+    // for the helper, what the owner allows (billing, sending broadcasts).
+    const h = await helper.current(ws.id);
+    const role = ctx.member.role;
+    const helperInfo = role === 'owner'
+      ? { active: !!h, name: h ? h.name : null, pending: !h && !!(await helper.pendingInvite(ws.id)), notice: h && !h.owner_seen ? { name: h.name || 'Your setup helper' } : null }
+      : role === 'helper' ? { you: true, billing: !!ws.helper_billing, send: ws.helper_send !== false } : null;
     return {
-      workspace: { id: ws.id, name: ws.name, timezone: ws.timezone, role: ctx.member.role, daily_cap: ws.daily_cap, require_approval: ws.require_approval, ai_trained: Object.keys(ws.ai_profile || {}).length > 0 },
+      workspace: { id: ws.id, name: ws.name, timezone: ws.timezone, role, daily_cap: ws.daily_cap, require_approval: ws.require_approval, ai_trained: Object.keys(ws.ai_profile || {}).length > 0 },
+      helper: helperInfo,
       plan, connections: conns,
       wallet: { cash: Number(wallet.wallet_cents) / 100, bonus: Number(wallet.bonus_cents) / 100, total: (Number(wallet.wallet_cents) + Number(wallet.bonus_cents)) / 100 },
       stats: st, activity: act, sending, upcoming, support_unread: unread.n, flows: { live: !!anyFlow, pending: pendingJoins.n },
@@ -75,7 +116,7 @@ module.exports = (r) => {
   }, { auth: 'workspace' });
 
   r.post('/api/app/settings', async (ctx) => {
-    ownerOnly(ctx);
+    canSetup(ctx);
     const b = ctx.body;
     let name = ctx.workspace.name;
     if (b.name !== undefined) {
@@ -97,67 +138,170 @@ module.exports = (r) => {
 
   /* ---------- Team ---------- */
   r.get('/api/app/team', async (ctx) => {
-    const members = await db.many('select u.id, u.name, u.email, u.tg_username, m.role from members m join users u on u.id = m.user_id where m.workspace_id = $1 order by m.created_at', [ctx.workspace.id]);
-    const invites = await db.many('select email, role, expires_at from invites where workspace_id = $1 and accepted_at is null and expires_at > now() order by created_at desc', [ctx.workspace.id]);
-    return { members, invites, seats: (await billing.limits(ctx.workspace)).seats };
+    const ws = ctx.workspace;
+    const owner = ctx.member.role === 'owner';
+    const rows = await db.many('select u.id, u.name, u.email, u.tg_username, m.role, m.created_at as joined_at, m.last_active_at from members m join users u on u.id = m.user_id where m.workspace_id = $1 order by m.created_at', [ws.id]);
+    // A setup helper sees who is on the team, not their logins (emails partly hidden, no Telegram usernames).
+    const members = rows.map((m) => (owner || m.id === ctx.user.id ? m : { id: m.id, name: m.name, email: maskEmail(m.email), tg_username: null, role: m.role, joined_at: m.joined_at }));
+    const invites = owner ? await db.many("select email, role, kind, expires_at from invites where workspace_id = $1 and role <> 'helper' and accepted_at is null and declined_at is null and expires_at > now() order by created_at desc", [ws.id]) : [];
+    const h = rows.find((m) => m.role === 'helper') || null;
+    const pend = owner && !h ? await helper.pendingInvite(ws.id) : null;
+    return {
+      members, invites, seats: (await billing.limits(ws)).seats, seats_used: seatsUsed(rows.length - (h ? 1 : 0), invites.length),
+      helper: {
+        included: 1,
+        member: h ? { id: h.id, name: h.name, email: owner ? h.email : maskEmail(h.email), tg_username: owner ? h.tg_username : null, joined_at: h.joined_at, last_active_at: h.last_active_at } : null,
+        invite: pend ? { kind: pend.kind, email: pend.email, expires_at: pend.expires_at, link: `${config.appUrl}/#join/${pend.token}` } : null,
+        settings: { billing: !!ws.helper_billing, send: ws.helper_send !== false },
+        activity: owner && h ? await helperLog.list(ws.id, { limit: 30 }) : [],
+        can: helper.CAN, cannot: helper.CANNOT,
+      },
+    };
   }, { auth: 'workspace' });
 
   r.post('/api/app/team/invite', async (ctx) => {
     ownerOnly(ctx);
     const mail = vEmail(ctx.body.email);
-    const role = oneOf(ctx.body.role || 'sender', 'Role', ['sender', 'drafter']);
-    const seats = (await billing.limits(ctx.workspace)).seats;
-    const used = (await db.one('select count(*)::int n from members where workspace_id = $1', [ctx.workspace.id])).n;
-    const pending = (await db.one('select count(*)::int n from invites where workspace_id = $1 and accepted_at is null and expires_at > now()', [ctx.workspace.id])).n;
-    if (used + pending >= seats) throw httpError(402, `Your plan has ${seats} seat${seats > 1 ? 's' : ''}. Upgrade to invite more people.`, 'limit_seats');
-    // SEC-12: invites are emails from Castvoo's domain with text the owner chose. New accounts may send fewer per day,
-    // and names that read like a web address are replaced, so an invite can't be dressed up as a Castvoo notice.
-    const ageDays = (Date.now() - new Date(ctx.user.created_at || Date.now()).getTime()) / 86400000;
-    const perDay = ctx.workspace.paid_ever ? 100 : ageDays < 2 ? 5 : ageDays < 14 ? 15 : 40;
-    if (!(await rl.hitShared('invite-day:' + ctx.user.id, perDay, 86400)).ok) throw httpError(429, 'That is a lot of invites for one day. Try again tomorrow.', 'rate_limited');
+    const role = oneOf(ctx.body.role || 'sender', 'Role', ['sender', 'drafter', 'helper']);
+    if (mail === String(ctx.user.email || '').toLowerCase()) throw badRequest('That is your own email. Invite someone else.');
+    if (role === 'helper') await helperRoom(ctx);
+    else {
+      const seats = (await billing.limits(ctx.workspace)).seats;
+      // The setup helper (and an invite for one) never uses a team seat.
+      const used = (await db.one("select count(*)::int n from members where workspace_id = $1 and role <> 'helper'", [ctx.workspace.id])).n;
+      const pending = (await db.one("select count(*)::int n from invites where workspace_id = $1 and role <> 'helper' and accepted_at is null and declined_at is null and expires_at > now()", [ctx.workspace.id])).n;
+      if (used + pending >= seats) throw httpError(402, `Your plan has ${seats} seat${seats > 1 ? 's' : ''}. Upgrade to invite more people.`, 'limit_seats');
+    }
+    await invitesPerDay(ctx);
     const token = randomToken(24);
-    await db.query("insert into invites(token, workspace_id, email, role, created_by, expires_at) values ($1,$2,$3,$4,$5, now() + interval '7 days')", [token, ctx.workspace.id, mail, role, ctx.user.id]);
+    await db.tx(async (c) => {
+      if (role === 'helper') await helper.expirePending(ctx.workspace.id, c); // one helper invite at a time: the new one replaces the old
+      await c.query("insert into invites(token, workspace_id, email, role, kind, created_by, expires_at) values ($1,$2,$3,$4,'email',$5, now() + interval '7 days')", [token, ctx.workspace.id, mail, role, ctx.user.id]);
+    });
     const link = `${config.appUrl}/#join/${token}`;
-    const safe = (v, fallback) => { const x = cleanName(v, 60); return x && !LOOKS_LIKE_URL.test(x) ? x : fallback; };
-    await email.sendTo(mail, 'team_invite', { inviter_name: safe(ctx.user.name, 'A Castvoo customer'), workspace_name: safe(ctx.workspace.name, 'their workspace'), invite_url: link });
+    const vars = { inviter_name: safeName(ctx.user.name, 'A Castvoo customer'), workspace_name: safeName(ctx.workspace.name, 'their workspace'), invite_url: link };
+    await email.sendTo(mail, role === 'helper' ? 'helper_invite' : 'team_invite', vars);
     return { ok: true, link };
   }, { auth: 'workspace', rate: [30, 3600] });
+
+  /** A one-time link to invite a setup helper (share it on Telegram or WhatsApp). The first person to accept gets it. */
+  r.post('/api/app/team/helper-link', async (ctx) => {
+    ownerOnly(ctx);
+    await helperRoom(ctx);
+    await invitesPerDay(ctx);
+    const token = randomToken(24);
+    await db.tx(async (c) => {
+      await helper.expirePending(ctx.workspace.id, c);
+      await c.query("insert into invites(token, workspace_id, email, role, kind, created_by, expires_at) values ($1,$2,null,'helper','link',$3, now() + interval '7 days')", [token, ctx.workspace.id, ctx.user.id]);
+    });
+    const exp = await db.one('select expires_at from invites where token = $1', [token]);
+    return { ok: true, link: `${config.appUrl}/#join/${token}`, expires_at: exp.expires_at };
+  }, { auth: 'workspace', rate: [30, 3600] });
+
+  r.post('/api/app/team/helper/cancel-invite', async (ctx) => {
+    ownerOnly(ctx);
+    await helper.expirePending(ctx.workspace.id);
+    return { ok: true };
+  }, { auth: 'workspace' });
+
+  r.post('/api/app/team/helper/settings', async (ctx) => {
+    ownerOnly(ctx);
+    const b = ctx.body || {};
+    const billingOn = b.billing === undefined ? !!ctx.workspace.helper_billing : !!b.billing;
+    const sendOn = b.send === undefined ? ctx.workspace.helper_send !== false : !!b.send;
+    await db.query('update workspaces set helper_billing = $2, helper_send = $3 where id = $1', [ctx.workspace.id, billingOn, sendOn]);
+    return { ok: true, settings: { billing: billingOn, send: sendOn } };
+  }, { auth: 'workspace' });
+
+  /** The owner saw the "your setup helper joined" notice. */
+  r.post('/api/app/team/helper/seen', async (ctx) => {
+    ownerOnly(ctx);
+    await db.query("update members set owner_seen = true where workspace_id = $1 and role = 'helper'", [ctx.workspace.id]);
+    return { ok: true };
+  }, { auth: 'workspace' });
 
   r.post('/api/app/team/remove', async (ctx) => {
     ownerOnly(ctx);
     const uid = int(ctx.body.user_id, 'Person');
     if (uid === ctx.user.id) throw badRequest('You cannot remove yourself.');
-    await db.query("delete from members where workspace_id = $1 and user_id = $2 and role <> 'owner'", [ctx.workspace.id, uid]);
+    // Deleting the membership is enough: every request reads the membership again, so the person's open
+    // sessions lose this workspace on their next click. Things they scheduled keep running unless the owner cancels them.
+    const gone = await db.one("delete from members where workspace_id = $1 and user_id = $2 and role <> 'owner' returning role", [ctx.workspace.id, uid]);
+    if (gone && gone.role === 'helper') {
+      const u = await db.one('select * from users where id = $1', [uid]);
+      await helperLog.record(ctx.workspace.id, uid, 'helper.removed', 'Was removed as setup helper by the owner', 'owner');
+      if (u) await email.send('helper_removed', u, { owner_name: safeName(ctx.user.name, 'The owner'), workspace_name: safeName(ctx.workspace.name, 'the workspace') });
+    }
+    return { ok: true, removed: !!gone };
+  }, { auth: 'workspace' });
+
+  /** Leave a workspace you were invited to (teammates and the setup helper). */
+  r.post('/api/app/team/leave', async (ctx) => {
+    if (ctx.member.role === 'owner') throw badRequest('You own this workspace, so you can\'t leave it.');
+    if (ctx.member.role === 'helper') await helperLog.record(ctx.workspace.id, ctx.user.id, 'helper.left', 'Left the workspace');
+    await db.query("delete from members where workspace_id = $1 and user_id = $2 and role <> 'owner'", [ctx.workspace.id, ctx.user.id]);
     return { ok: true };
   }, { auth: 'workspace' });
 
   r.post('/api/app/team/role', async (ctx) => {
     ownerOnly(ctx);
     const role = oneOf(ctx.body.role, 'Role', ['sender', 'drafter']);
-    await db.query("update members set role = $3 where workspace_id = $1 and user_id = $2 and role <> 'owner'", [ctx.workspace.id, int(ctx.body.user_id, 'Person'), role]);
+    const uid = int(ctx.body.user_id, 'Person');
+    const cur = await db.one('select role from members where workspace_id = $1 and user_id = $2', [ctx.workspace.id, uid]);
+    // A helper becoming a teammate would need a seat; remove them and invite them as a teammate instead.
+    if (cur && cur.role === 'helper') throw badRequest('The setup helper has their own role. To make them a teammate, remove them and invite them with a role.');
+    await db.query("update members set role = $3 where workspace_id = $1 and user_id = $2 and role not in ('owner','helper')", [ctx.workspace.id, uid, role]);
     return { ok: true };
   }, { auth: 'workspace' });
 
+  /** What an invite is, for the screen before accepting (the setup helper's consent screen). */
+  r.get('/api/invites/:token', async (ctx) => {
+    const inv = await openInvite(ctx, ctx.params.token);
+    const ws = await db.one('select w.name, w.owner_user_id, u.name as owner_name from workspaces w join users u on u.id = w.owner_user_id where w.id = $1', [inv.workspace_id]);
+    const member = await db.one('select role from members where workspace_id = $1 and user_id = $2', [inv.workspace_id, ctx.user.id]);
+    return {
+      role: inv.role, kind: inv.kind, expires_at: inv.expires_at,
+      workspace_name: ws.name, owner_name: safeName((ws.owner_name || '').split(' ')[0], 'The owner'),
+      already_member: !!member,
+      can: inv.role === 'helper' ? helper.CAN : [], cannot: inv.role === 'helper' ? helper.CANNOT : [],
+    };
+  }, { auth: 'user', rate: [60, 600] });
+
   r.post('/api/invites/accept', async (ctx) => {
-    const inv = await db.one('select * from invites where token = $1 and accepted_at is null and expires_at > now()', [str(ctx.body.token, 'Invite', { min: 10, max: 100 })]);
-    if (!inv) throw notFound('That invite');
-    // The invite only works for the email it was sent to, so a forwarded link can't be used by someone else.
-    if (!ctx.user.email || ctx.user.email.toLowerCase() !== inv.email.toLowerCase()) {
-      const hint = inv.email.replace(/^(.).*(@.*)$/, '$1•••$2');
-      throw httpError(403, `This invite was sent to ${hint}. Log in with that email, or add it to your account in Settings, then open the link again.`, 'invite_email');
-    }
+    const inv = await openInvite(ctx, ctx.body.token);
+    if (inv.role === 'helper' && ctx.body.consent !== true) throw badRequest('Read what a setup helper can do, then tap Accept.', 'consent_needed');
+    const already = await db.one('select role from members where workspace_id = $1 and user_id = $2', [inv.workspace_id, ctx.user.id]);
+    if (already) throw httpError(409, already.role === 'owner' ? 'This is your own workspace. Send the invite to the person who will help you.' : 'You are already in this workspace.', 'already_member');
     await db.tx(async (c) => {
-      await c.query('insert into members(workspace_id, user_id, role) values ($1,$2,$3) on conflict do nothing', [inv.workspace_id, ctx.user.id, inv.role]);
-      await c.query('update invites set accepted_at = now() where token = $1', [inv.token]);
+      // Used once: a link invite belongs to the first person who accepts it.
+      const used = (await c.query('update invites set accepted_at = now(), accepted_by = $2 where token = $1 and accepted_at is null and declined_at is null and expires_at > now() returning token', [inv.token, ctx.user.id])).rows[0];
+      if (!used) throw notFound('That invite');
+      if (inv.role === 'helper') {
+        await c.query('select pg_advisory_xact_lock(7101, $1::int)', [inv.workspace_id]);
+        const h = (await c.query("select 1 from members where workspace_id = $1 and role = 'helper'", [inv.workspace_id])).rows[0];
+        if (h) throw httpError(409, 'This workspace already has a setup helper. Ask the owner to remove them first.', 'helper_exists');
+      }
+      await c.query('insert into members(workspace_id, user_id, role, owner_seen) values ($1,$2,$3,$4) on conflict do nothing', [inv.workspace_id, ctx.user.id, inv.role, inv.role !== 'helper']);
     });
-    return { ok: true, workspace_id: inv.workspace_id };
+    if (inv.role === 'helper') {
+      await helperLog.record(inv.workspace_id, ctx.user.id, 'helper.joined', 'Joined as setup helper');
+      const ws = await db.one('select w.name, u.* from workspaces w join users u on u.id = w.owner_user_id where w.id = $1', [inv.workspace_id]);
+      if (ws) await email.send('helper_joined', ws, { helper_name: safeName(ctx.user.name, 'Your setup helper'), helper_contact: maskEmail(ctx.user.email) || (ctx.user.tg_username ? '@' + ctx.user.tg_username : 'a Castvoo account'), workspace_name: safeName(ws.name, 'your workspace'), team_url: `${config.appUrl}/#app/settings?tab=team` });
+    }
+    return { ok: true, workspace_id: inv.workspace_id, role: inv.role };
   }, { auth: 'user' });
+
+  r.post('/api/invites/decline', async (ctx) => {
+    const inv = await openInvite(ctx, ctx.body.token);
+    await db.query('update invites set declined_at = now() where token = $1 and accepted_at is null', [inv.token]);
+    return { ok: true };
+  }, { auth: 'user', rate: [30, 600] });
 
   /* ---------- Plan ---------- */
   r.get('/api/app/plan', async (ctx) => billing.planState(ctx.workspace), { auth: 'workspace' });
 
   r.post('/api/app/plan', async (ctx) => {
-    ownerOnly(ctx);
+    canBilling(ctx);
     const ws = ctx.workspace;
     const code = str(ctx.body.plan, 'Plan', { min: 1, max: 30 });
     // AUD-8: on a move to a smaller plan the owner picks which Welcome Flows stay live (the others are switched off
@@ -221,7 +365,7 @@ module.exports = (r) => {
   }, { auth: 'workspace' });
 
   r.post('/api/app/coupon', async (ctx) => {
-    ownerOnly(ctx);
+    canBilling(ctx);
     const code = str(ctx.body.code, 'Coupon code', { min: 2, max: 40 }).toUpperCase();
     const o = (await settings.activeOffers('coupon')).find((x) => (x.code || '').toUpperCase() === code);
     if (!o) throw badRequest('That code is not valid or has expired.');
@@ -261,4 +405,5 @@ module.exports = (r) => {
 };
 
 module.exports.ownerOnly = ownerOnly;
+module.exports.canSetup = canSetup;
 module.exports.canSend = canSend;

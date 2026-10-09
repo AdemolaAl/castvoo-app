@@ -214,6 +214,7 @@
     { group: 'Website', items: [
       { key: 'content', label: 'Website text', icon: 'text', c: '#6366F1', perm: 'overview.view', desc: 'Words on castvoo.com.' },
       { key: 'emails', label: 'Emails', icon: 'mail', c: '#F97316', perm: 'overview.view', desc: 'Every email we send.' },
+      { key: 'blog', label: 'Blog', icon: 'note', c: '#2F6BFF', perm: 'overview.view', desc: 'Posts, authors and SEO.' },
     ] },
     { group: 'Cas AI', items: [
       { key: 'knowledge', label: 'Knowledge', icon: 'book', c: '#8B5CF6', perm: 'overview.view', desc: 'What Cas knows.' },

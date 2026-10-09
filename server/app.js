@@ -16,11 +16,12 @@ const { HttpError, escHtml } = require('./lib/util');
 const rl = require('./lib/ratelimit');
 const auth = require('./services/auth');
 const perms = require('./permissions');
+const activity = require('./services/activity');
 const voo = require('./lib/voo');
 
 const ROUTE_FILES = [
   'public', 'auth', 'workspace', 'connections', 'subscribers', 'segments', 'media', 'broadcasts', 'drips', 'flows',
-  'ai', 'wallet', 'referrals', 'support', 'telegram-webhooks', 'payment-webhooks', 'voosquare', 'voo-connect', 'pages',
+  'ai', 'wallet', 'referrals', 'support', 'telegram-webhooks', 'payment-webhooks', 'voosquare', 'voo-connect', 'blog', 'pages',
   'admin/index',
 ];
 
@@ -238,14 +239,31 @@ function createServer() {
         if (!perms.can(ctx.user.staff_role, o.staff)) throw new HttpError(403, 'Your team role does not allow this.', 'forbidden');
       }
       if (o.auth === 'workspace') {
-        ctx.workspace = await auth.currentWorkspace(ctx.user, req.headers['x-ws'] || ctx.query.ws);
+        const wanted = req.headers['x-ws'] || ctx.query.ws;
+        ctx.workspace = await auth.currentWorkspace(ctx.user, wanted);
         if (!ctx.workspace) throw new HttpError(403, 'You are not part of a workspace yet.', 'no_workspace');
+        // A setup helper the owner just removed: their open tabs still ask for that workspace. Say so plainly
+        // (instead of quietly showing their own workspace), so the dashboard can switch them back.
+        if (wanted && String(ctx.workspace.id) !== String(Number(wanted)) && (await activity.wasRemoved(Number(wanted), ctx.user.id))) {
+          throw new HttpError(403, 'The owner removed your access to this workspace.', 'access_removed');
+        }
         ctx.member = { role: ctx.workspace.member_role };
+        // The workspace role map (server/permissions.js WS_ROUTES) decides who may use this route, for every role.
+        // A route missing from the map is for the owner only (npm run check fails on it).
+        if (!perms.wsRouteAllowed(route.method, route.pattern, ctx.member.role, ctx.workspace)) {
+          if (ctx.member.role === 'helper') throw new HttpError(403, 'Only the workspace owner can do this. You are the setup helper here.', 'owner_only');
+          throw new HttpError(403, 'Only the workspace owner can do that.', 'forbidden');
+        }
+        if (ctx.member.role === 'helper') activity.seen(ctx.workspace.id, ctx.user.id);
       }
 
       if (o.rate && needsLogin) await limit('u' + ctx.user.id);
 
+      // The setup helper's changes are written to the owner's Activity list.
+      const track = ctx.member && ctx.member.role === 'helper' && route.method !== 'GET' ? `${route.method} ${route.pattern}` : null;
+      const trackName = track ? await activity.before(ctx, track) : null;
       const out = await route.handler(ctx);
+      if (track) await activity.after(ctx, track, trackName, out);
       if (ctx.sent || res.headersSent) return;
       if (ctx.cookieOut.length) res.setHeader('Set-Cookie', ctx.cookieOut);
       sendJson(res, 200, out === undefined ? { ok: true } : out);
@@ -275,4 +293,4 @@ function createServer() {
   return server;
 }
 
-module.exports = { createServer, buildRouter, parseRange, sendFile };
+module.exports = { createServer, buildRouter, parseRange, sendFile, cspHeader };

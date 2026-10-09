@@ -1,5 +1,5 @@
 'use strict';
-/* Server-made pages: legal pages, referral links, tracked link clicks, email unsubscribe, robots and sitemap. */
+/* Server-made pages: legal pages, referral links, tracked link clicks, email unsubscribe. (Blog, robots and sitemap: routes/blog.js.) */
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,7 +13,7 @@ const LEGAL_DIR = path.join(__dirname, '..', 'legal');
 const shell = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escHtml(title)} · Castvoo</title><link rel="icon" href="/img/favicon.svg"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"><link rel="stylesheet" href="/css/legal.css"></head>
 <body><header class="lh"><a class="lg" href="/"><span class="lm">C</span><b>Cast<i>voo</i></b></a><a class="bk" href="/">Back to Castvoo</a></header><main class="lw">${body}</main>
-<footer class="lf"><nav>${LEGAL.map((l) => `<a href="/legal/${l.slug}">${escHtml(l.title)}</a>`).join('')}</nav><p>Castvoo is not affiliated with Telegram.${config.vooConnectOn() ? ` <a href="${escHtml(config.voosquare.base)}/app" target="_blank" rel="noopener">Part of VooSquare</a>` : ''}</p></footer><script src="/voo-connect-browser.js" defer></script></body></html>`;
+<footer class="lf"><nav>${LEGAL.map((l) => `<a href="/legal/${l.slug}">${escHtml(l.title)}</a>`).join('')}<a href="/blog">Blog</a></nav><p>Castvoo is not affiliated with Telegram.${config.vooConnectOn() ? ` <a href="${escHtml(config.voosquare.base)}/app" target="_blank" rel="noopener">Part of VooSquare</a>` : ''}</p></footer><script src="/voo-connect-browser.js" defer></script></body></html>`;
 
 // Hosts tracked links may always go to straight away.
 const SAFE_HOSTS = ['t.me', 'telegram.me', 'telegram.org', 'telegram.dog'];
@@ -81,9 +81,5 @@ module.exports = (r) => {
     ctx.html(200, shell('Unsubscribed', `<h1>You're unsubscribed</h1><p>You won't get tips and offers from Castvoo any more. You'll still get important account emails like receipts and login codes.</p><p><a href="/#app">Open my dashboard</a></p>`));
   });
 
-  r.get('/robots.txt', async (ctx) => ctx.send(200, `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nSitemap: ${config.appUrl}/sitemap.xml\n`, { 'Content-Type': 'text/plain' }));
-  r.get('/sitemap.xml', async (ctx) => {
-    const urls = ['/', ...LEGAL.map((l) => '/legal/' + l.slug)];
-    ctx.send(200, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((u) => `<url><loc>${config.appUrl}${u}</loc></url>`).join('')}</urlset>`, { 'Content-Type': 'application/xml' });
-  });
+  // /robots.txt and /sitemap.xml are in routes/blog.js (the sitemap lists the blog too).
 };

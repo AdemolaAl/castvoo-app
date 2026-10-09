@@ -21,6 +21,7 @@ async function purgeRows(c, wsIds, { userId = null, members = false } = {}) {
   await q('delete from links where workspace_id = any($1)');
   await q('delete from replies where workspace_id = any($1)');
   await q('delete from support_ai_tool_log where workspace_id = any($1)');
+  await q('delete from workspace_activity where workspace_id = any($1)'); // the setup helper's activity lines (names of flows, messages)
   // Account deletion only: the retention purge keeps the owner's (and team's) access to the emptied workspace.
   if (members) { await q('delete from members where workspace_id = any($1)'); await q('delete from invites where workspace_id = any($1)'); }
   await q('update ai_usage set user_id = null where workspace_id = any($1)');

@@ -48,10 +48,10 @@ PAGES.wallet = {
       (p.join && p.join.no_welcome ? '<p class="wf-mw"><b>' + plural(p.join.no_welcome, 'person', 'people') + ' joined without your welcome</b> this month. <button type="button" class="lnk" data-upg="join">Get more join requests</button></p>' : '') +
       (p.branding ? '<div class="note2"><span>⚡</span><span>Your welcome ends with "Free welcome bot by Castvoo.com". <button type="button" class="lnk" data-upg="brand">Remove it from ' + usd(((p.plans || []).find((x) => x.price_month > 0) || { price_month: 19 }).price_month) + '/month</button></span></div>' : '') +
       (p.suggest_yearly ? '<div class="note2"><span>💡</span><span><b>Switch to yearly and save ' + usd(p.suggest_yearly.save) + '.</b> Pay for 10 months, get 12. <button type="button" class="lnk" data-upg="yearly">Switch to yearly</button></span></div>' : '') +
-      (isOwner() ? '<button type="button" class="btn b-blue sm" id="pChange">' + icon('up') + ((p.status === 'trial' && !pend) || p.free ? 'Choose a plan' : 'Change plan') + '</button>' +
-        (p.status === 'active' && !p.free ? '<div class="tg"><span><b style="font-size:14.5px">Renew automatically</b><br><small class="muted">' + (p.cancel_at_period_end ? 'Off: the plan ends on ' + fmtDate(p.period_end, false) : 'Paid from your wallet. If it\'s short, we email you a few days before.') + '</small></span>' + toggleBtn('pRenew', !p.cancel_at_period_end, 'Renew automatically') + '</div>' : '') +
+      (canBilling() ? '<button type="button" class="btn b-blue sm" id="pChange">' + icon('up') + ((p.status === 'trial' && !pend) || p.free ? 'Choose a plan' : 'Change plan') + '</button>' +
+        (isOwner() && p.status === 'active' && !p.free ? '<div class="tg"><span><b style="font-size:14.5px">Renew automatically</b><br><small class="muted">' + (p.cancel_at_period_end ? 'Off: the plan ends on ' + fmtDate(p.period_end, false) : 'Paid from your wallet. If it\'s short, we email you a few days before.') + '</small></span>' + toggleBtn('pRenew', !p.cancel_at_period_end, 'Renew automatically') + '</div>' : '') +
         '<form class="slnew" id="cpF"><input class="inp" id="cpI" maxlength="40" placeholder="Coupon code" aria-label="Coupon code"><button type="submit" class="btn b-ghost sm">Apply</button></form>'
-        : '<p class="hint">Only the workspace owner can change the plan.</p>') +
+        : '<p class="hint">' + (isHelper() ? 'Only the owner can change the plan. They can allow it for you in Settings → Team. You can still top up the wallet.' : 'Only the workspace owner can change the plan.') + '</p>') +
       '<p class="hint">Unused top-ups can be refunded within ' + fmt(CFG.billing.refund_days || 14) + ' days. See the <a href="/legal/refunds" target="_blank" rel="noopener">refund policy</a>.</p></div></div>';
     countTo($('#wB'), w.total, 900, money);
     const pc = $('#pChange'); if (pc) pc.onclick = () => planSheet(p);
@@ -185,7 +185,7 @@ function openUpgrade(o = {}) {
     if (!x.branding) f.push('No Castvoo line on your welcome');
     return f.slice(0, 5);
   };
-  const owner = isOwner();
+  const owner = canBilling();
   const h = sheet(esc(o.title || 'Upgrade your plan'), '<span class="spk">' + icon('up') + '</span>',
     (o.text ? '<p class="muted" style="font-size:15px">' + esc(o.text) + '</p>' : '') +
     (list.length ? '<div class="upg">' + list.map((x, i) => '<div class="upgc' + (i === 0 ? ' on' : '') + '"><div class="upgh"><b>' + esc(x.name) + '</b>' + (x.popular ? '<span class="pill p-blue">Popular</span>' : '') + '<span class="upgp">' + usd(x.price_month) + '<small>/month</small></span></div><ul>' + facts(x).map((f) => '<li>' + icon('check') + esc(f) + '</li>').join('') + '</ul>' +
@@ -456,6 +456,7 @@ PAGES.earn = {
   async render(el, q, alive) {
     el.innerHTML = skel(1, 280) + '<div class="dg"><div class="c7">' + skel(1, 260) + '</div><div class="c5">' + skel(1, 260) + '</div></div>';
     if (CFG.features.referrals === false) { el.innerHTML = emptyBox({ cas: 'think', title: 'The referral program is paused', text: 'Your earnings are safe. Please check back soon.' }); return; }
+    if (isHelper()) { el.innerHTML = emptyBox({ cas: 'wave', title: 'Earnings live in your own workspace', text: 'You are the setup helper here, so this workspace\'s referral earnings stay with the owner. Switch to your own workspace to see yours.', action: (ME.workspaces || []).length > 1 ? '<button type="button" class="btn b-blue sm" data-ws-switch>' + icon('swap') + 'Switch workspace</button>' : '' }); return; }
     const d = await GET('/api/referrals');
     if (!alive()) return;
     const b = d.balance, min = d.min_withdraw;

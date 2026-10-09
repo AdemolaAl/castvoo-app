@@ -13,10 +13,17 @@
  * send only if they clicked / did not click a button in the previous message.
  *
  * Telegram rules this code follows:
- *  - After a join request, the bot may message the person for 5 minutes, through user_chat_id, until the
- *    request is processed. So step 1 is sent at once, before the person is let in.
- *  - Bots cannot message people who never pressed Start. Later steps wait ('waiting' runs) until the person
- *    presses Start, then go out on time. Waiting runs stop after 7 days.
+ *  - After a join request, the bot may message the person for 5 minutes, through user_chat_id, "until the join
+ *    request is processed" (core.telegram.org/bots/api#chatjoinrequest). So step 1 is sent at once, before the
+ *    person is let in.
+ *  - Quick steps: later messages whose waits add up to QUICK_SECONDS or less also reach everyone who asked to join
+ *    (the drips job sends them through user_chat_id while the request is still open, WINDOW_SECONDS at most).
+ *    Letting someone in ends that window, so in "Straight away" and "After the welcome" a flow with quick steps
+ *    holds the approval (join_requests.hold_position / approve_at) until the last quick message is sent; then the
+ *    person is let in automatically (releaseHeld). "Tap to join" and "I decide" leave the request open anyway.
+ *  - After the window, bots cannot message people who never pressed Start. Later steps wait ('waiting' runs) until
+ *    the person presses Start, then go out on time. Waiting runs stop after 7 days.
+ * Waits are stored in seconds (sequence_steps.delay_seconds); units: sec, min, hour, day.
  *
  * Plan rules (services/billing.js): join requests per month (+10% grace, then welcomes pause but people are
  * still let in), flows, steps per flow, features (tap_to_start, ab_welcome_2/4, condition_clicked ...), and the
@@ -35,7 +42,25 @@ const B = require('./broadcasts');
 const { tokenOf } = require('./connections');
 const { str, int, oneOf, bool, badRequest, httpError, randomCode, sleep, fmtDate } = require('../lib/util');
 
-const UNIT = { min: 1, hour: 60, day: 1440 };
+/* Wait units, in seconds. The builder shows "seconds / minutes / hours / days"; the API also takes the long names. */
+const UNIT = { sec: 1, min: 60, hour: 3600, day: 86400 };
+const UNIT_MAX = { sec: 999, min: 525600, hour: 8760, day: 365 };
+const MAX_WAIT = 365 * 86400; // all waits of a flow together
+const UNIT_ALIAS = { s: 'sec', sec: 'sec', secs: 'sec', second: 'sec', seconds: 'sec', m: 'min', min: 'min', mins: 'min', minute: 'min', minutes: 'min',
+  h: 'hour', hr: 'hour', hour: 'hour', hours: 'hour', d: 'day', day: 'day', days: 'day' };
+/** "seconds" → "sec" (unknown units are left as they are, so the validation names them). */
+function normUnit(u) { const k = String(u == null || u === '' ? 'min' : u).trim().toLowerCase(); return UNIT_ALIAS[k] || k; }
+const UNIT_WORDS = { sec: ['second', 'seconds'], min: ['minute', 'minutes'], hour: ['hour', 'hours'], day: ['day', 'days'] };
+/** 1 → "1 second", 90 → "90 seconds", 3600 → "1 hour", 0 → "right away". */
+function waitText(seconds) { const [v, u] = splitDelay(seconds); return v ? `${v} ${UNIT_WORDS[u][v === 1 ? 0 : 1]}` : 'right away'; }
+/*
+ * Telegram's 5-minute window after a join request. QUICK_SECONDS: a later message whose waits (counted from the
+ * welcome) add up to this or less is a "quick" message that reaches everyone (the builder says "in the first 5
+ * minutes"; 20 s are kept for sending). WINDOW_SECONDS: the runtime never uses user_chat_id after this.
+ */
+const QUICK_SECONDS = 280;
+const WINDOW_SECONDS = 295;
+const HOLD_GRACE_SECONDS = 20; // a held request is let in at the latest this long after its last quick message is due
 const MODES = ['instant', 'after_welcome', 'tap', 'manual'];
 const BRAND_TEXT = 'Free welcome bot by Castvoo.com';
 const BRAND_LEN = BRAND_TEXT.length + 4; // "\n\n⚡ " + text, as Telegram counts it
@@ -89,13 +114,30 @@ const TEMPLATES = [
 const template = (key) => TEMPLATES.find((t) => t.key === key) || null;
 
 /* ---------- Blocks <-> steps ---------- */
-function splitDelay(m) { m = Number(m) || 0; if (m && m % 1440 === 0) return [m / 1440, 'day']; if (m && m % 60 === 0) return [m / 60, 'hour']; return [m, 'min']; }
+/** Seconds → the biggest whole unit: 86400 → [1, 'day'], 120 → [2, 'min'], 45 → [45, 'sec'], 0 → [0, 'min']. */
+function splitDelay(sec) {
+  sec = Math.max(0, Math.round(Number(sec) || 0));
+  if (!sec) return [0, 'min'];
+  if (sec % 86400 === 0) return [sec / 86400, 'day'];
+  if (sec % 3600 === 0) return [sec / 3600, 'hour'];
+  if (sec % 60 === 0) return [sec / 60, 'min'];
+  return [sec, 'sec'];
+}
+/** A step's wait in seconds (older rows and callers may only have delay_minutes). */
+function delayOf(s) { return s.delay_seconds != null ? Number(s.delay_seconds) || 0 : (Number(s.delay_minutes) || 0) * 60; }
+/** One wait block → seconds (validated). Takes { value, unit } or { seconds }. */
+function waitSeconds(blk, what) {
+  if (blk.seconds != null && blk.value == null) return int(blk.seconds, what, { min: 0, max: MAX_WAIT });
+  const unit = oneOf(normUnit(blk.unit), 'Wait unit', Object.keys(UNIT));
+  const value = int(blk.value ?? 0, what, { min: 0, max: UNIT_MAX[unit] });
+  return value * UNIT[unit];
+}
 
 /** Saved steps (with their variants and buttons) → the blocks the builder shows. */
 function stepsToBlocks(steps) {
   const out = [];
   for (const s of steps.filter((x) => x.variant === 0).sort((a, b) => a.position - b.position)) {
-    if (s.position > 1 && s.delay_minutes > 0) { const [value, unit] = splitDelay(s.delay_minutes); out.push({ type: 'wait', value, unit }); }
+    if (s.position > 1 && delayOf(s) > 0) { const [value, unit] = splitDelay(delayOf(s)); out.push({ type: 'wait', value, unit }); }
     out.push({
       type: 'message', id: s.id, body: s.body, media_id: s.media_id, media_kind: s.media_kind || null, buttons: s.buttons || [], condition: s.condition || null,
       variants: steps.filter((v) => v.position === s.position && v.variant > 0).sort((a, b) => a.variant - b.variant)
@@ -106,7 +148,7 @@ function stepsToBlocks(steps) {
 }
 
 async function loadSteps(seqId) {
-  return db.many(`select s.id, s.position, s.variant, s.delay_minutes, s.body, s.media_id, s.condition, m.kind as media_kind,
+  return db.many(`select s.id, s.position, s.variant, s.delay_seconds, s.delay_minutes, s.body, s.media_id, s.condition, m.kind as media_kind,
       (select coalesce(json_agg(json_build_object('label', l.label, 'url', l.url, 'code', l.code, 'row', l.row) order by l.position, l.created_at, l.code), '[]') from links l where l.step_id = s.id) as buttons
     from sequence_steps s left join media m on m.id = s.media_id where s.sequence_id = $1 order by s.position, s.variant`, [seqId]);
 }
@@ -159,7 +201,7 @@ async function cleanMessage(ws, m, what, l) {
 
 /**
  * Validate what the builder sends. Returns { name, chat, bot, approve_mode, start_button, start_label, invite_link, steps }.
- * steps: [{ id?, position, delay_minutes, body, media_id, buttons, condition, variants: [{ id?, body, media_id, buttons }] }]
+ * steps: [{ id?, position, delay_seconds, body, media_id, buttons, condition, variants: [{ id?, body, media_id, buttons }] }]
  */
 async function cleanFlow(ws, b, { partialChecks = true } = {}) {
   const l = await billing.limits(ws);
@@ -189,10 +231,8 @@ async function cleanFlow(ws, b, { partialChecks = true } = {}) {
   for (const [i, blk] of blocks.entries()) {
     if (!blk || typeof blk !== 'object') throw badRequest('One of the steps is empty.');
     if (blk.type === 'wait') {
-      const unit = oneOf(blk.unit || 'min', 'Wait unit', Object.keys(UNIT));
-      const value = int(blk.value ?? 0, `Wait (step ${i + 1})`, { min: 0, max: unit === 'day' ? 365 : unit === 'hour' ? 8760 : 525600 });
-      wait += value * UNIT[unit];
-      if (wait > 525600) throw badRequest('Waits can add up to one year at most.');
+      wait += waitSeconds(blk, `Wait (step ${i + 1})`);
+      if (wait > MAX_WAIT) throw badRequest('Waits can add up to 365 days at most.');
       continue;
     }
     if (blk.type !== 'message') throw badRequest('Each step is a message or a wait.');
@@ -214,7 +254,7 @@ async function cleanFlow(ws, b, { partialChecks = true } = {}) {
       if (rawV.length + 1 > 4) throw badRequest('Use up to 4 versions of the welcome.');
       for (const [vi, v] of rawV.entries()) variants.push({ id: v.id || null, ...(await cleanMessage(ws, v, `Version ${String.fromCharCode(66 + vi)} of the welcome`, l)) });
     }
-    steps.push({ id: blk.id || null, position: pos, delay_minutes: pos === 1 ? 0 : wait, ...msg, condition, variants });
+    steps.push({ id: blk.id || null, position: pos, delay_seconds: pos === 1 ? 0 : wait, ...msg, condition, variants });
     wait = 0;
   }
   if (wait > 0 && partialChecks) throw badRequest('The last wait has no message after it. Add a message or remove the wait.');
@@ -251,8 +291,8 @@ async function saveSteps(c, wsId, seqId, steps) {
   const kept = new Set();
   const put = async (s, position, variant, delay, condition) => {
     let id = s.id && oldIds.has(String(s.id)) && !kept.has(String(s.id)) ? Number(s.id) : null;
-    if (id) await c.query('update sequence_steps set position = $2, variant = $3, delay_minutes = $4, body = $5, media_id = $6, condition = $7 where id = $1', [id, position, variant, delay, s.body, s.media_id, condition]);
-    else id = (await c.query('insert into sequence_steps(sequence_id, position, variant, delay_minutes, body, media_id, condition) values ($1,$2,$3,$4,$5,$6,$7) returning id', [seqId, position, variant, delay, s.body, s.media_id, condition])).rows[0].id;
+    if (id) await c.query('update sequence_steps set position = $2, variant = $3, delay_seconds = $4, body = $5, media_id = $6, condition = $7 where id = $1', [id, position, variant, delay, s.body, s.media_id, condition]);
+    else id = (await c.query('insert into sequence_steps(sequence_id, position, variant, delay_seconds, body, media_id, condition) values ($1,$2,$3,$4,$5,$6,$7) returning id', [seqId, position, variant, delay, s.body, s.media_id, condition])).rows[0].id;
     kept.add(String(id));
     // Keep each button's short link (people may already have it in Telegram): change it in place, add new ones,
     // and unhook extra ones (they keep redirecting, their clicks are kept).
@@ -263,7 +303,7 @@ async function saveSteps(c, wsId, seqId, steps) {
     return id;
   };
   for (const s of steps) {
-    await put(s, s.position, 0, s.delay_minutes, s.condition);
+    await put(s, s.position, 0, delayOf(s), s.condition);
     for (const [vi, v] of (s.variants || []).entries()) await put(v, s.position, vi + 1, 0, null);
   }
   const gone = old.filter((o) => !kept.has(String(o.id))).map((o) => o.id);
@@ -407,7 +447,7 @@ async function onJoinRequest(conn, jr) {
   if (!row) {
     // An open request is there already. A new Telegram request (a new date, or older than 60 s): refresh it and handle it again.
     row = await db.one(`update join_requests set workspace_id = $1, sequence_id = $2, connection_id = $3, user_chat_id = $6, first_name = $7, username = $8, invite_link = $9,
-        start_code = $10, tg_date = $11, requested_at = now(), welcome = 'none', welcomed_at = null, started_at = null, error = null, step_id = null, variant = 0
+        start_code = $10, tg_date = $11, requested_at = now(), welcome = 'none', welcomed_at = null, started_at = null, error = null, step_id = null, variant = 0, hold_position = null, approve_at = null
       where chat_id = $4 and tg_user_id = $5 and status = 'pending'
         and (case when $11::bigint is not null and tg_date is not null then tg_date <> $11 and requested_at < now() - interval '5 seconds' else requested_at < now() - interval '60 seconds' end)
       returning *`, vals);
@@ -475,30 +515,67 @@ async function onJoinRequest(conn, jr) {
       }
     };
     const rowNow = () => ({ ...row, chat_id: chatId, tg_user_id: from.id });
+    // Later steps: only on plans with follow-up steps, never while welcomes are paused.
+    const later = steps.filter((s) => s.variant === 0 && s.position > firsts[0].position);
+    const allowed = l.flow_steps === billing.UNLIMITED ? Infinity : l.flow_steps;
+    const runsLater = !skip && later.length > 0 && allowed > 1 && has('welcome_flows');
+    // Quick steps: the later messages due inside Telegram's 5-minute window (waits counted from the welcome).
+    let quickLast = null, quickAt = 0;
+    if (runsLater) {
+      let t = 0;
+      for (const s of later) {
+        if (s.position > allowed) break;
+        t += delayOf(s);
+        if (t > QUICK_SECONDS) break;
+        quickLast = s; quickAt = t;
+      }
+    }
     // The welcome always goes first: once a request is processed, Telegram no longer lets the bot message them.
     //  instant:        let them in straight away, even if the welcome could not be sent.
     //  after_welcome:  let them in once the welcome reached them (or welcomes are paused by the plan: auto-approve keeps
     //                  working). If Telegram refused the welcome, they wait in the Requests list for the owner.
+    //  (both)          with quick steps, they are let in right after the last quick message instead (hold).
     //  tap:            let in when they press Start through the welcome's button (bot-updates → onStart).
     //  manual:         the owner lets them in (or declines) from the dashboard.
     const sent = await welcome();
-    if (mode === 'instant' || (mode === 'after_welcome' && (sent || skip))) await decide(conn, rowNow(), 'approve');
-    const welcomed = sent === true;
-    // Later steps: only on plans with follow-up steps, never while welcomes are paused.
-    const later = steps.filter((s) => s.variant === 0 && s.position > firsts[0].position);
-    const allowed = l.flow_steps === billing.UNLIMITED ? Infinity : l.flow_steps;
-    if (!skip && later.length && allowed > 1 && has('welcome_flows')) {
-      await db.query(`insert into sequence_runs(sequence_id, subscriber_id, next_position, due_at, variant, status)
-          values ($1,$2,$3, now() + make_interval(mins => $4), $5, $6) on conflict (sequence_id, subscriber_id) do nothing`,
-      [flow.id, sub.id, later[0].position, later[0].delay_minutes, (await db.one('select variant from join_requests where id = $1', [row.id])).variant, sub.status === 'active' ? 'active' : 'waiting']);
+    const hold = !!quickLast && sent === true && (mode === 'instant' || mode === 'after_welcome');
+    if (hold) {
+      await db.query("update join_requests set hold_position = $2, approve_at = now() + make_interval(secs => $3) where id = $1 and status = 'pending'",
+        [row.id, quickLast.position, quickAt + HOLD_GRACE_SECONDS]);
+    } else if (mode === 'instant' || (mode === 'after_welcome' && (sent || skip))) await decide(conn, rowNow(), 'approve');
+    if (runsLater) {
+      // Active now when the next message is quick (it reaches them through the join request) or they already tapped Start.
+      const run = await db.one(`insert into sequence_runs(sequence_id, subscriber_id, next_position, due_at, variant, status)
+          values ($1,$2,$3, now() + make_interval(secs => $4), $5, $6) on conflict (sequence_id, subscriber_id) do nothing returning due_at, status`,
+      [flow.id, sub.id, later[0].position, delayOf(later[0]), (await db.one('select variant from join_requests where id = $1', [row.id])).variant, sub.status === 'active' || quickLast ? 'active' : 'waiting']);
+      if (run && run.status === 'active') require('../workers/soon').at(run.due_at);
     }
-    void welcomed;
   } catch (e) {
     log.error('join request failed', { conn: conn.id, err: e });
     await db.query('update join_requests set error = $2 where id = $1', [row.id, String(e.message || e).slice(0, 200)]).catch(() => {});
   }
   await meterAlerts(ws, meterNow).catch(() => {});
   return { ok: true, id: row.id };
+}
+
+/**
+ * Let in the held join requests that are due: their last quick message was sent (the sender sets approve_at to now)
+ * or their time is up. Each row is claimed first (approve_at → null), so two servers never approve the same person twice.
+ */
+async function releaseHeld(limit = 100) {
+  const rows = await db.many(`update join_requests j set approve_at = null where j.id in (select id from join_requests
+      where status = 'pending' and approve_at is not null and approve_at <= now() order by approve_at limit $1 for update skip locked) returning j.*`, [limit]);
+  for (const jr of rows) {
+    const bot = await db.one("select * from connections where id = $1 and kind = 'bot' and status <> 'removed'", [jr.connection_id]);
+    if (bot) await decide(bot, jr, 'approve');
+  }
+  return rows.length;
+}
+
+/** A quick step to someone who has not tapped Start is done (sent or failed): let them in now if their request was held for it. */
+async function quickStepDone(jrId) {
+  const r = await db.one("update join_requests set approve_at = now() where id = $1 and status = 'pending' and approve_at is not null returning id", [jrId]);
+  if (r) await releaseHeld();
 }
 
 async function stepButtons(step) {
@@ -512,7 +589,8 @@ async function stepButtons(step) {
  */
 async function onStart(conn, sub, from, payload) {
   await db.query('update join_requests set started_at = now(), subscriber_id = coalesce(subscriber_id, $3) where connection_id = $1 and tg_user_id = $2 and started_at is null', [conn.id, from.id, sub.id]);
-  await db.query("update sequence_runs set status = 'active', due_at = greatest(due_at, now()) where subscriber_id = $1 and status = 'waiting'", [sub.id]);
+  const woke = await db.many("update sequence_runs set status = 'active', due_at = greatest(due_at, now()) where subscriber_id = $1 and status = 'waiting' returning due_at", [sub.id]);
+  for (const w of woke) require('../workers/soon').at(w.due_at);
   if (!payload || !payload.startsWith('j_')) return null;
   const jr = await db.one('select j.*, q.approve_mode from join_requests j left join sequences q on q.id = j.sequence_id where j.connection_id = $1 and j.start_code = $2 and j.tg_user_id = $3', [conn.id, payload, from.id]);
   if (!jr || jr.status !== 'pending' || jr.approve_mode !== 'tap') return jr ? jr.status : null;
@@ -620,6 +698,7 @@ async function decideMany(wsId, ids, action) {
 }
 
 module.exports = {
+  UNIT, UNIT_MAX, MAX_WAIT, normUnit, splitDelay, delayOf, waitSeconds, waitText, QUICK_SECONDS, WINDOW_SECONDS, releaseHeld, quickStepDone,
   TEMPLATES, template, MODES, BRAND_TEXT, stepsToBlocks, loadSteps, cleanFlow, checkAdmin, requireAdmin, saveSteps, liveClash, assertCanGoLive,
   onJoinRequest, onStart, decide, decideMany, summary, getOwn, detail, stats, pending, brandingHtml, startUrl, freeWelcome, placeholderIn, assertNoPlaceholders, BRAND_LEN,
 };
