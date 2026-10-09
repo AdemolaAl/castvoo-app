@@ -147,6 +147,8 @@ async function startApp({ env = {}, port: wantPort, host = '127.0.0.1' } = {}) {
     db.init();
     await db.migrate();
     await require(S('seed')).run();
+    // Provider-flow tests opt in; production defaults keep both checkouts disabled.
+    await db.query("update feature_flags set enabled = true where key in ('paystack','flutterwave')");
     const { createServer } = require(S('app'));
     server = createServer();
     await new Promise((r) => server.listen(port, '127.0.0.1', r));

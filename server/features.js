@@ -25,6 +25,8 @@ const FEATURES = [
   { key: 'ai',             group: 'AI',        name: 'Cas AI',                  about: 'AI writing, rewriting, translating and answers.', default: true },
   { key: 'topups',         group: 'Money',     name: 'Wallet top-ups',          about: 'Let users add money to their wallet.', default: true },
   { key: 'crypto',         group: 'Money',     name: 'Crypto top-ups',          about: 'USDT and Bitcoin (through Gatevoo when connected).', default: true },
+  { key: 'paystack',       group: 'Money',     name: 'Paystack payments',       about: 'Offer Paystack as a wallet top-up method.', default: false },
+  { key: 'flutterwave',    group: 'Money',     name: 'Flutterwave payments',    about: 'Offer Flutterwave as a wallet top-up method.', default: false },
   { key: 'referrals',      group: 'Money',     name: 'Referral program',        about: 'Referral links and earnings.', default: true },
   { key: 'withdrawals',    group: 'Money',     name: 'Referral withdrawals',    about: 'Let users request crypto payouts of referral earnings.', default: true },
   { key: 'support_chat',   group: 'Support',   name: 'Support chat',            about: 'Chat with the team from the dashboard.', default: true },

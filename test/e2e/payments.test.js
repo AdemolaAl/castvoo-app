@@ -34,6 +34,21 @@ const gatevooHook = (ev, { ts = Math.floor(Date.now() / 1000), secret = 'gv-webh
 };
 
 describe('wallet', () => {
+  it('keeps Paystack and Flutterwave unavailable when their feature switches are off', async () => {
+    const { c } = await payer('NG');
+    await app.setFeature('paystack', false);
+    await app.setFeature('flutterwave', false);
+    try {
+      const w = await c.get('/api/wallet');
+      assert.ok(!w.body.methods.some((m) => ['paystack_ng', 'flw_card'].includes(m.key)));
+      assert.equal((await c.post('/api/wallet/topup', { amount: 50, method: 'paystack_ng' })).status, 400);
+      assert.equal((await c.post('/api/wallet/topup', { amount: 50, method: 'flw_card' })).status, 400);
+    } finally {
+      await app.setFeature('paystack', true);
+      await app.setFeature('flutterwave', true);
+    }
+  });
+
   it('shows methods for my country, bonuses and limits', async () => {
     const { c } = await payer('NG');
     const w = await c.get('/api/wallet');

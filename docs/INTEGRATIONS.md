@@ -60,6 +60,7 @@ Admin → Cas AI shows the last 24 hours of tokens and cost.
 sub-processor. Before you switch Cas to OpenRouter, add OpenRouter (and the model's maker) there.
 
 ## Paystack (Nigeria, Ghana, South Africa)
+Paystack checkout is disabled by default. Enable **Admin → Features → Paystack payments** before offering it to customers.
 1. dashboard.paystack.com → Settings → API Keys & Webhooks → copy the **Secret key** → `PAYSTACK_SECRET_KEY`
    (use the test key first: `sk_test_...`).
 2. Webhook URL: `https://castvoo.com/pay/paystack`. Castvoo checks the `x-paystack-signature` and then asks
@@ -69,6 +70,7 @@ sub-processor. Before you switch Cas to OpenRouter, add OpenRouter (and the mode
    before paying.
 
 ## Flutterwave (Kenya, Cameroon, cards everywhere)
+Flutterwave checkout is disabled by default. Enable **Admin → Features → Flutterwave payments** before offering it to customers.
 1. dashboard.flutterwave.com → Settings → API Keys → **Secret key** → `FLW_SECRET_KEY`.
 2. Settings → Webhooks → URL `https://castvoo.com/pay/flutterwave`, and type a long random **Secret hash**.
    Put the same value in `FLW_WEBHOOK_HASH`.

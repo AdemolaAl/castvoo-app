@@ -93,12 +93,8 @@ Yearly: Starter $190, Growth $490, Scale $990. Each plan includes everything in 
 ## Wallet and payments
 - Prepaid wallet in USD. Plans are paid from it.
 - Payment methods depend on the country chosen at sign-up (changeable in Settings), set by the admin:
-  - Nigeria: Paystack (card, bank transfer, USSD)
-  - Ghana: Paystack (card, mobile money)
-  - South Africa: Paystack (card, instant EFT)
-  - Kenya: Flutterwave (card, M-Pesa)
-  - Cameroon: Flutterwave (card, MTN and Orange mobile money)
-  - Everywhere else: card through Flutterwave
+  - Paystack and Flutterwave are disabled by default and can be enabled separately in Admin → Features.
+  - When enabled: Nigeria, Ghana and South Africa use Paystack; Kenya, Cameroon and everywhere else use Flutterwave.
   - Everyone: USDT (TRC20) and Bitcoin. With Gatevoo connected, the crypto checkout confirms automatically (USDT about a minute, Bitcoin about 10 minutes). Without Gatevoo: USDT only. Send the exact amount shown (it has unique cents) to the address shown, paste the transaction ID, and the team confirms it, usually within a few hours.
   - The team can add more local methods in the admin (for example a bank transfer, a mobile money number or a crypto wallet) for one country or for everyone. With these, the customer sees the team's payment instructions and an exact amount (with unique cents), pays, sends the transaction reference and/or a screenshot, and the team confirms it by hand, usually within a few hours. The wallet is credited only after the team confirms it.
 - Local-currency payments: Castvoo shows the local amount for the USD top-up before you pay (rate set by the team in Admin → Countries). The USD amount lands in the wallet.

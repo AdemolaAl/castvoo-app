@@ -84,8 +84,8 @@ async function methodsFor(countryCode) {
   for (const key of country.methods || []) {
     const m = all.methods.find((x) => x.key === key && x.active);
     if (!m) continue;
-    if (m.provider === 'paystack' && integ.paystack) out.push({ ...m, currency: country.currency, usd_rate: Number(country.usd_rate) });
-    if (m.provider === 'flutterwave' && integ.flutterwave) out.push({ ...m, currency: key === 'flw_card' ? 'USD' : country.currency, usd_rate: key === 'flw_card' ? 1 : Number(country.usd_rate) });
+    if (m.provider === 'paystack' && f.paystack && integ.paystack) out.push({ ...m, currency: country.currency, usd_rate: Number(country.usd_rate) });
+    if (m.provider === 'flutterwave' && f.flutterwave && integ.flutterwave) out.push({ ...m, currency: key === 'flw_card' ? 'USD' : country.currency, usd_rate: key === 'flw_card' ? 1 : Number(country.usd_rate) });
     if (m.provider === 'crypto' && f.crypto) {
       if (await gatevooOn()) out.push({ ...m, key: 'gatevoo', label: 'USDT or Bitcoin', detail: 'Secure crypto checkout by Gatevoo', currency: 'USD', usd_rate: 1, gatevoo: true });
       else {
