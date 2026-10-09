@@ -31,6 +31,7 @@ async function view(ctx) {
   const att = await images.forMessages(rows.map((m) => m.id));
   const messages = rows.map(({ p_updated, ...m }) => ({ ...m, avatar: m.persona_id ? supportAi.avatarUrl({ id: m.persona_id, updated_at: p_updated }) : null,
     attachments: (att.get(Number(m.id)) || []).map((a) => images.publicRow(a, IMG_BASE)) }));
+  await db.query('update support_threads set user_seen_at = now() where id = $1', [t.id]);
   if (t.unread_user) {
     const pending = await db.one("select 1 from support_messages where thread_id = $1 and visible_at > now() limit 1", [t.id]);
     if (!pending) await db.query('update support_threads set unread_user = false where id = $1', [t.id]);
@@ -45,6 +46,19 @@ async function view(ctx) {
 
 module.exports = (r) => {
   r.get('/api/support', view, { auth: 'workspace' });
+
+  /**
+   * The floating support widget's badge while it is closed: replies (AI or team) the customer has not seen yet, and
+   * whether an agent is typing. Reading this never marks anything as seen (only opening the chat does).
+   */
+  r.get('/api/support/unread', async (ctx) => {
+    const t = await support.latestThread(ctx.user.id, ctx.workspace.id);
+    if (!t || !t.unread_user) return { unread: 0, typing: false };
+    const n = await db.one(`select count(*)::int n from support_messages where thread_id = $1 and not internal and author_type in ('ai','staff')
+      and visible_at <= now() and visible_at > coalesce($2::timestamptz, '-infinity'::timestamptz)`, [t.id, t.user_seen_at]);
+    const typing = !!(await db.one('select 1 from support_messages where thread_id = $1 and visible_at > now() limit 1', [t.id]));
+    return { unread: Math.max(n.n, typing ? 0 : 1), typing };
+  }, { auth: 'workspace' });
 
   r.post('/api/support', async (ctx) => {
     await settings.requireFeature('support_chat', 'Support chat is switched off. Email us instead.');

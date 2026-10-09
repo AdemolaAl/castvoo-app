@@ -10,7 +10,7 @@ const { fill, escHtml, checkSig, notFound } = require('../lib/util');
 const LEGAL = require('../legal/index.js');
 
 const LEGAL_DIR = path.join(__dirname, '..', 'legal');
-const shell = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+const shell = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>${escHtml(title)} · Castvoo</title><link rel="icon" href="/img/favicon.svg"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"><link rel="stylesheet" href="/css/legal.css"></head>
 <body><header class="lh"><a class="lg" href="/"><span class="lm">C</span><b>Cast<i>voo</i></b></a><a class="bk" href="/">Back to Castvoo</a></header><main class="lw">${body}</main>
 <footer class="lf"><nav>${LEGAL.map((l) => `<a href="/legal/${l.slug}">${escHtml(l.title)}</a>`).join('')}<a href="/blog">Blog</a></nav><p>Castvoo is not affiliated with Telegram.${config.vooConnectOn() ? ` <a href="${escHtml(config.voosquare.base)}/app" target="_blank" rel="noopener">Part of VooSquare</a>` : ''}</p></footer><script src="/voo-connect-browser.js" defer></script></body></html>`;

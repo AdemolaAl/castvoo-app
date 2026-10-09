@@ -7,11 +7,14 @@
  * Anywhere: <button data-vguide="<id>"> opens that guide (guideLink(id) builds one).
  * Add data-vset="<set>" to limit the player's list and "Next" to one set (VG_SETS): the public homepage uses "site",
  * so logged-out visitors only see its 4 videos and the last one ends with "Start free" instead of "See all guides".
- * Files: public/videos/<id>.mp4 (H.264 + AAC), <id>.vtt (captions), <id>.jpg (poster). The server answers Range requests.
+ * Files: public/videos/<id>.mp4, <id>.vtt (captions), <id>.jpg (poster). The server answers Range requests (iPhones ask
+ * for "bytes=0-1" first) and warns at start-up when a listed video is missing (npm run check fails on it too).
+ * Encoding (plays on every iPhone and Android): 1280x720, H.264 Main 3.1, yuv420p, AAC-LC 96 kbps, +faststart, about
+ * 3 MB each. See docs/DEVELOPER-GUIDE.md ("Guide videos") for the ffmpeg command.
  * To change a video: replace its 3 files and bump GUIDE_V so browsers fetch the new ones.
  */
 
-const GUIDE_V = 1;
+const GUIDE_V = 2;
 const VGUIDES = [
   { id: 'connect-bot', title: 'Connect your Telegram bot', text: 'Make a bot with @BotFather and connect it in a minute.', dur: 75, pages: ['bots'] },
   { id: 'add-channel', title: 'Add a channel or group', text: 'Link your Telegram, then connect a channel or group in one tap.', dur: 74, pages: ['bots'] },
@@ -64,7 +67,7 @@ PAGES.guides = {
       '<div class="vgh-r"><div class="vgring" style="--p:' + Math.round(n / VGUIDES.length * 100) + '"><b class="tnum"><span>' + n + '<small>/' + VGUIDES.length + '</small></span></b></div><small>watched</small></div></div>' +
       '<div class="vgg">' + VGUIDES.map((g, i) => vgCard(g, i, seen[g.id])).join('') + '</div>' +
       '<p class="hint" style="text-align:center">Ticks are saved in this browser. Questions after watching? <a href="#app/help">Chat with us</a>.' + (CFG.features.blog !== false ? ' Want more? <a href="/blog" target="_blank" rel="noopener">Read the blog</a> for step-by-step guides.' : '') + '</p>';
-    if (q.play) { history.replaceState(null, '', '#app/guides'); openVideoGuide(q.play); }
+    if (q.play) { history.replaceState(null, '', '#app/guides'); openVideoGuide(q.play, null, { tap: false }); } // not a tap: waits for Play
   },
 };
 
@@ -81,7 +84,10 @@ let VG = null; // the open player: { id, v, root, cleanup() }
 
 function vgCaptionsOn() { return store.get('cv_guides_cc') !== '0'; }
 
-function openVideoGuide(id, set) {
+/* opts.tap: opened by a tap (the default), so playback starts at once; otherwise the big Play button waits for one
+   (phones only play sound after a tap). */
+function openVideoGuide(id, set, opts) {
+  const tap = !opts || opts.tap !== false;
   const g = VGUIDES.find((x) => x.id === id); if (!g) return;
   const list = (set && VG_SETS[set] ? VG_SETS[set].map((k) => VGUIDES.find((x) => x.id === k)).filter(Boolean) : VGUIDES);
   if (!list.includes(g)) set = null;
@@ -95,14 +101,15 @@ function openVideoGuide(id, set) {
   host.innerHTML = '<div class="vg" role="dialog" aria-modal="true" aria-label="' + esc(g.title) + ' (video guide)">' +
     '<div class="vg-hd"><span class="vg-no">' + String(i + 1).padStart(2, '0') + '</span><div style="min-width:0;flex:1"><b class="ell">' + esc(g.title) + '</b><small class="ell">' + esc(g.text) + '</small></div><button type="button" class="vg-x" data-vx aria-label="Close video">' + icon('x') + '</button></div>' +
     '<div class="vg-st" tabindex="-1">' +
-      '<video class="vg-v" playsinline preload="metadata" poster="' + vgSrc(g.id, 'jpg') + '"><source src="' + vgSrc(g.id, 'mp4') + '" type="video/mp4"><track kind="captions" srclang="en" label="English" src="' + vgSrc(g.id, 'vtt') + '" default></video>' +
+      '<video class="vg-v" playsinline webkit-playsinline preload="metadata" poster="' + vgSrc(g.id, 'jpg') + '"><source src="' + vgSrc(g.id, 'mp4') + '" type="video/mp4"><track kind="captions" srclang="en" label="English" src="' + vgSrc(g.id, 'vtt') + '" default></video>' +
       '<div class="vg-cap" aria-hidden="true"></div>' +
-      '<button type="button" class="vg-big" data-vplay aria-label="Play">' + icon('play') + '</button>' +
+      '<button type="button" class="vg-big" data-vplay aria-label="Play">' + icon('play') + '</button><button type="button" class="vg-snd" data-vsnd hidden>' + VG_ICON.mute + 'Tap for sound</button><span class="vg-spin" aria-hidden="true"><span class="spin wh"></span></span>' +
+      '<div class="vg-err" role="alert" hidden><b>This video couldn\'t load — check your connection and try again</b><button type="button" class="btn b-w sm" data-vretry>' + VG_ICON.replay + 'Try again</button></div>' +
       '<div class="vg-end" hidden><span class="vg-done">' + icon('check') + 'Watched</span>' + (nextG ? '<button type="button" class="btn b-blue sm" data-vnext>' + icon('play') + 'Next: ' + esc(nextG.title) + '</button>' : (set ? '<a class="btn b-blue sm" href="#signup" data-vsignup>Start free' + icon('arrow') + '</a>' : '<button type="button" class="btn b-blue sm" data-vall>See all guides</button>')) + '<button type="button" class="vg-rep" data-vrep>' + VG_ICON.replay + 'Watch again</button></div>' +
       '<div class="vg-ctl">' +
         '<div class="vg-bar" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="' + g.dur + '" aria-valuenow="0"><span class="vg-buf"></span><span class="vg-fill"></span><span class="vg-knob"></span><span class="vg-tip" hidden></span></div>' +
         '<div class="vg-row"><button type="button" class="vg-b" data-vplay aria-label="Play">' + icon('play') + '</button>' +
-          '<button type="button" class="vg-b hide-xs" data-vmute aria-label="Mute">' + VG_ICON.vol + '</button>' +
+          '<button type="button" class="vg-b" data-vmute aria-label="Mute" aria-pressed="false">' + VG_ICON.vol + '</button>' +
           '<span class="vg-t tnum"><span data-vcur>0:00</span> / <span data-vdur>' + vgTime(g.dur) + '</span></span><span style="flex:1"></span>' +
           '<button type="button" class="vg-b vg-sp" data-vspeed aria-label="Playback speed">1×</button>' +
           '<button type="button" class="vg-b" data-vcc aria-label="Captions" aria-pressed="false">' + VG_ICON.cc + '</button>' +
@@ -122,7 +129,51 @@ function openVideoGuide(id, set) {
     st.classList.toggle('playing', p);
     playBtns.forEach((b) => { b.setAttribute('aria-label', p ? 'Pause' : 'Play'); if (!b.classList.contains('vg-big')) b.innerHTML = icon(p ? 'pause' : 'play'); });
   };
-  const toggle = () => { if (v.paused || v.ended) { const r = v.play(); if (r && r.catch) r.catch(() => {}); } else v.pause(); };
+  /* Loading problems: an error on the <video> or on its <source> (with <source> children the browser reports a failed
+     file there, not on the video), or no data for a while after Play ("stalled" alone is normal on iPhones, so it
+     only starts a timer). Shows the message with "Try again" instead of a frozen poster. */
+  const errBox = $('.vg-err', host), srcEl = $('source', host);
+  let want = false, stallT = null, failed = false;
+  const clearStall = () => { clearTimeout(stallT); stallT = null; };
+  const armStall = (ms) => { clearStall(); stallT = setTimeout(() => { if (want && v.readyState < 3 && !v.paused) fail('stalled'); }, ms); };
+  const fail = (why) => {
+    if (failed || !VG || VG.host !== host) return;
+    failed = true; clearStall(); want = false;
+    st.classList.remove('wait', 'playing'); st.classList.add('failed');
+    errBox.hidden = false;
+    try { v.pause(); } catch (_) { /* ignore */ }
+    try { console.warn('[guides] video failed', g.id, why, v.error ? v.error.code : '', v.networkState); } catch (_) { /* ignore */ }
+  };
+  const retry = () => {
+    failed = false; errBox.hidden = true; st.classList.remove('failed');
+    const at = v.currentTime || 0;
+    v.load(); // fetch the file again (a tap, so it may play with sound)
+    if (at > 0) v.addEventListener('loadedmetadata', () => { try { v.currentTime = at; } catch (_) { /* ignore */ } }, { once: true });
+    play();
+  };
+  /* Sound: every Play is a tap, so it starts WITH sound (muted off, full volume) unless the person muted this player
+     themselves. Mute is never saved between videos or visits. iPhone: the "playback" audio session plays the voice even
+     with the silent switch on (Safari 16.4+). If the browser still refuses sound, the video plays muted with a big
+     "Tap for sound" button instead of staying silent. */
+  let userMuted = false;
+  const sndBtn = $('[data-vsnd]', host);
+  const withSound = () => {
+    if (userMuted) return;
+    try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (_) { /* older Safari */ }
+    v.defaultMuted = false; v.removeAttribute('muted'); v.muted = false; v.volume = 1;
+  };
+  const setMuted = (m) => { userMuted = m; if (m) v.muted = true; else withSound(); };
+  const play = () => {
+    if (failed) { retry(); return; }
+    want = true; st.classList.add('wait');
+    if (v.readyState < 3) armStall(20000);
+    withSound();
+    const r = v.play(); if (r && r.catch) r.catch((e) => {
+      if (e && e.name === 'NotAllowedError' && !v.muted && want) { v.muted = true; const r2 = v.play(); if (r2 && r2.catch) r2.catch(() => { st.classList.remove('wait'); want = false; clearStall(); setPlayIcons(); }); return; }
+      st.classList.remove('wait'); want = false; clearStall(); setPlayIcons(); if (e && e.name === 'NotSupportedError') fail('not supported');
+    });
+  };
+  const toggle = () => { if (v.paused || v.ended) play(); else { want = false; clearStall(); v.pause(); } };
   const dur = () => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : g.dur);
   const paint = () => {
     const d = dur(), p = Math.min(1, (v.currentTime || 0) / d);
@@ -160,19 +211,28 @@ function openVideoGuide(id, set) {
   v.addEventListener('play', () => { $('.vg-end', host).hidden = true; st.classList.add('started'); setPlayIcons(); showCtl(); });
   v.addEventListener('pause', () => { setPlayIcons(); showCtl(); });
   v.addEventListener('ended', () => { vgMarkSeen(g.id); setPlayIcons(); $('.vg-end', host).hidden = false; showCtl(); });
-  v.addEventListener('volumechange', () => { const b = $('[data-vmute]', host); b.innerHTML = v.muted ? VG_ICON.mute : VG_ICON.vol; b.setAttribute('aria-label', v.muted ? 'Unmute' : 'Mute'); });
-  v.addEventListener('error', () => { cap.hidden = false; cap.innerHTML = '<span>This video could not load. Check your connection and try again.</span>'; });
+  const paintSound = () => { const b = $('[data-vmute]', host), off = v.muted || v.volume === 0; b.innerHTML = off ? VG_ICON.mute : VG_ICON.vol; b.setAttribute('aria-label', off ? 'Unmute' : 'Mute'); b.setAttribute('aria-pressed', String(off)); b.classList.toggle('off', off); sndBtn.hidden = !(off && !userMuted); };
+  v.addEventListener('volumechange', paintSound);
+  v.addEventListener('playing', paintSound);
+  v.addEventListener('error', () => fail('error'));
+  if (srcEl) srcEl.addEventListener('error', () => fail('source error'));
+  v.addEventListener('stalled', () => { if (want) armStall(15000); });
+  v.addEventListener('waiting', () => { if (want) { st.classList.add('wait'); armStall(20000); } });
+  ['playing', 'canplay', 'timeupdate'].forEach((ev) => v.addEventListener(ev, () => { if (ev !== 'timeupdate' || !v.paused) { st.classList.remove('wait'); if (ev !== 'canplay' || v.readyState >= 3) clearStall(); } }));
+  v.addEventListener('pause', () => st.classList.remove('wait'));
   st.addEventListener('pointermove', showCtl);
   st.addEventListener('click', (e) => { if (e.target === v || e.target === cap) toggle(); });
   host.addEventListener('click', (e) => {
     const t = e.target;
     if (t === host || t.closest('[data-vx]')) { closeVideoGuide(); return; }
+    if (t.closest('[data-vretry]')) { retry(); return; }
     if (t.closest('[data-vplay]')) { toggle(); return; }
-    if (t.closest('[data-vmute]')) { v.muted = !v.muted; return; }
+    if (t.closest('[data-vmute]')) { setMuted(!(v.muted || v.volume === 0)); paintSound(); return; }
+    if (t.closest('[data-vsnd]')) { setMuted(false); paintSound(); if (v.paused) play(); return; }
     if (t.closest('[data-vcc]')) { setCC(!ccOn); return; }
     const sp = t.closest('[data-vspeed]'); if (sp) { speedI = (speedI + 1) % VG_SPEEDS.length; v.playbackRate = VG_SPEEDS[speedI]; sp.textContent = VG_SPEEDS[speedI] + '×'; return; }
     if (t.closest('[data-vfs]')) { vgFullscreen(st, v); return; }
-    if (t.closest('[data-vrep]')) { v.currentTime = 0; toggle(); return; }
+    if (t.closest('[data-vrep]')) { v.currentTime = 0; play(); return; }
     if (t.closest('[data-vnext]') && nextG) { openVideoGuide(nextG.id, set); return; }
     if (t.closest('[data-vall]')) { closeVideoGuide(true); appGo('guides'); return; }
     // "Start free" at the end of the homepage set: the player's history entry becomes #signup (Back returns to the site).
@@ -188,14 +248,15 @@ function openVideoGuide(id, set) {
     else if (k === 'ArrowRight' || k === 'ArrowLeft') { if (e.target === bar) return; e.preventDefault(); v.currentTime = Math.max(0, Math.min(dur(), v.currentTime + (k === 'ArrowRight' ? 5 : -5))); paint(); showCtl(); }
     else if (k === 'c' || k === 'C') setCC(!ccOn);
     else if (k === 'f' || k === 'F') vgFullscreen(st, v);
-    else if (k === 'm' || k === 'M') v.muted = !v.muted;
+    else if (k === 'm' || k === 'M') { setMuted(!(v.muted || v.volume === 0)); paintSound(); }
   };
   document.addEventListener('keydown', onKey, true);
-  VG = { id, host, v, cleanup: () => document.removeEventListener('keydown', onKey, true) };
+  VG = { id, host, v, cleanup: () => { clearStall(); document.removeEventListener('keydown', onKey, true); } };
   // Phone Back button closes the player instead of leaving the page: one history entry while it is open.
   try { if (!(history.state && history.state.vg)) history.pushState({ ...(history.state || {}), vg: 1 }, '', location.href); } catch (_) { /* ignore */ }
   setTimeout(() => { $('[data-vx]', host).focus({ preventScroll: true }); host.classList.add('in'); }, 10);
-  const r = v.play(); if (r && r.catch) r.catch(() => { setPlayIcons(); }); // autoplay can be refused: the big button stays
+  // Opened by a tap: start now, inside that tap (iPhones allow sound then). Otherwise the big Play button waits.
+  if (tap) play();
   setPlayIcons();
 }
 
@@ -215,12 +276,12 @@ function closeVideoGuide(quiet, fromBack) {
   VG = null;
   cleanup();
   if (!fromBack && !quiet && history.state && history.state.vg) { try { history.back(); } catch (_) { /* ignore */ } }
-  try { v.pause(); v.removeAttribute('src'); } catch (_) { /* ignore */ }
+  try { v.pause(); $$('source', host).forEach((x) => x.remove()); v.removeAttribute('src'); v.load(); } catch (_) { /* ignore */ } // stops the download
   if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (_) { /* ignore */ } }
   host.remove();
   if (!$('#modalHost').innerHTML) document.body.classList.remove('noscroll');
   if (quiet) return;
-  if (APP.page === 'guides' && !$('#v-app').hidden) renderPage('guides', {});
+  if (APP.page === 'guides' && !$('#v-app').hidden) renderPage('guides', {}, { keepScroll: true }); // new ticks, same place
   else $$('[data-vguide]').forEach((b) => { const s = vgSeen()[b.dataset.vguide]; if (s && b.classList.contains('vgl')) { b.classList.add('seen'); const p = $('.vgl-p', b); if (p) p.innerHTML = icon('check'); } });
 }
 

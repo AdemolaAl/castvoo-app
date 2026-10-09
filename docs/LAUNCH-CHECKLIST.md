@@ -20,6 +20,9 @@ Tick every line before opening Castvoo to the public.
 
 ## Services (Admin → Settings & connections → Test)
 - [ ] Telegram: @CastvooBot test passes, `/setdomain` done in @BotFather
+- [ ] Castvoo bot card (same page) is green: right bot username, webhook `https://castvoo.com/tg/platform`, no recent
+      error. "Send test message to me" arrives. Nothing else uses `CASTVOO_BOT_TOKEN` (only one program may use a bot
+      token; see DEPLOY-RAILWAY.md → "Castvoo bot not answering"). Tap Start on the bot: it answers within a second
 - [ ] Email: test email arrives (check spam). SPF/DKIM verified in Resend
 - [ ] Cas AI: test passes, Anthropic account has credit and a monthly spend limit
 - [ ] Paystack: LIVE secret key, webhook URL saved, NGN/GHS/ZAR enabled

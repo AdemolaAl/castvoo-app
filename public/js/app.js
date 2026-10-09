@@ -61,6 +61,7 @@ async function appRoute(sub, q) {
     if (!ok) return;
   }
   renderPage(sub || 'overview', q);
+  if (typeof avatarPromptMaybe === 'function') avatarPromptMaybe();
 }
 
 async function bootApp() {
@@ -88,7 +89,13 @@ async function refreshState() {
   return APP.state;
 }
 
-async function renderPage(name, q) {
+/* Write HTML only when it changed: polls (refreshState every few seconds) must not rebuild what the person is looking at. */
+function putHtml(el, h) { if (!el || el._cvHtml === h) return false; el._cvHtml = h; el.innerHTML = h; return true; }
+
+/* opts.keepScroll: redraw the page where it is (closing a video, refreshing after an action) instead of jumping to the
+   top. A page change (another page or the same page tapped in the menu) still starts at the top. */
+async function renderPage(name, q, opts) {
+  const keepY = opts && opts.keepScroll && APP.page === name ? (window.scrollY || document.documentElement.scrollTop || 0) : null;
   clearPageTimers();
   if (typeof closeVideoGuide === 'function') closeVideoGuide(true);
   const g = ++APP.gen;
@@ -102,10 +109,11 @@ async function renderPage(name, q) {
   pg.innerHTML = '<div class="pgt"><h2>' + esc(p.title) + '</h2><span class="muted">' + esc(p.sub || '') + '</span></div><div class="pgb"></div>';
   const el = $('.pgb', pg);
   closeDrawer();
-  window.scrollTo(0, 0);
+  if (keepY === null) window.scrollTo(0, 0);
   const alive = () => g === APP.gen && !$('#v-app').hidden;
   try {
     await p.render(el, APP.q, alive);
+    if (keepY !== null && alive()) window.scrollTo(0, Math.min(keepY, document.documentElement.scrollHeight - innerHeight));
   } catch (e) {
     if (!alive()) return;
     if (e.status === 401) return;
@@ -129,11 +137,12 @@ function shellUI() {
   if (!s) return;
   const u = ME.user || {};
   $$('.walBal').forEach((e) => { e.textContent = money(s.wallet.total); });
+  $$('.walBonus').forEach((e) => { const b = Number(s.wallet.bonus) || 0; e.hidden = !(b > 0); e.textContent = b > 0 ? 'incl. ' + money(b) + ' bonus credit' : ''; });
   const nConn = s.connections.length;
   const multi = (ME.workspaces || []).length > 1;
   $('#wsBox').innerHTML = '<' + (multi ? 'button type="button" data-ws-switch' : 'div') + ' class="ws' + (multi ? ' sw' : '') + '"><span class="wi">' + esc((s.workspace.name || 'W')[0].toUpperCase()) + '</span><div style="min-width:0;flex:1"><b class="ell" style="font-size:14.5px;display:block">' + esc(s.workspace.name) + (isHelper() ? ' <span class="pill p-tg hb">Helper</span>' : '') + '</b><small>' + TG.replace('class="tgi"', 'class="tgi" style="width:14px;height:14px"') + (nConn ? plural(nConn, 'Telegram connection') : 'Nothing connected yet') + '</small></div>' + (multi ? '<svg class="chv2"><use href="#i-swap"/></svg>' : '') + '</' + (multi ? 'button' : 'div') + '>';
-  $('#meRow').innerHTML = ava(u.name || u.email || '?', 42) + '<div style="min-width:0;flex:1"><b class="ell" style="font-size:14.5px;display:block">' + esc(u.name || 'You') + '</b><small class="ell" style="display:block">' + esc(u.email || (u.tg_username ? '@' + u.tg_username : roleName(s.workspace.role))) + '</small></div><button type="button" class="ib" data-logout aria-label="Log out" title="Log out"><svg><use href="#i-out"/></svg></button>';
-  $('#topAva').innerHTML = ava(u.name || u.email || '?', 40);
+  $('#meRow').innerHTML = '<button type="button" class="me-av" data-avatar-edit aria-label="Edit your avatar">' + myAva(42) + '</button><div style="min-width:0;flex:1"><b class="ell" style="font-size:14.5px;display:block">' + esc(u.nickname || u.name || 'You') + '</b><small class="ell" style="display:block">' + esc(u.email || (u.tg_username ? '@' + u.tg_username : roleName(s.workspace.role))) + '</small></div><button type="button" class="ib" data-logout aria-label="Log out" title="Log out"><svg><use href="#i-out"/></svg></button>';
+  $('#topAva').innerHTML = myAva(40, 'top');
   $('#navHelp').hidden = !(s.support_unread > 0);
   $('#dockDot').hidden = !(s.support_unread > 0);
   const ref = CFG.referral && CFG.referral.rates ? CFG.referral.rates[0] + '%+' : '';
@@ -168,7 +177,7 @@ function appBanners() {
   if (CFG.features.maintenance) b.push('<div class="abn warn"><span>🔧</span><span>' + esc(CFG.content.maintenance_message || 'Castvoo is getting an upgrade. Sending is paused for a few minutes.') + '</span></div>');
   if (s && s.plan.join && s.plan.join.paused) b.push('<div class="abn warn"><span>⏸️</span><span><b>Welcomes are paused for this month.</b> People who ask to join are still let in, but they don\'t get your welcome.</span><button type="button" class="btn b-blue xs" data-go="flows">See why</button></div>');
   if (s && s.plan.status === 'paused') b.push('<div class="abn bad"><span>⏸️</span><span><b>Sending is paused.</b> Your wallet did not cover the plan. Top up to restart; nothing was deleted.</span><button type="button" class="btn b-blue xs" data-topup>Top up</button></div>');
-  $('#appBanners').innerHTML = b.join('');
+  putHtml($('#appBanners'), b.join(''));
 }
 function applyFeatures(root) {
   $$('[data-feat]', root).forEach((e) => { e.hidden = CFG.features[e.dataset.feat] === false; });
@@ -282,6 +291,7 @@ function appInit() {
     if ($('#v-app').hidden && !e.target.closest('#modalHost')) return;
     const t = e.target;
     const lo = t.closest('[data-logout]'); if (lo) { e.preventDefault(); logout(); return; }
+    if (t.closest('[data-avatar-edit]')) { e.preventDefault(); closeDrawer(); openAvatarBuilder({ onSaved: () => renderPage(APP.page || 'overview', APP.q || {}) }); return; }
     const tp = t.closest('[data-topup]'); if (tp) { e.preventDefault(); e.stopPropagation(); closeDrawer(); openTopup(); return; }
     const g = t.closest('[data-go]'); if (g) { e.preventDefault(); closeModal(); appGo(g.dataset.go, g.dataset.q ? parseQuery(g.dataset.q) : null); return; }
     const cn = t.closest('[data-connect]'); if (cn) { e.preventDefault(); closeDrawer(); openConnect(cn.dataset.connect || ''); return; }

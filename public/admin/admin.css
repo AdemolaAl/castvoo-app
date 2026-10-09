@@ -547,6 +547,11 @@ a.li:hover,.li.click:hover{background:#FAFBFE;cursor:pointer}
 .intg .res{font-size:12.5px;font-weight:650;padding:8px 10px;border-radius:10px}
 .intg .res.ok{background:var(--ok-s);color:#08724F}
 .intg .res.bad{background:var(--bad-s);color:#B42328}
+/* Castvoo bot card (platform.js botCard) */
+.pbb{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pbb .res{font-size:12.5px;font-weight:650;padding:8px 10px;border-radius:10px}
+.pbb .res.ok{background:var(--ok-s);color:#08724F}
+.pbb .res.bad{background:var(--bad-s);color:#B42328}
 .gvc{border-radius:20px;border:1px solid #E3E1DB;background:linear-gradient(180deg,#FBFAF7,#fff);padding:18px;display:flex;flex-direction:column;gap:14px}
 .gv-brand{display:flex;align-items:center;gap:10px}
 .gv-brand svg{width:40px;height:40px}
@@ -866,3 +871,4 @@ a.bl-row:hover{background:#FAFBFE}
 .prose-a .keys{border:1px solid #D6E1FF;border-radius:14px;padding:12px 14px;background:#F7F9FF}
 .prose-a .keys-t{font:600 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--blue-t)}
 .prose-a .keys ul{margin-top:6px}
+.av.avi{background:none;padding:0;overflow:hidden}.av.avi svg{width:100%;height:100%;display:block}

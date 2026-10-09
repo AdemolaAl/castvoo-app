@@ -53,6 +53,8 @@
     return date(d);
   }
   const isoDay = (d) => { if (!d) return ''; const x = new Date(d); if (Number.isNaN(x.getTime())) return ''; return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  /* A customer's face: their cartoon avatar (public/js/avatar.js, drawn only from known options) or their initials. */
+  const uav = (avatar, name, email, style) => (avatar && window.AV ? raw('<span class="av avi"' + (style ? ' style="' + esc(style) + '"' : '') + '>' + window.AV.render(avatar, { size: 64, label: 'Avatar' }) + '</span>') : raw('<span class="av"' + (style ? ' style="' + esc(style) + '"' : '') + '>' + esc(initials(name, email)) + '</span>'));
   const initials = (name, email) => { const s = (name || email || '?').trim(); const p = s.split(/[\s@._-]+/).filter(Boolean); return ((p[0] || '?')[0] + (p[1] ? p[1][0] : '')).toUpperCase(); };
   const plural = (n, w, ws) => `${num(n)} ${Number(n) === 1 ? w : ws || w + 's'}`;
   const cap = (s) => String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1);
@@ -334,7 +336,7 @@
   }
 
   Object.assign(CV, {
-    Raw, raw, esc, html, $, $$, icon, put, on, num, usd, usdc, date, dt, ago, time, isoDay, initials, plural, cap,
+    Raw, raw, esc, html, $, $$, icon, put, on, num, usd, usdc, date, dt, ago, time, isoDay, initials, uav, plural, cap,
     api, get, post, put_: putj, putj, del, toast, act, dialog, lightbox, confirm: confirmBox, field, formValues,
     can, role, rank, NAV, navItem, allowed, renderNav, route, openDrawer, closeDrawer, refreshCounts, ApiError,
   });

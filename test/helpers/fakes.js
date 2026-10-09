@@ -55,6 +55,8 @@ async function startFakes() {
     joinError: null, // e.g. 'Bad Request: HIDE_REQUESTER_MISSING' for approve/decline
     uploads: [], // { method, field, filename, size, file_id }
     fail5xx: 0,
+    webhooks: new Map(), // token -> what setWebhook was given ({ url, secret_token, allowed_updates })
+    webhookInfo: null, // override for getWebhookInfo: an object, or (token, saved) => object
     nextBotId: 700000000,
     newBot(username = 'bot' + crypto.randomBytes(3).toString('hex')) {
       const id = this.nextBotId++;
@@ -152,10 +154,16 @@ async function startFakes() {
         return tgOk(res, true);
       case 'createChatInviteLink':
         return tgOk(res, { invite_link: 'https://t.me/+' + crypto.randomBytes(8).toString('base64url').replace(/[^A-Za-z0-9]/g, 'x'), creator: { id: bot.id }, creates_join_request: !!params.creates_join_request, name: params.name, is_primary: false, is_revoked: false });
-      case 'setWebhook': case 'deleteWebhook': case 'setMyCommands': case 'answerCallbackQuery':
+      case 'setWebhook': tg.webhooks.set(token, { url: params.url, secret_token: params.secret_token, allowed_updates: params.allowed_updates }); return tgOk(res, true);
+      case 'deleteWebhook': tg.webhooks.delete(token); return tgOk(res, true);
+      case 'setMyCommands': case 'answerCallbackQuery':
       case 'leaveChat': case 'pinChatMessage': case 'deleteMessage':
         return tgOk(res, true);
-      case 'getWebhookInfo': return tgOk(res, { url: 'https://example/tg', pending_update_count: 0 });
+      case 'getWebhookInfo': {
+        const saved = tg.webhooks.get(token);
+        if (tg.webhookInfo) return tgOk(res, typeof tg.webhookInfo === 'function' ? tg.webhookInfo(token, saved) : tg.webhookInfo);
+        return tgOk(res, saved ? { url: saved.url, has_custom_certificate: false, pending_update_count: 0 } : { url: 'https://example/tg', pending_update_count: 0 });
+      }
       case 'getChatMemberCount': return tgOk(res, tg.memberCount);
       case 'getChatMember': return tgOk(res, tg.chatMember || { status: 'administrator', can_invite_users: true, user: { id: Number(params.user_id) } });
       case 'sendMessage': {

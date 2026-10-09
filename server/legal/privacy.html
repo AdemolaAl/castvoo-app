@@ -28,7 +28,7 @@
 <h2>3. What we collect</h2>
 <p><strong>Only what we need to run the service.</strong></p>
 <ul>
-<li><strong>Account details:</strong> your name, email address, Telegram ID and country.</li>
+<li><strong>Account details:</strong> your name, email address, Telegram ID and country, and, if you make them, your nickname and your cartoon avatar (the choices you picked in the avatar builder, such as hairstyle and colours; no photo).</li>
 <li><strong>Workspace content:</strong> messages, follow-up sequences, audiences, media you upload, settings and the bots, channels and groups you connect. Bot tokens are stored encrypted.</li>
 <li><strong>Subscriber data your bots receive from Telegram:</strong> Telegram user ID, first name, username, language, the start tag they used, and their join and click history.</li>
 <li><strong>Payment records:</strong> top-ups, plan payments, receipts and the payment method used. We never receive or store full card numbers. For crypto top-ups, we keep the coin, amount and transaction ID.</li>
@@ -70,7 +70,7 @@
 <ul>
 <li><strong>Railway</strong> for hosting and our database.</li>
 <li><strong>Telegram</strong> to deliver your messages to your subscribers.</li>
-<li><strong>Anthropic</strong> to power Cas, our AI writing assistant, and our AI support assistants. When you use Cas, the text you give it and the relevant notes from the Train Cas page are sent to Anthropic to create a reply. When you write to support (or use the chat on our website), your messages, any images you attach, your first name and country, and the account details needed to answer them (for example your plan, payment status, referral earnings or connection status) are sent to Anthropic to create a reply. Bot tokens, passwords, login codes and full card numbers are never sent.</li>
+<li><strong>Anthropic</strong> to power Cas, our AI writing assistant, and our AI support assistants. When you use Cas, the text you give it and the relevant notes from the Train Cas page are sent to Anthropic to create a reply. When you write to support (or use the chat on our website), your messages, any images you attach, your first name (and nickname, if you set one) and country, and the account details needed to answer them (for example your plan, payment status, referral earnings or connection status) are sent to Anthropic to create a reply. Bot tokens, passwords, login codes and full card numbers are never sent.</li>
 <li><strong>OpenRouter</strong> and <strong>OpenAI</strong>, only if we switch them on instead of Anthropic. We can choose to run Cas and our AI support assistants through OpenRouter (which passes the request to the AI model we pick, such as models from Anthropic, OpenAI or Google) or directly through OpenAI. When one of them is switched on, it receives the same data described for Anthropic above, for the same purpose, and nothing more. Only one AI provider is used at a time.</li>
 <li><strong>Paystack</strong> and <strong>Flutterwave</strong> to process card, bank transfer, USSD, instant EFT and mobile money payments, depending on your country.</li>
 <li><strong>Gatevoo</strong>, a crypto checkout run by Zedapex, to create crypto payment pages and confirm USDT and Bitcoin payments. It receives the top-up amount, a payment reference and your first name. It never holds your money.</li>

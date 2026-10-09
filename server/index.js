@@ -53,6 +53,8 @@ async function main() {
   await require('./seed').run();
   // IP-to-country file on the volume (sign-up country pre-select, Active devices, new-login alerts). Optional.
   require('./lib/geoip').init();
+  // The Guides page videos must be deployed with the app (they are large, so a partial upload can leave them out).
+  require('./lib/guide-videos').warnIfMissing(log);
 
   const { createServer } = require('./app');
   const server = createServer();
@@ -60,7 +62,11 @@ async function main() {
   log.info('Castvoo is running', { url: config.appUrl, port: config.port, integrations: config.integrations() });
 
   const workers = config.runWorkers ? require('./workers').start() : null;
-  if (config.telegram.botToken) require('./services/platform-bot').ensureWebhook().catch((e) => log.warn('platform webhook setup failed', { err: e }));
+  // @CastvooBot: set the webhook, then check it (and the bot's real username). The workers check again every 10 minutes.
+  if (config.telegram.botToken) {
+    const pb = require('./services/platform-bot');
+    pb.ensureWebhook().catch((e) => log.warn('platform webhook setup failed', { err: e, description: e.description })).then(() => pb.selfHeal());
+  }
 
   let stopping = false;
   async function stop(sig) {

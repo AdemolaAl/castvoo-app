@@ -168,6 +168,18 @@ const PERSONAS = [
   { name: 'Daniel', role: 'Technical support', bio: 'Bots, channels, webhooks and delivery problems.', sort: 2, face: 'daniel' },
   { name: 'Amara', role: 'Billing and payments', bio: 'Top-ups, plans, renewals and payment checks.', sort: 3, face: 'amara' },
   { name: 'Leo', role: 'Onboarding', bio: 'Gets new customers from sign-up to their first message.', sort: 4, face: 'leo' },
+  { name: 'Aisha', role: 'Customer support', bio: 'Welcome Flows, join requests and getting people let in.', sort: 5, face: 'aisha' },
+  { name: 'Kenji', role: 'Technical support', bio: 'Bots, webhooks, start links and anything technical.', sort: 6, face: 'kenji' },
+  { name: 'Sofia', role: 'Customer success', bio: 'Helps you get more replies and clicks from your messages.', sort: 7, face: 'sofia' },
+  { name: 'Tunde', role: 'Billing and payments', bio: 'Local payments, bank transfers, receipts and top-ups.', sort: 8, face: 'tunde' },
+  { name: 'Zara', role: 'Onboarding', bio: 'First channel, first Welcome Flow, first broadcast.', sort: 9, face: 'zara' },
+  { name: 'Marcus', role: 'Technical support', bio: 'Delivery problems, blocked bots and Telegram limits.', sort: 10, face: 'marcus' },
+  { name: 'Nadia', role: 'Customer support', bio: 'Sending, scheduling and audiences.', sort: 11, face: 'nadia' },
+  { name: 'Emeka', role: 'Billing and payments', bio: 'Plans, renewals, wallet and payment checks.', sort: 12, face: 'emeka' },
+  { name: 'Lucas', role: 'Customer success', bio: 'Follow-up flows that keep people engaged.', sort: 13, face: 'lucas' },
+  { name: 'Priya', role: 'Technical support', bio: 'Groups, channels, admin rights and connections.', sort: 14, face: 'priya' },
+  { name: 'Kofi', role: 'Customer support', bio: 'Account, team, setup helper and settings.', sort: 15, face: 'kofi' },
+  { name: 'Elena', role: 'Onboarding', bio: 'Moving over from another tool, step by step.', sort: 16, face: 'elena' },
 ];
 
 const OFFERS = [

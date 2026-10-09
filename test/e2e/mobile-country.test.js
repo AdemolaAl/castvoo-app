@@ -56,11 +56,38 @@ describe('phones: no zoom when a field gets focus (iOS zooms into fields under 1
     }
   });
 
-  it('the viewport still lets people pinch-zoom (no maximum-scale / user-scalable=no)', () => {
-    for (const f of ['index.html', 'admin/index.html']) {
+  it('the viewport stops iPhone focus zoom (maximum-scale=1) but never blocks pinch-zoom (no user-scalable=no)', () => {
+    // iOS Safari ignores maximum-scale for pinch-zoom (since iOS 10) but honours it for the automatic zoom into a
+    // focused field, which otherwise stays after log-in ("the page is zoomed in").
+    const want = 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover';
+    for (const f of ['index.html', 'admin/index.html', '404.html']) {
       const v = /<meta name="viewport" content="([^"]+)"/.exec(read(f))[1];
-      assert.match(v, /width=device-width/);
-      assert.doesNotMatch(v, /maximum-scale|user-scalable/, f);
+      assert.equal(v, want, f);
+      assert.doesNotMatch(v, /user-scalable/, f);
     }
+    const ROOT = path.join(__dirname, '..', '..');
+    for (const f of ['server/services/blog-pages.js', 'server/routes/pages.js', 'server/routes/auth.js', 'server/routes/voo-connect.js', 'server/app.js']) {
+      const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      const all = [...src.matchAll(/<meta name="?viewport"? content="([^"]+)"/g)].map((m) => m[1]);
+      assert.ok(all.length, f);
+      for (const v of all) assert.equal(v, want, f);
+    }
+  });
+
+  it('after log-in and on each sign-up step the focused field lets go (iPhone keeps its keyboard and zoom otherwise)', () => {
+    const core = read('js/core.js'), su = read('js/signup.js'), main = read('js/main.js');
+    assert.match(core, /function dropFocus\(\)/);
+    assert.match(su, /async function afterLogin\(created\) \{\n  dropFocus\(\);/);
+    assert.match(su, /async function signupRoute\(sub, q\) \{\n  suStopGuide\(\);\n  dropFocus\(\);/);
+    assert.match(su, /function finishSignup\(msg\) \{\n  dropFocus\(\);/);
+    assert.match(main, /if \(VIEW !== v\) \{\n    dropFocus\(\);/);
+  });
+
+  it('the menu drawer never squashes its items (wallet card keeps its height)', () => {
+    const css = read('css/castvoo.css');
+    assert.match(css, /\.side>\*\{flex-shrink:0\}/);
+    assert.match(css, /\.wcard\{[^}]*flex:none;min-height:128px/);
+    const html = read('index.html');
+    assert.match(html, /<div class="wcard">.*class="tnum walBal".*class="wc-bn walBonus" hidden.*data-topup/);
   });
 });

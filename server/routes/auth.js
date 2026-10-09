@@ -11,6 +11,7 @@ const rl = require('../lib/ratelimit');
 const perms = require('../permissions');
 const security = require('../services/security');
 const { audit } = require('../services/audit');
+const avatars = require('../lib/avatar');
 const { str, email: vEmail, randomDigits, sha256, safeEqual, httpError, badRequest, randomToken, addDays, cleanName, escHtml } = require('../lib/util');
 
 const codeHash = (mail, code) => sha256(`${config.appSecret}:${mail}:${code}`);
@@ -62,6 +63,8 @@ async function meResponse(ctx) {
       id: u.id, name: u.name, email: u.email, email_verified: u.email_verified, country: u.country, tg_linked: !!u.tg_user_id, tg_username: u.tg_username,
       voo_linked: !!u.voo_id, ref_code: u.ref_code, staff_role: u.staff_role, marketing_opt_out: u.marketing_opt_out,
       login_alert_tg: u.login_alert_tg !== false,
+      // Cartoon avatar + nickname (Settings → Profile → Your avatar). avatar_prompt: show the one-time "Make your avatar".
+      nickname: u.nickname || null, avatar: u.avatar || null, avatar_prompt: !u.avatar && !u.avatar_prompted_at,
       perms: u.staff_role ? perms.permsFor(u.staff_role) : [],
     },
     workspaces,
@@ -120,6 +123,13 @@ module.exports = (r) => {
     // New-login alerts by Telegram can be switched off; the email alert always goes.
     const tgAlerts = ctx.body.login_alert_tg !== undefined ? !!ctx.body.login_alert_tg : ctx.user.login_alert_tg !== false;
     await db.query('update users set name = $2, country = $3, marketing_opt_out = $4, login_alert_tg = $5 where id = $1', [ctx.user.id, name, country, optOut, tgAlerts]);
+    // Nickname and cartoon avatar: only known options are stored (lib/avatar.js), anything else is refused.
+    if (ctx.body.nickname !== undefined) await db.query('update users set nickname = $2 where id = $1', [ctx.user.id, avatars.nickname(ctx.body.nickname)]);
+    if (ctx.body.avatar !== undefined) {
+      const av = ctx.body.avatar === null ? null : avatars.check(ctx.body.avatar);
+      await db.query('update users set avatar = $2, avatar_prompted_at = coalesce(avatar_prompted_at, now()) where id = $1', [ctx.user.id, av ? JSON.stringify(av) : null]);
+    }
+    if (ctx.body.avatar_prompt_done === true) await db.query('update users set avatar_prompted_at = coalesce(avatar_prompted_at, now()) where id = $1', [ctx.user.id]);
     if (ctx.body.login_alert_tg !== undefined && tgAlerts !== (ctx.user.login_alert_tg !== false)) await audit(ctx, tgAlerts ? 'security.tg_alerts_on' : 'security.tg_alerts_off', 'user:' + ctx.user.id);
     if (ctx.body.country !== undefined) {
       const tz = auth.TZ_BY_COUNTRY[country];
@@ -184,7 +194,7 @@ module.exports = (r) => {
    * 7 days. Opening it shows one button (email scanners open links on their own, so a plain visit changes nothing);
    * pressing it logs out EVERY device of the account, this browser too, and asks the person to log in again.
    */
-  const secPage = (ctx, status, title, body) => ctx.html(status, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(title)} · Castvoo</title><link rel="icon" href="/img/favicon.svg"></head>
+  const secPage = (ctx, status, title, body) => ctx.html(status, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"><title>${escHtml(title)} · Castvoo</title><link rel="icon" href="/img/favicon.svg"></head>
 <body style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#F6F8FC;color:#0B1430;padding:16px;box-sizing:border-box">
 <main style="max-width:440px;width:100%;background:#fff;border:1px solid #E3E8F2;border-radius:20px;padding:30px 24px;text-align:center;box-shadow:0 18px 40px -24px rgba(11,20,48,.35)">${body}</main></body></html>`);
   const btn = 'display:inline-block;border:0;border-radius:12px;padding:14px 20px;font:600 16px system-ui,sans-serif;cursor:pointer;text-decoration:none';

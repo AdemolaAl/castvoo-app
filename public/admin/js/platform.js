@@ -73,6 +73,30 @@
   };
   const disableRo = (el) => $$('form[data-skey]', el).forEach((f) => { if (!canSet(f.dataset.skey)) for (const x of f.elements) x.disabled = true; });
 
+  /* "Castvoo bot" card (GET /api/admin/platform-bot): the bot's real username, its webhook, Telegram's last error,
+     "Fix webhook" and "Send test message to me". Server: routes/admin/team.js, services/platform-bot.js. */
+  async function botCard(card) {
+    const box = $('.pbb', card);
+    const draw = (b, msg) => {
+      if (!b.configured) { put(box, html`<div class="note warn">${icon('warn')}<span>CASTVOO_BOT_TOKEN is not set, so nobody answers the Castvoo bot. Add it (and CASTVOO_BOT_USERNAME) in Railway.</span></div>`); return; }
+      if (b.error) { put(box, html`<div class="note bad">${icon('warn')}<span>Telegram refused the bot token: ${b.error}. Check CASTVOO_BOT_TOKEN in Railway.</span></div>${btns()}<div class="res" hidden></div>`); return; }
+      const good = !b.problems.length;
+      put(box, html`
+        <div class="note ${good ? 'ok' : 'bad'}">${icon(good ? 'check' : 'warn')}<span>${good ? html`Working: Telegram sends @${b.username}'s updates to Castvoo.` : html`<b>Customers may get no answer from @${b.username}.</b> ${b.problems.join(' ')}`}</span></div>
+        <dl class="kv"><dt>Bot</dt><dd><a href="https://t.me/${b.username}" target="_blank" rel="noopener">@${b.username}</a>${b.username_mismatch ? html` <span class="bd warn">CASTVOO_BOT_USERNAME says @${b.env_username}</span>` : ''}</dd>
+          <dt>Webhook</dt><dd class="mono break">${b.url || 'Not set'} ${b.url_ok ? html`<span class="bd ok"><span class="dot"></span>Right address</span>` : html`<span class="bd bad"><span class="dot"></span>Should be ${b.expected_url}</span>`}</dd>
+          <dt>Updates waiting</dt><dd>${num(b.pending)}</dd>
+          <dt>Last error</dt><dd>${b.last_error ? html`${b.last_error} <span class="mut small">(${dt(b.last_error_at)}, ${ago(b.last_error_at)})</span>` : 'None'}</dd></dl>
+        ${btns()}<div class="res" ${msg ? '' : raw('hidden')}>${msg || ''}</div>
+        <p class="hint">Only one program may use a bot token. If another app, bot builder or a second Castvoo deploy uses it, @${b.username} stops answering here. Castvoo checks every 10 minutes and puts the webhook back.</p>`);
+    };
+    const btns = () => html`<div class="row">${can('settings.edit') ? html`<button type="button" class="btn sm" data-pbfix>${icon('refresh')} Fix webhook</button>` : ''}<button type="button" class="btn sec sm" data-pbtest>${icon('send')} Send test message to me</button></div>`;
+    const show = (r) => { const res = $('.res', box); if (!res) return; res.hidden = false; res.className = 'res ' + (r.ok ? 'ok' : 'bad'); res.textContent = (r.ok ? '✓ ' : '✗ ') + (r.detail || r.error || (r.ok ? 'Done.' : 'Failed.')); };
+    try { draw(await get('/api/admin/platform-bot')); } catch (e) { put(box, html`<div class="note bad">${icon('warn')}<span>${e.message}</span></div>`); return; }
+    on(card, 'click', '[data-pbfix]', async (e, b) => { const r = await act(b, () => post('/api/admin/platform-bot/fix')); if (!r) return; if (r.username) draw(r); show(r); });
+    on(card, 'click', '[data-pbtest]', async (e, b) => { const r = await act(b, () => post('/api/admin/platform-bot/test')); if (r) show(r); });
+  }
+
   CV.page('settings', {
     intro: () => {
       const t = (location.hash.split('/')[1] || '').split('?')[0] || 'connections';
@@ -99,7 +123,8 @@
               ${(x.urls || []).map(([l, p]) => html`<div class="stack" style="gap:6px"><span class="lbl">${l}</span>${CV.copyField(origin + p, 'Copy URL')}</div>`)}
               ${x.test && can('system.view') ? html`<div class="row"><button type="button" class="btn sec sm" data-test="${x.test}" ${okk ? '' : raw('disabled title="Connect it first"')}>${icon('refresh')} Test</button>${x.test === 'email' ? html`<span class="hint">Sends a test login code to you.</span>` : ''}</div><div class="res" hidden></div>` : ''}
             </div>`;
-          })}</div>`;
+          })}</div>
+          ${can('system.view') ? html`<div class="card" id="pbCard"><div class="ch"><h3>${icon('send')} Castvoo bot</h3><p>Who answers when customers tap Start on the bot: its real username, where Telegram sends its updates, and Telegram's last error.</p></div><div class="pbb"><p class="small mut">Checking with Telegram…</p></div></div>` : ''}`;
       } else if (tab === 'crypto') {
         const c = st.crypto;
         const ro = !canSet('crypto');
@@ -174,6 +199,7 @@
         html: html`${nav}${body}`,
         mount(el) {
           disableRo(el);
+          if ($('#pbCard', el)) botCard($('#pbCard', el));
           on(el, 'click', '[data-test]', async (e, b) => {
             const res = $('.res', b.closest('.intg'));
             const r = await act(b, () => post(`/api/admin/integrations/${b.dataset.test}/test`));

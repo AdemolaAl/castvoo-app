@@ -20,6 +20,7 @@ function parseHash() {
 
 function showView(v) {
   if (VIEW !== v) {
+    dropFocus();
     $('#v-site').hidden = v !== 'site';
     $('#v-signup').hidden = v !== 'signup';
     $('#v-app').hidden = v !== 'app';

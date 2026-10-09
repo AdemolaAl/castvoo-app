@@ -90,6 +90,11 @@ same process, in loops that never overlap.
 - Plans: limits and features live in the `plans` table (Admin → Pricing). Check them with `billing.limits(ws)`,
   `billing.hasFeature(ws, key)` / `requirePlanFeature(ws, key)` (402 `plan_feature`) and `billing.joinMeter(ws)`.
   A workspace whose trial or plan ends unpaid drops to the Free plan (`billing.dropToFree`), it is not paused.
+- @CastvooBot (`services/platform-bot.js`): only one program may use a bot token. `selfHeal()` runs at start-up and every
+  10 minutes (workers): `getWebhookInfo`, and if the URL is not `APP_URL/tg/platform` or Telegram reports a delivery
+  error newer than our last `setWebhook`, it sets the webhook again and logs a warning. `getMe`'s username replaces
+  `CASTVOO_BOT_USERNAME` in every link (warning when they differ). Admin → Settings & connections → "Castvoo bot" card
+  (`/api/admin/platform-bot`, `/fix`, `/test`). Tests: `test/e2e/platform-bot.test.js` (`fakes.tg.webhookInfo`).
 - `t.me/<bot>?start=<tag>` passes `<tag>` to `/start`. `?startchannel&admin=...` / `?startgroup&admin=...`
   open Telegram's "add as admin" screen.
 
@@ -137,10 +142,11 @@ Files: `services/support-ai.js` (queue, persona, prompt, handoff, sandbox, websi
 - `get_usage` and `get_flows` cover Welcome Flows: the join-request meter (`billing.joinMeter`), flows made / live /
   plan limit, and per flow the channel, approve mode, requests, welcomed, let in and people waiting to press Start.
 - `llm.complete({ tools })` speaks one neutral tool format and translates it for Claude, OpenRouter and OpenAI.
-- Faces: `support_personas.face` picks one of the illustrated faces in `public/img/agents/<face>.svg` (8 built in,
+- Faces: `support_personas.face` picks one of the illustrated faces in `public/img/agents/<face>.svg` (16 built in,
   `supportAi.FACES`; Admin → Support AI → Face). An uploaded photo shows first; with neither, the initials avatar.
-  All three come from the same URL, `/api/public/personas/:id/photo`. To add a face: drop `<key>.svg` (128×128, ids
-  prefixed with the key) in `public/img/agents/` and add it to `FACES` in `services/support-ai.js`.
+  All three come from the same URL, `/api/public/personas/:id/photo`. To add a face: add it to `scripts/agent-faces.js`
+  (the generator for all 16, same flat style), run `node scripts/agent-faces.js`, and add the key to `FACES` in
+  `services/support-ai.js`. Migration 020 added agents 5–16 to existing databases (only names and faces nobody uses yet).
 - Images (`services/support-images.js`): customers upload with `POST /api/support/attachments` (raw body, JPG / PNG / WEBP,
   10 MB, checked by signature and by reading the header; EXIF/XMP/comments and PNG text chunks are removed, JPG
   rotation kept), then send the ids with `POST /api/support { body, attachments }` (max 3). Staff use
@@ -158,6 +164,24 @@ Files: `services/support-ai.js` (queue, persona, prompt, handoff, sandbox, websi
   `support_ai.powered_by` / `powered_by_text`.
 - Tests: `test/e2e/support-ai.test.js`; the fake Anthropic plays tool calls with `fakes.ai.script`, the OpenRouter mock
   with `mock.script`. Call `require('server/services/support-ai').tick()` to run the worker once.
+
+## The floating support widget
+`public/js/widget.js`, mounted from `renderHelp(view)` (site.js) on every view change. Logged in it uses the same
+routes as Help (`GET/POST /api/support`, `/api/support/attachments`); logged out it uses `POST /api/public/chat`
+(no account tools, no images). While closed it polls `GET /api/support/unread` (every 25 s, visible tab only; it never
+marks anything seen). `GET /api/support` sets `support_threads.user_seen_at`. Faces come from `CFG.support_team`
+(public config: the first 4 active agents when the AI support team is on). Hidden on `#app/help`, during sign-up and
+while the VooSquare widget is used on the website. Phones: full-screen sheet sized to `visualViewport`, body locked with
+`position:fixed` + restored `scrollY` (no jump). Root class is `.swg` (`.sw` and `.app` are taken).
+
+## Customer avatars and nicknames
+`public/js/avatar.js` is ONE module for both sides: the browser draws with `AV.render(cfg)`, the server checks with
+`AV.clean(cfg, true)` through `server/lib/avatar.js` (unknown keys or values → 400). It is stored in `users.avatar`
+(jsonb, ≤ 2,000 chars) and `users.nickname` (≤ 24, letters/numbers/emoji/space . _ - '). Saved with `POST /api/me
+{ avatar, nickname }`; `{ avatar_prompt_done: true }` remembers the one-time prompt (`users.avatar_prompted_at`).
+`/api/me` returns `nickname`, `avatar`, `avatar_prompt`. Builder, prompt and helpers (`myAva`, `userAva`, `greetName`):
+`public/js/app-avatar.js`. Greeting name: nickname > first name > email prefix (`AV.greetName`). To add an option, add it
+to `OPTIONS` and draw it in the matching part function; old saved avatars keep working.
 
 ## Logins, devices, seats and country
 - **Sessions** (`services/auth.js`, `services/security.js`): `sessions` keeps the token hash, `id` (public), `ip_hash`
@@ -182,6 +206,24 @@ Files: `services/support-ai.js` (queue, persona, prompt, handoff, sandbox, websi
   first one is whatever the visitor sent. Used for the sign-up pre-select (`GET /api/public/geo`, not cached), the device
   list and alerts. Never for language: the marketing site picks it from `navigator.languages` (`browserLang` in site.js).
   Attribution (CC BY 4.0) is on the privacy page. Test fixture: `test/fixtures/dbip-country-lite-sample.csv`.
+
+## Guide videos (public/videos)
+
+The Guides page plays the 9 videos listed in `VGUIDES` (public/js/app-guides.js). Each guide needs `<id>.mp4`,
+`<id>.vtt` (captions) and `<id>.jpg` (poster). They are part of the app: deploy them with the code (one zip, or git).
+A start-up warning ("guide videos missing") and `npm run check` (section 11) catch a deploy without them.
+
+Encode every video like this, so it plays on every iPhone and Android phone and stays about 2 to 3 MB:
+
+```
+ffmpeg -i source.mp4 -map 0:v:0 -map 0:a:0 -vf "scale=1280:720:flags=lanczos,format=yuv420p" \
+  -c:v libx264 -preset veryslow -profile:v main -level:v 3.1 -crf 28 -x264-params "keyint=300:min-keyint=30:ref=5:bframes=5" \
+  -c:a aac -b:a 96k -ar 48000 -ac 2 -map_metadata -1 -movflags +faststart public/videos/<id>.mp4
+```
+
+`+faststart` matters: iPhones first ask for 2 bytes (`Range: bytes=0-1`), then need the index at the start of the file.
+The server answers those 206 requests itself (server/app.js serveStatic; never compressed). After replacing a video,
+bump `GUIDE_V` in app-guides.js so browsers fetch the new file.
 
 ## Tests
 - `test/e2e/*.test.js` run the real server against a real throwaway PostgreSQL, with fake Telegram,

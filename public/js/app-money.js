@@ -77,11 +77,11 @@ PAGES.wallet = {
       await busy(pr, '', async () => {
         try { await POST('/api/app/plan/cancel', { resume: !turnOff }); toast(turnOff ? 'Your plan won\'t renew.' : 'Your plan will renew automatically.'); } catch (ex) { apiErr(ex); }
       });
-      renderPage('wallet', {});
+      renderPage('wallet', {}, { keepScroll: true });
     };
     const cf = $('#cpF'); if (cf) cf.onsubmit = async (e) => {
       e.preventDefault(); const code = $('#cpI').value.trim(); if (!code) return;
-      try { const r = await POST('/api/app/coupon', { code }); toast(r.message); renderPage('wallet', {}); } catch (ex) { apiErr(ex); }
+      try { const r = await POST('/api/app/coupon', { code }); toast(r.message); renderPage('wallet', {}, { keepScroll: true }); } catch (ex) { apiErr(ex); }
     };
     el.addEventListener('click', (e) => {
       const c = e.target.closest('[data-chk]'); if (c) { checkPayment(c.dataset.chk, true); return; }
@@ -137,7 +137,7 @@ function planSheet(p, cycleWant) {
     $('#psCy', h).onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) { cycle = b.dataset.c; draw(); } };
     $('#psL', h).onclick = (e) => { const b = e.target.closest('[data-p]'); if (b) { sel = b.dataset.p; draw(); } };
     $('#psGo', h).onclick = (e) => busy(e.currentTarget, 'Saving…', async () => {
-      try { const n = $('#psNow', h); const r = await POST('/api/app/plan', { plan: sel, cycle, start_now: n && n.checked ? true : undefined, keep_flows: keepPicker() ? keep.ids.map(Number) : undefined }); closeModal(); toast(r.message || 'Saved.'); await refreshState(); renderPage('wallet', {}); }
+      try { const n = $('#psNow', h); const r = await POST('/api/app/plan', { plan: sel, cycle, start_now: n && n.checked ? true : undefined, keep_flows: keepPicker() ? keep.ids.map(Number) : undefined }); closeModal(); toast(r.message || 'Saved.'); await refreshState(); renderPage('wallet', {}, { keepScroll: true }); }
       catch (ex) { $('#psE', h).textContent = ex.message; $('#psE', h).hidden = false; apiErr(ex, { silent: true }); }
     });
   };
@@ -202,7 +202,7 @@ function openUpgrade(o = {}) {
   $('#upAll', h).onclick = () => { closeModal(); appGo('wallet'); };
   $$('[data-pick]', h).forEach((b) => { b.onclick = async () => {
     btnBusy(b, true, 'Switching…');
-    try { const r = await POST('/api/app/plan', { plan: b.dataset.pick, cycle: 'month' }); closeModal(); toast(r.message || 'Done.'); confetti(); await refreshState(); renderPage(APP.page, APP.q); }
+    try { const r = await POST('/api/app/plan', { plan: b.dataset.pick, cycle: 'month' }); closeModal(); toast(r.message || 'Done.'); confetti(); await refreshState(); renderPage(APP.page, APP.q, { keepScroll: true }); }
     catch (ex) { btnBusy(b, false); if (ex.code === 'wallet_short') { closeModal(); toast(ex.message, { kind: 'err', action: { label: 'Top up', onClick: () => openTopup((ex.data && ex.data.needed) || undefined) } }); return; } const e2 = $('#upE', h); e2.textContent = ex.message; e2.hidden = false; }
   }; });
 }
@@ -322,7 +322,7 @@ function wireTxid(h, reference) {
     try {
       await POST('/api/wallet/crypto-txid', { reference, txid: v });
       sheet('Thank you!', '<span class="spk" style="background:var(--ok)">' + icon('check') + '</span>', '<div class="succ"><div style="width:110px" data-cas="happy"></div><b style="font-size:19px">We got your transaction ID</b><p class="muted" style="font-size:14px">Our team checks it, usually within a few hours, and adds the money to your wallet. We\'ll email you when it\'s done.</p><button type="button" class="btn b-blue full" data-shx>Done</button></div>');
-      if (APP.page === 'wallet') renderPage('wallet', {});
+      if (APP.page === 'wallet') renderPage('wallet', {}, { keepScroll: true });
     } catch (ex) { btnBusy(b, false); err.textContent = ex.message; err.hidden = false; }
   };
 }
@@ -386,7 +386,7 @@ function manualPay(r) {
     try {
       await POST('/api/wallet/manual/' + encodeURIComponent(r.reference) + '/submit', { proof_ref: ref });
       sheet('Thank you!', '<span class="spk" style="background:var(--ok)">' + icon('check') + '</span>', '<div class="succ"><div style="width:110px" data-cas="happy"></div><b style="font-size:19px">We got your payment details</b><p class="muted" style="font-size:14px">Our team checks it, usually within a few hours, and adds the money to your wallet. We\'ll email you when it\'s done.</p><button type="button" class="btn b-blue full" data-shx>Done</button></div>');
-      if (APP.page === 'wallet') renderPage('wallet', {});
+      if (APP.page === 'wallet') renderPage('wallet', {}, { keepScroll: true });
     } catch (ex) { btnBusy(b, false); err.textContent = ex.message; err.hidden = false; }
   };
 }
@@ -437,7 +437,7 @@ async function checkPayment(ref, manual) {
     await refreshState();
     const h = sheet('Payment received', '<span class="spk" style="background:var(--ok)">' + icon('check') + '</span>', '<div class="succ"><div class="money" aria-hidden="true" data-money="16" data-h="300"></div><div class="sc"><svg><use href="#i-check"/></svg></div><b style="font-size:22px;letter-spacing:-.03em">Money added to your wallet</b><p class="muted">New balance <b class="tnum" style="color:var(--ink)">' + money(APP.state ? APP.state.wallet.total : 0) + '</b></p><div style="width:110px" data-cas="happy"></div><button type="button" class="btn b-blue full" data-shx>Done</button></div>');
     paintMoney(h); confetti();
-    if (APP.page === 'wallet') renderPage('wallet', {});
+    if (APP.page === 'wallet') renderPage('wallet', {}, { keepScroll: true });
   } else if (r.status === 'pending') {
     if (manual) toast('Still processing. Your wallet updates as soon as the payment is confirmed.', { kind: 'info' });
     else sheet('Almost there', '<span class="spk">⏳</span>', '<div class="succ"><div style="width:110px" data-cas="think"></div><b style="font-size:19px">Your payment is still processing</b><p class="muted" style="font-size:14px">This can take a minute. Your wallet updates by itself as soon as it\'s confirmed. We\'ll also email you.</p><button type="button" class="btn b-blue full" id="ckA">' + icon('refresh') + 'Check again</button></div>');
@@ -489,7 +489,7 @@ PAGES.earn = {
         const a = parseFloat($('#ruA', h).value) || 0;
         if (a < 1 || a > b.available) { $('#ruE', h).textContent = 'Enter between $1 and ' + money(b.available) + '.'; $('#ruE', h).hidden = false; return; }
         return busy(e.currentTarget, 'Moving…', async () => {
-          try { const r = await POST('/api/referrals/use', { amount: a }); closeModal(); toast(r.message); refreshState(); renderPage('earn', {}); } catch (ex) { $('#ruE', h).textContent = ex.message; $('#ruE', h).hidden = false; }
+          try { const r = await POST('/api/referrals/use', { amount: a }); closeModal(); toast(r.message); refreshState(); renderPage('earn', {}, { keepScroll: true }); } catch (ex) { $('#ruE', h).textContent = ex.message; $('#ruE', h).hidden = false; }
         });
       };
     };
@@ -502,7 +502,7 @@ PAGES.earn = {
         if (coin === 'USDT' ? !/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address) : !/^(bc1[02-9ac-hj-np-z]{11,71}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/.test(address)) { err.textContent = coin === 'USDT' ? 'That is not a TRON (TRC20) address. It starts with T and has 34 characters.' : 'That is not a Bitcoin address. It starts with bc1, 1 or 3.'; err.hidden = false; return; }
         if (amount < min || amount > b.available) { err.textContent = 'Enter between ' + usd(min) + ' and ' + money(b.available) + '.'; err.hidden = false; return; }
         if (!(await confirmBox('Send ' + money(amount) + ' in ' + coin + '?', 'To <span class="mono" style="word-break:break-all">' + esc(address) + '</span>', 'Yes, withdraw'))) return;
-        try { await POST('/api/referrals/withdraw', { coin, address, amount }); toast('Withdrawal requested. We\'ll email you when it\'s paid.'); renderPage('earn', {}); } catch (ex) { apiErr(ex); }
+        try { await POST('/api/referrals/withdraw', { coin, address, amount }); toast('Withdrawal requested. We\'ll email you when it\'s paid.'); renderPage('earn', {}, { keepScroll: true }); } catch (ex) { apiErr(ex); }
       };
     };
   },

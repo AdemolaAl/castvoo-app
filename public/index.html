@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Castvoo · Telegram welcome bot, broadcasts and follow-ups on autopilot</title>
 <meta name="description" content="Welcome everyone who asks to join your Telegram channel or group, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links. Cas, the AI helper, writes the messages. Free plan for 1 channel, 7-day free trial, no card.">
 <meta name="theme-color" content="#2F6BFF">
@@ -13,15 +13,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/css/castvoo.css?v=13">
+<link rel="stylesheet" href="/css/castvoo.css?v=14">
 <script defer src="/js/core.js?v=4"></script>
+<script defer src="/js/avatar.js?v=1"></script>
 <script defer src="/js/api.js?v=6"></script>
 <script defer src="/js/qr.js?v=1"></script>
-<script defer src="/js/site.js?v=9"></script>
+<script defer src="/js/site.js?v=10"></script>
 <script defer src="/js/site-story.js?v=1"></script>
 <script defer src="/js/signup.js?v=3"></script>
-<script defer src="/js/app.js?v=5"></script>
-<script defer src="/js/app-home.js?v=4"></script>
+<script defer src="/js/app.js?v=6"></script>
+<script defer src="/js/app-home.js?v=5"></script>
 <script defer src="/js/app-send.js?v=3"></script>
 <script defer src="/js/app-drips.js?v=4"></script>
 <script defer src="/js/app-flows.js?v=4"></script>
@@ -29,9 +30,11 @@
 <script defer src="/js/app-connect.js?v=3"></script>
 <script defer src="/js/app-cas.js?v=2"></script>
 <script defer src="/js/app-money.js?v=5"></script>
-<script defer src="/js/app-account.js?v=7"></script>
+<script defer src="/js/app-account.js?v=8"></script>
+<script defer src="/js/app-avatar.js?v=1"></script>
 <script defer src="/js/app-zedapex.js?v=1"></script>
 <script defer src="/js/app-guides.js?v=5"></script>
+<script defer src="/js/widget.js?v=1"></script>
 <script defer src="/js/main.js?v=4"></script>
 <script defer src="/voo-connect-browser.js"></script>
 </head>
@@ -434,7 +437,7 @@
         <button type="button" class="zxi" style="background:#FFF1C7;color:#5C4300" data-go="replyvoo"><svg width="28" height="28" style="flex:none"><use href="#rvLogo"/></svg>Replyvoo<span class="pill" style="background:#121110;color:#FFC21A">AI replies</span></button>
         <a class="zxv" data-voo-app hidden href="#" target="_blank" rel="noopener"><span class="vq">V</span>Part of VooSquare</a>
       </div>
-      <div class="wcard"><div class="money" aria-hidden="true" data-money="6" data-h="160"></div><small style="position:relative">Wallet balance</small><b class="tnum walBal">$0.00</b><button type="button" class="btn b-w xs" data-topup data-feat="topups"><svg><use href="#i-plus"/></svg>Top up</button></div>
+      <div class="wcard"><div class="money" aria-hidden="true" data-money="6" data-h="160"></div><div class="wc-hd"><span class="wc-ic" aria-hidden="true"><svg><use href="#i-wallet"/></svg></span><small>Wallet balance</small></div><b class="tnum walBal">$0.00</b><small class="wc-bn walBonus" hidden></small><button type="button" class="btn b-w xs" data-topup data-feat="topups"><svg><use href="#i-plus"/></svg>Top up</button></div>
       <div class="me-row" id="meRow"></div>
     </aside>
     <div class="main">

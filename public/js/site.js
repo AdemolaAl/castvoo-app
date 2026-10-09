@@ -258,88 +258,14 @@ function vooWidget(show) {
   return true;
 }
 
-/* ---------- Help bubble ---------- */
+/* ---------- Support widget ----------
+ * The floating support widget (widget.js) on the website and in the dashboard. On the website the VooSquare widget
+ * (when switched on) takes its place; if it fails to load, ours comes back.
+ */
 function renderHelp(view) {
-  const h = $('#helpHost');
-  if (vooWidget(view === 'site')) { h.innerHTML = ''; return; }
-  if (view !== 'site') { h.innerHTML = ''; return; }
-  const ag = CFG.site_chat && CFG.site_chat.agent && CFG.site_chat.agent.avatar ? CFG.site_chat.agent : null;
-  if ($('#helpB')) {
-    // The site config may arrive after the button was drawn: show the agent's face once we know it.
-    const cas = $('#helpB .hcas');
-    if (ag && cas) { const im = document.createElement('img'); im.className = 'mav hface'; im.src = ag.avatar; im.alt = ''; im.width = 44; im.height = 44; cas.replaceWith(im); }
-    return;
-  }
-  h.innerHTML = '<button type="button" class="help" id="helpB" aria-label="Help and 24/7 support">' + (ag ? '<img class="mav hface" src="' + esc(ag.avatar) + '" alt="" width="44" height="44">' : '<span class="mav hcas" data-cas="mini"></span>') + '<span class="hb"><svg><use href="#i-chat"/></svg></span></button>';
-  paintCas(h);
-  $('#helpB').onclick = () => {
-    const c = $('.helpc'); if (c) { c.remove(); return; }
-    if (CFG.site_chat) return openSiteChat();
-    const s = CFG.support || {};
-    const d = document.createElement('div');
-    d.className = 'helpc'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Help');
-    d.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><span style="width:44px" data-cas="happy"></span><div style="flex:1"><b style="font-size:17px;letter-spacing:-.02em">Need a hand?</b><br><small class="muted">24/7 customer support, with our human team on call.</small></div><button type="button" class="ib" data-hx aria-label="Close"><svg><use href="#i-x"/></svg></button></div>' +
-      '<p class="muted" style="font-size:14px">' + esc(s.reply_time || '') + '</p>' +
-      (ME && ME.user ? '<a class="btn b-blue full" href="#app/help" data-hgo>' + icon('chat') + 'Chat with us</a>' : '') +
-      '<a class="btn b-ghost full" href="mailto:' + esc(s.email) + '">' + icon('mail') + esc(s.email) + '</a>' +
-      (s.telegram ? '<a class="btn b-ghost full" href="https://t.me/' + esc(String(s.telegram).replace(/^@/, '')) + '" target="_blank" rel="noopener">' + icon('tg') + '@' + esc(String(s.telegram).replace(/^@/, '')) + '</a>' : '') +
-      (ME && ME.user ? '' : '<p class="hint" style="text-align:center">Have an account? <a href="#login" data-hgo>Log in</a> to chat with us.</p>');
-    document.body.appendChild(d);
-    paintCas(d);
-    d.onclick = (e) => { if (e.target.closest('[data-hx]') || e.target.closest('[data-hgo]')) d.remove(); };
-  };
-}
-
-/* ---------- Website chat (visitors): product and pricing answers, no account access ---------- */
-const SITECHAT = { msgs: [], busy: false };
-function openSiteChat() {
-  const s = CFG.support || {};
-  const ag = (CFG.site_chat && CFG.site_chat.agent) || { name: 'Castvoo', avatar: null };
-  const d = document.createElement('div');
-  d.className = 'helpc sitechat'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Chat with Castvoo');
-  const face = (cls) => ag.avatar ? '<img class="' + cls + '" src="' + esc(ag.avatar) + '" alt="" width="40" height="40">' : '<span class="' + cls + '" data-cas="mini"></span>';
-  d.innerHTML = '<div class="sc-h">' + face('sc-ava') + '<div style="flex:1;min-width:0"><b>' + esc(ag.name) + ' from Castvoo</b><small><span class="sdot"></span><span><b>24/7 customer support</b> · AI assistant · replies in seconds</span></small></div><button type="button" class="ib" data-hx aria-label="Close"><svg><use href="#i-x"/></svg></button></div>' +
-    '<div class="sc-l" id="scL" aria-live="polite"></div>' +
-    '<div class="sc-q" id="scQ">' + ['What does Castvoo do?', 'How much does it cost?', 'How do I pay from Nigeria?', 'Can I see who read my message?'].map((q) => '<button type="button" data-q>' + esc(q) + '</button>').join('') + '</div>' +
-    '<form class="sc-f" id="scF"><input class="inp" id="scI" maxlength="1000" placeholder="Ask about Castvoo…" aria-label="Your question" autocomplete="off"><button type="submit" class="btn b-blue" aria-label="Send"><svg><use href="#i-send"/></svg></button></form>' +
-    '<div class="sc-foot"><a class="btn b-blue sm" href="#signup" data-hgo>Start free</a>' + (ME && ME.user ? '<a href="#app/help" data-hgo>Account question? Open Help</a>' : '<a href="mailto:' + esc(s.email) + '">' + esc(s.email) + '</a>') + '</div>' +
-    (CFG.site_chat && CFG.site_chat.powered_by ? '<div class="sc-pwr">' + poweredBy(CFG.site_chat.powered_by) + '</div>' : '');
-  document.body.appendChild(d);
-  paintCas(d);
-  const L = $('#scL', d);
-  const draw = () => {
-    const intro = '<div class="scm a">' + '<div class="cb">Hi! I\'m ' + esc(ag.name) + '. Ask me anything about Castvoo: what it does, prices, payments or setup.</div></div>';
-    L.innerHTML = intro + SITECHAT.msgs.map((m) => '<div class="scm ' + (m.role === 'user' ? 'u' : 'a') + '"><div class="cb">' + esc(m.content).replace(/\n/g, '<br>') + '</div></div>').join('') +
-      (SITECHAT.busy ? '<div class="scm a"><div class="cb"><span class="tg-typing in"><i></i><i></i><i></i></span></div></div>' : '');
-    $('#scQ', d).hidden = SITECHAT.msgs.length > 0;
-    L.scrollTop = L.scrollHeight;
-  };
-  const ask = async (text) => {
-    const t = String(text || '').trim();
-    if (!t || SITECHAT.busy) return;
-    const history = SITECHAT.msgs.slice(-10);
-    SITECHAT.msgs.push({ role: 'user', content: t });
-    SITECHAT.busy = true; draw();
-    try {
-      const r = await POST('/api/public/chat', { message: t, history });
-      SITECHAT.busy = false;
-      for (const [i, b] of r.bubbles.entries()) {
-        if (i) { SITECHAT.busy = true; draw(); await new Promise((ok) => setTimeout(ok, Math.min(1800, 500 + b.length * 12))); SITECHAT.busy = false; }
-        SITECHAT.msgs.push({ role: 'assistant', content: b }); draw();
-      }
-    } catch (ex) {
-      SITECHAT.busy = false;
-      SITECHAT.msgs.push({ role: 'assistant', content: (ex && ex.message) || 'Sorry, chat is busy. Email us and we\'ll help.' });
-      draw();
-    }
-  };
-  draw();
-  $('#scF', d).onsubmit = (e) => { e.preventDefault(); const i = $('#scI', d); const v = i.value; i.value = ''; ask(v); };
-  d.onclick = (e) => {
-    if (e.target.closest('[data-hx]') || e.target.closest('[data-hgo]')) { d.remove(); return; }
-    const q = e.target.closest('[data-q]'); if (q) ask(q.textContent);
-  };
-  setTimeout(() => { const i = $('#scI', d); if (i && window.matchMedia('(pointer:fine)').matches) i.focus(); }, 50);
+  const h = $('#helpHost'); if (h) h.innerHTML = '';
+  const voo = vooWidget(view === 'site');
+  swSync(view === 'site' && voo ? null : view);
 }
 
 /* ---------- Example animations ---------- */
@@ -385,7 +311,9 @@ function heroJoin() {
   ];
   if (RM) { steps.forEach((x) => x[1]()); const k = $('.tkb', bg); if (k) k.classList.remove('tap'); bg.querySelectorAll('.touch').forEach((t) => t.remove()); return; }
   steps.forEach(([ms, fn]) => hjT.push(setTimeout(fn, ms)));
-  hjT.push(setTimeout(() => { if (siteOn()) heroJoin(); else hjT.push(setTimeout(heroJoin, 2000)); }, 11500));
+  // Only replay while the website is on screen (not behind the dashboard): wait until it is.
+  const again = () => { if (siteOn()) heroJoin(); else hjT.push(setTimeout(again, 2000)); };
+  hjT.push(setTimeout(again, 11500));
 }
 const NC = [['tunde', 'Welcome sent to Tunde', '02:14 · <b>delivered</b>'], ['wanjiku', 'Day 3 follow-up sent', '03:00 · <b>delivered</b>'], ['kwame', 'Kwame tapped "See the collection"', '03:12 · <b>tracked click</b>'], ['thandi', 'Thandi started your bot', '04:40 · <b>welcome sent</b>'], ['zainab', 'Zainab asked to join', '05:52 · <b>welcome sent in 1s</b>']];
 let nci = 0;
@@ -458,14 +386,13 @@ function siteInit() {
   const scrolledBy = () => Math.max(window.scrollY || 0, (document.scrollingElement && document.scrollingElement.scrollTop) || 0, document.documentElement.scrollTop || 0, document.body.scrollTop || 0);
   // One read and at most one class change per frame (scroll fires many times a frame on iOS); classes only change
   // when the state really flips, so nothing near the scroll position is re-laid out while the finger moves.
-  let scQ = false, scS = null, hbS = null;
+  let scQ = false, scS = null;
   const onScroll = () => {
     if (scQ) return; scQ = true;
     requestAnimationFrame(() => {
       scQ = false;
-      const y = scrolledBy(), s = y > 8, h = y > 600;
+      const y = scrolledBy(), s = y > 8;
       if (s !== scS) { scS = s; $('#hdr').classList.toggle('sc', s); }
-      const hb = $('#helpB'); if (hb && h !== hbS) { hbS = h; hb.classList.toggle('show', h); }
     });
   };
   document.addEventListener('scroll', onScroll, { passive: true, capture: true });

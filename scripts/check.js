@@ -13,6 +13,7 @@
  *   8. feature switches used by the website exist on the server
  *   9. migrations split into valid statements
  *  10. payment methods: every seeded provider has code, the database allows it, the manual-method emails exist
+ *  11. guide videos: every guide listed in public/js/app-guides.js has its files in public/videos, encoded for iPhones
  * Exit code 1 if anything fails, so it can run before every deploy.
  */
 
@@ -277,6 +278,30 @@ process.env.QUIET_LOGS = '1';
   for (const pv of new Set([...METHODS.map((m) => m.provider), 'manual'])) if (!allowed.includes(pv)) fail('payments', `provider ${pv} is not allowed by payment_methods_provider_check (add a migration)`);
   for (const k of ['topup_received', 'topup_submitted', 'topup_rejected', 'crypto_submitted', 'crypto_rejected']) if (!T[k]) fail('payments', `email template ${k} is missing`);
   passed.push(`payments: ${Object.keys(GATEWAYS).length} automatic gateways, ${METHODS.length} built-in methods; the database allows ${allowed.join(', ')}`);
+}
+
+/* 11. Guide videos: every guide in public/js/app-guides.js has its mp4, captions and poster in public/videos (a deploy
+   without them plays nothing), and each mp4 is encoded so iPhones play it: faststart, H.264 Main/Baseline up to 3.1. */
+{
+  const gv = require('../server/lib/guide-videos');
+  const before = problems.length;
+  const list = gv.guides(path.join(ROOT, 'public'));
+  for (const m of gv.missing(path.join(ROOT, 'public'))) fail('videos', `${m.file} is ${m.why} (guide "${m.id}"). Deploy public/videos with the app.`);
+  let total = 0;
+  for (const g of list) {
+    const f = path.join(ROOT, 'public', 'videos', g.id + '.mp4');
+    if (!fs.existsSync(f)) continue;
+    const i = gv.inspectMp4(f);
+    total += i.size;
+    if (!i.faststart) fail('videos', `${rel(f)}: the "moov" box must come before "mdat" (encode with -movflags +faststart)`);
+    if (!i.avc) fail('videos', `${rel(f)}: no H.264 video track found`);
+    else {
+      if (![66, 77].includes(i.avc.profile)) fail('videos', `${rel(f)}: H.264 profile ${i.avc.profile} (use Main: -profile:v main)`);
+      if (i.avc.level > 31) fail('videos', `${rel(f)}: H.264 level ${i.avc.level / 10} (use 3.1: -level:v 3.1)`);
+    }
+    if (i.size > 5e6) fail('videos', `${rel(f)}: ${(i.size / 1e6).toFixed(1)} MB (keep each guide under 5 MB; see app-guides.js)`);
+  }
+  if (problems.length === before) passed.push(`videos: ${list.length} guides have their mp4, captions and poster; ${(total / 1e6).toFixed(1)} MB of mp4, all faststart H.264 Main`);
 }
 
 console.log('\nCastvoo pre-launch check\n');

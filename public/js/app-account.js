@@ -26,7 +26,9 @@ PAGES.settings = {
     el.innerHTML = '<div class="dg">' +
       // Profile
       '<div class="box c6" id="stProfile"><div class="bh"><h3>' + icon('users') + 'Your profile</h3></div>' +
+      '<div class="avrow"><button type="button" class="avrow-pv" data-avatar-edit aria-label="Edit your avatar">' + myAva(72) + '<span class="avrow-ed" aria-hidden="true">' + icon('pencil') + '</span></button><div style="flex:1;min-width:0"><b>Your avatar</b><small>' + (u.avatar ? 'Your cartoon face on the dashboard, your team and support chats.' : 'Make a cartoon face for your account. Takes a few seconds.') + '</small><button type="button" class="btn ' + (u.avatar ? 'b-ghost' : 'b-blue') + ' xs" data-avatar-edit>' + (u.avatar ? icon('pencil') + 'Edit avatar' : '<span aria-hidden="true">✨</span>Make my avatar') + '</button></div></div>' +
       '<div class="field"><label for="stName">Your name</label><input class="inp" id="stName" maxlength="80" value="' + esc(u.name || '') + '"></div>' +
+      '<div class="field"><label for="stNick">Nickname <span class="hint">(optional)</span></label><input class="inp" id="stNick" maxlength="24" autocomplete="nickname" placeholder="What should we call you?" value="' + esc(u.nickname || '') + '"><small class="hint">Used when we greet you, instead of your name.</small></div>' +
       '<div class="field"><label for="stCt">Country</label><select class="inp" id="stCt"><option value="">Choose your country</option>' + ctry.map((c) => '<option value="' + esc(c.code) + '"' + (c.code === u.country ? ' selected' : '') + '>' + esc(c.flag + ' ' + c.name) + '</option>').join('') + '</select><small class="hint" id="stCtH">Your country decides which payment methods you see when you top up.</small></div>' +
       '<button type="button" class="btn b-blue sm" id="stPSave" style="align-self:flex-start">Save profile</button>' +
       '<div class="srow"><span class="sri">' + icon('mail') + '</span><div style="flex:1;min-width:0"><b>Email</b><small class="ell" style="display:block">' + (u.email ? esc(u.email) + (u.email_verified ? ' · verified' : '') : 'No email yet. Add one for receipts and login codes.') + '</small></div><button type="button" class="btn b-ghost xs" id="stEm">' + (u.email ? 'Change' : 'Add email') + '</button></div><div id="stEmBox"></div>' +
@@ -44,7 +46,7 @@ PAGES.settings = {
       // Team
       '<div class="box c6" id="stTeam"><div class="bh"><h3>' + icon('users') + 'Team</h3>' + (team ? '<span class="hint">' + fmt(team.seats_used) + ' of ' + plural(team.seats, 'seat') + ' used</span>' : '') + '</div>' +
       (team && owner ? seatsBox(team) : '') +
-      (team ? team.members.filter((m) => m.role !== 'helper').map((m) => '<div class="srow">' + ava(m.name || m.email || '?', 40) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(m.name || 'Teammate') + (m.id === u.id ? ' <span class="muted">(you)</span>' : '') + '</b><small class="ell" style="display:block">' + esc(m.email || (m.tg_username ? '@' + m.tg_username : '')) + '</small></div>' + (owner && m.role !== 'owner' ? '<select class="inp sm" data-role="' + m.id + '" aria-label="Role"><option value="sender"' + (m.role === 'sender' ? ' selected' : '') + '>Can send</option><option value="drafter"' + (m.role === 'drafter' ? ' selected' : '') + '>Drafts only</option></select><button type="button" class="x" data-rmm="' + m.id + '" aria-label="Remove ' + esc(m.name) + '"><svg width="15" height="15"><use href="#i-trash"/></svg></button>' : '<span class="pill p-grey">' + roleName(m.role) + '</span>') + '</div>').join('') +
+      (team ? team.members.filter((m) => m.role !== 'helper').map((m) => '<div class="srow">' + userAva(m, 40) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(m.name || 'Teammate') + (m.nickname && m.nickname !== m.name ? ' <span class="muted">· ' + esc(m.nickname) + '</span>' : '') + (m.id === u.id ? ' <span class="muted">(you)</span>' : '') + '</b><small class="ell" style="display:block">' + esc(m.email || (m.tg_username ? '@' + m.tg_username : '')) + '</small></div>' + (owner && m.role !== 'owner' ? '<select class="inp sm" data-role="' + m.id + '" aria-label="Role"><option value="sender"' + (m.role === 'sender' ? ' selected' : '') + '>Can send</option><option value="drafter"' + (m.role === 'drafter' ? ' selected' : '') + '>Drafts only</option></select><button type="button" class="x" data-rmm="' + m.id + '" aria-label="Remove ' + esc(m.name) + '"><svg width="15" height="15"><use href="#i-trash"/></svg></button>' : '<span class="pill p-grey">' + roleName(m.role) + '</span>') + '</div>').join('') +
         team.invites.map((i) => '<div class="srow"><span class="sri">' + icon('mail') + '</span><div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(i.email) + '</b><small>Invited · ' + roleName(i.role) + ' · expires ' + fmtDate(i.expires_at, false) + '</small></div><span class="pill p-warn">Waiting</span></div>').join('') : '<p class="muted">Could not load the team.</p>') +
       (owner ? '<form class="invf" id="invF" novalidate><input class="inp" id="invE" type="email" placeholder="teammate@company.com" aria-label="Teammate email"><select class="inp sm" id="invR" aria-label="Role"><option value="sender">Can send</option><option value="drafter">Drafts only</option></select><button type="submit" class="btn b-blue sm">' + icon('plus') + 'Invite</button></form><p class="ferr" id="invErr" hidden></p><div id="invOk"></div><p class="hint"><b>Can send:</b> writes and sends messages. <b>Drafts only:</b> writes, and the owner sends.</p>' : '') + '</div>' +
       // Setup helper
@@ -73,7 +75,7 @@ PAGES.settings = {
       const name = $('#stName').value.trim();
       if (!name) { toast('Your name can\'t be empty.', { kind: 'err' }); return; }
       await busy(e.currentTarget, 'Saving…', async () => {
-        try { const body = { name }; if ($('#stCt').value) body.country = $('#stCt').value; ME = await POST('/api/me', body); shellUI(); toast('Profile saved.'); } catch (ex) { apiErr(ex); }
+        try { const body = { name, nickname: $('#stNick').value.trim() }; if ($('#stCt').value) body.country = $('#stCt').value; ME = await POST('/api/me', body); shellUI(); toast('Profile saved.'); } catch (ex) { apiErr(ex); }
       });
     };
     $('#stMk').onclick = async (e) => {
@@ -255,14 +257,14 @@ function helperBox(team, u) {
   const H = team.helper || {}, m = H.member, inv = H.invite;
   let body = '';
   if (isHelper()) {
-    body = '<div class="srow">' + ava(u.name || u.email || '?', 40) + '<div style="flex:1;min-width:0"><b>You\'re the setup helper</b><small style="display:block">You use your own login. The owner can remove you at any time.</small></div><button type="button" class="btn b-ghost xs danger" data-helper-leave>Leave</button></div>' +
+    body = '<div class="srow">' + myAva(40) + '<div style="flex:1;min-width:0"><b>You\'re the setup helper</b><small style="display:block">You use your own login. The owner can remove you at any time.</small></div><button type="button" class="btn b-ghost xs danger" data-helper-leave>Leave</button></div>' +
       helperLists(H.can, H.cannot, 'You') +
       '<p class="hint">Right now you ' + (H.settings.send ? 'can send broadcasts' : 'write and schedule broadcasts, and the owner sends them') + ', and you ' + (H.settings.billing ? 'can change the plan' : 'can\'t change the plan') + '.</p>';
   } else if (!isOwner()) {
-    body = m ? '<div class="srow">' + ava(m.name || '?', 40) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(m.name || 'Setup helper') + '</b><small>Setup helper · joined ' + esc(fmtDate(m.joined_at, false)) + '</small></div><span class="pill p-tg">Helper</span></div>' : '<p class="muted" style="font-size:14px">No setup helper yet. The owner can invite one.</p>';
+    body = m ? '<div class="srow">' + userAva(m, 40) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block">' + esc(m.name || 'Setup helper') + '</b><small>Setup helper · joined ' + esc(fmtDate(m.joined_at, false)) + '</small></div><span class="pill p-tg">Helper</span></div>' : '<p class="muted" style="font-size:14px">No setup helper yet. The owner can invite one.</p>';
   } else if (m) {
     const act = H.activity || [];
-    body = '<div class="hlpm">' + ava(m.name || m.email || '?', 48) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block;font-size:15.5px">' + esc(m.name || 'Setup helper') + ' <span class="pill p-tg">Helper</span></b><small class="ell" style="display:block">' + esc([m.email, m.tg_username ? '@' + m.tg_username : ''].filter(Boolean).join(' · ')) + '</small>' +
+    body = '<div class="hlpm">' + userAva(m, 48) + '<div style="flex:1;min-width:0"><b class="ell" style="display:block;font-size:15.5px">' + esc(m.name || 'Setup helper') + ' <span class="pill p-tg">Helper</span></b><small class="ell" style="display:block">' + esc([m.email, m.tg_username ? '@' + m.tg_username : ''].filter(Boolean).join(' · ')) + '</small>' +
       '<small class="hlpd"><span>Joined ' + esc(fmtDate(m.joined_at, false)) + '</span><span>' + (m.last_active_at ? 'Active ' + esc(ago(m.last_active_at)) : 'Not active yet') + '</span></small></div></div>' +
       '<div class="tg"><span><b style="font-size:14.5px">Can send broadcasts</b><br><small class="muted">Off: they write and schedule, and you approve before anything goes out.</small></span>' + toggleBtn('hpSend', H.settings.send, 'Can send broadcasts') + '</div>' +
       '<div class="tg"><span><b style="font-size:14.5px">Can manage billing &amp; plan</b><br><small class="muted">Change the plan and use coupons. Cancelling, refunds and earnings stay yours.</small></span>' + toggleBtn('hpBill', H.settings.billing, 'Can manage billing and plan') + '</div>' +
@@ -431,7 +433,7 @@ PAGES.help = {
         const prev = ms[i - 1], next = ms[i + 1];
         const same = (x) => x && (x.author_type === 'user') === mine && (mine || x.author_name === m.author_name);
         const first = !same(prev), last = !same(next) && !(d.typing && !mine && i === ms.length - 1 && d.typing.name === m.author_name);
-        const ava = mine ? '' : last ? supAva(m) : '<span class="sav sp"></span>';
+        const ava = mine ? (last ? myAva(32, 'sav') : '<span class="sav sp"></span>') : last ? supAva(m) : '<span class="sav sp"></span>';
         const nm = !mine && first ? '<small class="cn">' + esc(m.author_name || 'Castvoo team') + (m.author_type === 'staff' ? ' <span class="steam-tag">Team</span>' : '') + '</small>' : '';
         const pics = supPics(m.attachments);
         const text = m.body ? esc(m.body).replace(/\n/g, '<br>') : '';

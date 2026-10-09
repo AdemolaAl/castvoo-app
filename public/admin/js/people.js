@@ -1,7 +1,7 @@
 'use strict';
 /* Castvoo Admin — Overview, Users, Support. */
 (() => {
-  const { html, raw, icon, $, $$, on, put, num, usd, usdc, date, dt, ago, isoDay, initials, plural, get, post, act, dialog, confirm, can, toast } = CV;
+  const { html, raw, icon, $, $$, on, put, num, usd, usdc, date, dt, ago, isoDay, initials, uav, plural, get, post, act, dialog, confirm, can, toast } = CV;
 
   /* =================== OVERVIEW =================== */
   CV.page('overview', {
@@ -68,7 +68,7 @@
       const setQ = (patch) => { const n = { ...q, page: '1', ...patch }; const p = new URLSearchParams(Object.entries(n).filter(([, v]) => v)); if (n.page === '1') p.delete('page'); CV.go('users' + (String(p) ? '?' + p : '')); };
       const chip = (label, key, v) => html`<button class="chip${q[key] === v ? ' on' : ''}" data-set="${key}" data-v="${q[key] === v ? '' : v}">${label}</button>`;
       const rows = res.users.map((u) => html`<tr class="click" data-href="#users/${u.id}">
-        <td class="main-cell" data-l="User"><div class="ucell"><span class="av">${initials(u.name, u.email)}</span><div style="min-width:0"><b>${u.name || u.email || ('@' + (u.tg_username || u.id))}</b><small>${u.email || (u.tg_username ? '@' + u.tg_username : 'No email')}</small></div></div></td>
+        <td class="main-cell" data-l="User"><div class="ucell">${uav(u.avatar, u.name, u.email)}<div style="min-width:0"><b>${u.name || u.email || ('@' + (u.tg_username || u.id))}</b><small>${u.email || (u.tg_username ? '@' + u.tg_username : 'No email')}</small></div></div></td>
         <td data-l="Plan">${u.plan_code ? html`<span class="row" style="gap:6px">${CV.cap(u.plan_code)} ${CV.planBadge(u.plan_status, u.plan_free)}</span>` : html`<span class="mut">—</span>`}</td>
         <td data-l="Total spent" class="num"><span class="money${u.spent ? '' : ' mut'}">${usd(u.spent)}</span></td>
         <td data-l="Wallet" class="num">${usd(u.wallet)}</td>
@@ -121,11 +121,12 @@
     const canEdit = can('users.edit');
     const head = html`<div class="card"><div class="uhead">
       <a class="ib" href="#users" aria-label="Back to users">${icon('back')}</a>
-      <span class="av">${initials(u.name, u.email)}</span>
+      ${uav(u.avatar, u.name, u.email)}
       <div style="min-width:0"><h2>${name}</h2><div class="meta">
         ${u.status === 'suspended' ? html`<span class="bd bad">Suspended</span>` : html`<span class="bd ok">Active</span>`}
         ${u.staff_role ? CV.roleBadge(u.staff_role) : ''}
         ${d.workspaces[0] ? CV.planBadge(d.workspaces[0].plan_status, d.workspaces[0].plan_free) : ''}
+        ${u.nickname ? html`<span class="bd">Nickname: ${u.nickname}</span>` : ''}
         <span class="bd">Joined ${date(u.created_at)}</span></div></div>
       <div class="acts">
         ${canEdit ? (u.status === 'suspended'
@@ -340,7 +341,7 @@
       const keep = (extra = '') => { const p = new URLSearchParams(); if (filter !== 'open') p.set('f', filter); if (q) p.set('q', q); return String(p) ? '?' + p + extra : extra; };
 
       const listHtml = (l) => l.threads.length ? l.threads.map((t) => html`<a class="th${t.id === threadId ? ' on' : ''}${t.unread_staff ? ' unread' : ''}" href="#support/${t.id}${keep()}">
-          <span class="av">${initials(t.user_name, t.user_email)}</span>
+          ${uav(t.user_avatar, t.user_name, t.user_email)}
           <span class="tx"><span class="r1"><b>${t.user_name || t.user_email}</b><time>${ago(t.last_message_at)}</time></span>
           <p>${t.last_author === 'staff' ? 'Team: ' : t.last_author === 'ai' ? 'AI: ' : ''}${t.last_message || t.subject}</p>
           <span class="tags">${t.needs_human && t.status !== 'closed' ? html`<span class="bd bad"><span class="dot"></span>Needs human</span>` : ''}${statusBadge(t.status)}${prioBadge(t.priority)}${t.needs_human && t.queue !== 'support' ? html`<span class="bd blue">${QUEUE[t.queue] || t.queue}</span>` : ''}${!t.needs_human && t.ai_enabled && !t.ai_paused && t.status !== 'closed' ? html`<span class="bd vio">${icon('spark')} AI</span>` : ''}${t.plan_code ? html`<span class="bd">${CV.cap(t.plan_code)}</span>` : ''}${t.assigned_name ? html`<span class="bd">${t.assigned_name}</span>` : ''}</span></span></a>`)
@@ -380,7 +381,7 @@
           <div class="ib-body">
             <div class="msgs" id="msgs">${msgsHtml(th.messages)}</div>
             <aside class="cust">
-              <div class="row"><span class="av" style="width:40px;height:40px">${initials(t.user_name, t.user_email)}</span><div style="min-width:0"><b>${t.user_name || 'Customer'}</b><div class="mut small break">${t.user_email || ''}</div></div></div>
+              <div class="row">${uav(t.user_avatar, t.user_name, t.user_email, 'width:40px;height:40px')}<div style="min-width:0"><b>${t.user_name || 'Customer'}</b><div class="mut small break">${t.user_email || ''}</div></div></div>
               <dl class="kv"><dt>Plan</dt><dd>${t.plan_code ? html`${CV.cap(t.plan_code)} ${CV.planBadge(t.plan_status, t.plan_free)}` : '—'}</dd>
                 <dt>Wallet</dt><dd>${usdc(Number(t.wallet_cents || 0) + Number(t.bonus_cents || 0), { cents: true })}</dd>
                 <dt>Country</dt><dd>${t.user_country || '—'}</dd>

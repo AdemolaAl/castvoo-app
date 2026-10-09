@@ -92,6 +92,42 @@ module.exports = (r) => {
     };
   }, { staff: 'system.view' });
 
+  /* ---------- Admin → Settings & connections → "Castvoo bot" card (services/platform-bot.js) ---------- */
+  const pb = () => require('../../services/platform-bot');
+  const botView = (c) => ({ configured: true, ...c, problems: [
+    ...(c.username_mismatch ? [`CASTVOO_BOT_USERNAME is @${c.env_username}, but CASTVOO_BOT_TOKEN belongs to @${c.username}. Links use @${c.username}. Set both for the same bot in Railway.`] : []),
+    ...(c.url_ok ? [] : [c.url ? `The webhook points to ${c.url}, not ${c.expected_url}. Another program is using this bot token.` : `No webhook is set. Another program may be reading this bot with getUpdates. Only one program may use a bot token.`]),
+    ...(c.last_error ? [`Telegram's last delivery error: ${c.last_error}`] : []),
+  ] });
+  const tgFail = (e) => { if (e.status) throw e; return { configured: true, ok: false, error: e.description || e.message }; };
+
+  r.get('/api/admin/platform-bot', async () => {
+    if (!config.telegram.botToken) return { configured: false };
+    try { return botView(await pb().checkWebhook({ fix: false })); } catch (e) { return tgFail(e); }
+  }, { staff: 'system.view' });
+
+  r.post('/api/admin/platform-bot/fix', async (ctx) => {
+    if (!config.telegram.botToken) throw badRequest('CASTVOO_BOT_TOKEN is not set.');
+    try {
+      await pb().ensureWebhook();
+      const c = await pb().checkWebhook({ fix: false });
+      await audit(ctx, 'platform_bot.fix_webhook', 'platform_bot', { url: c.url, bot: c.username });
+      return { ...botView(c), ok: true, detail: `Webhook set to ${c.url} for @${c.username}.` };
+    } catch (e) { return tgFail(e); }
+  }, { staff: 'settings.edit', rate: [20, 600] });
+
+  r.post('/api/admin/platform-bot/test', async (ctx) => {
+    if (!config.telegram.botToken) throw badRequest('CASTVOO_BOT_TOKEN is not set.');
+    try {
+      await pb().sendTest(ctx.user);
+      await audit(ctx, 'platform_bot.test_message', 'user:' + ctx.user.id, {});
+      return { ok: true, detail: `Sent. Check Telegram${ctx.user.tg_username ? ' (@' + ctx.user.tg_username + ')' : ''}.` };
+    } catch (e) {
+      if (e.status) throw e;
+      return { ok: false, detail: e.code === 403 ? `Telegram says you blocked @${pb().username()} or never pressed Start. Open it, tap Start, then try again.` : (e.description || e.message) };
+    }
+  }, { staff: 'system.view', rate: [10, 600] });
+
   /** "Test" buttons next to each integration in Admin → Settings → Connections. */
   r.post('/api/admin/integrations/:name/test', async (ctx) => {
     const name = ctx.params.name;

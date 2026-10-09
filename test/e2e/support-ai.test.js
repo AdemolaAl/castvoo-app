@@ -54,7 +54,7 @@ describe('AI support replies', () => {
     const mine = v.messages.filter((m) => m.author_type === 'ai');
     assert.equal(mine.length, 3, 'at most 3 bubbles');
     assert.equal(mine[1].body, 'Open Channels & bots and tap Add a channel.', 'markdown removed');
-    assert.ok(['Mia', 'Daniel', 'Amara', 'Leo'].includes(mine[0].author_name));
+    assert.ok(['Mia', 'Daniel', 'Amara', 'Leo', 'Aisha', 'Kenji', 'Sofia', 'Tunde', 'Zara', 'Marcus', 'Nadia', 'Emeka', 'Lucas', 'Priya', 'Kofi', 'Elena'].includes(mine[0].author_name));
     assert.match(mine[0].avatar, /^\/api\/public\/personas\/\d+\/photo/);
     assert.equal(v.typing, null);
     assert.equal(v.thread.agent.name, mine[0].author_name);

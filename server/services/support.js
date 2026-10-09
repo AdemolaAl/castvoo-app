@@ -27,7 +27,7 @@ async function listThreads({ status = 'open', q = '', limit = 50, before = null,
   if (q) { params.push('%' + String(q).replace(/[%_]/g, '').slice(0, 60) + '%'); where += ` and (u.email ilike $${params.length} or u.name ilike $${params.length} or t.subject ilike $${params.length})`; }
   params.push(Math.min(200, Number(limit) || 50));
   return db.many(`select t.id, t.subject, t.status, t.unread_staff, t.last_message_at, t.created_at, t.assigned_to, a.name as assigned_name,
-      u.id as user_id, u.name as user_name, u.email as user_email, u.voo_id, t.workspace_id, w.name as workspace_name, w.plan_code, w.plan_status,
+      u.id as user_id, u.name as user_name, u.email as user_email, u.avatar as user_avatar, u.nickname as user_nickname, u.voo_id, t.workspace_id, w.name as workspace_name, w.plan_code, w.plan_status,
       t.needs_human, t.ai_enabled, t.ai_paused, t.ai_paused_reason, t.priority, t.queue, t.handoff_reason,
       (select coalesce(nullif(body, ''), '📷 Image') from support_messages m where m.thread_id = t.id and not m.internal and m.visible_at <= now() order by m.id desc limit 1) as last_message,
       (select author_type from support_messages m where m.thread_id = t.id and not m.internal and m.visible_at <= now() order by m.id desc limit 1) as last_author
@@ -36,7 +36,7 @@ async function listThreads({ status = 'open', q = '', limit = 50, before = null,
 }
 
 async function getThread(id, { includeInternal = true } = {}) {
-  const t = await db.one(`select t.*, u.name as user_name, u.email as user_email, u.country as user_country, u.tg_username, u.created_at as user_since,
+  const t = await db.one(`select t.*, u.name as user_name, u.email as user_email, u.avatar as user_avatar, u.nickname as user_nickname, u.country as user_country, u.tg_username, u.created_at as user_since,
       w.name as workspace_name, w.plan_code, w.plan_status, w.wallet_cents, w.bonus_cents,
       exists (select 1 from plans p where p.code = w.plan_code and coalesce(p.price_month_cents, 0) = 0 and coalesce(p.price_year_cents, 0) = 0) as plan_free
     from support_threads t join users u on u.id = t.user_id left join workspaces w on w.id = t.workspace_id where t.id = $1`, [id]);

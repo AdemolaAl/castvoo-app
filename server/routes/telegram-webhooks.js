@@ -14,7 +14,9 @@ module.exports = (r) => {
   r.post('/tg/platform', async (ctx) => {
     if (!safeEqual(ctx.req.headers['x-telegram-bot-api-secret-token'] || '', platformBot.secret())) return ctx.send(401, 'no');
     const u = parse(ctx);
-    if (u) await platformBot.handleUpdate(u);
+    // Answer Telegram quickly: it waits for our 200 before sending the next update, and counts slow answers as errors
+    // (getWebhookInfo last_error_message). handleUpdate never throws; a slow one finishes after the answer.
+    if (u) await Promise.race([platformBot.handleUpdate(u), new Promise((res) => setTimeout(res, 8000).unref())]);
     ctx.send(200, 'ok');
   }, { raw: true, limit: 512 * 1024 });
 

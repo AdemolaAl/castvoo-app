@@ -62,7 +62,7 @@ PAGES.overview = {
     const st = s.stats;
     const hr = new Date().getHours();
     const greet = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
-    const first = (u.name || '').split(' ')[0];
+    const first = greetName();
     const nConn = s.connections.length;
     const line = !nConn ? 'Let\'s connect your Telegram first. It takes about a minute, and then Castvoo can start welcoming people for you.'
       : st.new_subscribers_24h ? plural(st.new_subscribers_24h, 'new subscriber') + ' in the last 24 hours' + (s.sending ? ', and a message is sending right now.' : '.')
@@ -72,11 +72,12 @@ PAGES.overview = {
     const aiOn = CFG.ai_available && CFG.features.ai !== false;
     const series = st.series || [];
     el.innerHTML = '<div class="box hello"><div class="mesh" style="width:360px;height:360px;right:10%;top:-60%;background:rgba(110,195,255,.5)"></div>' +
-      '<div style="display:flex;flex-direction:column;gap:12px;min-width:0;padding-bottom:4px"><div class="who">' + ava(u.name || u.email || '?', 44) + '<small>' + (nConn ? '<span class="dl" style="margin-right:6px"></span>' + plural(nConn, 'Telegram connection') + ' · ' + esc(s.workspace.name) : esc(s.workspace.name)) + '</small></div>' +
+      '<div style="display:flex;flex-direction:column;gap:12px;min-width:0;padding-bottom:4px"><div class="who">' + (u.avatar ? '' : ava(u.name || u.email || '?', 44)) + '<small>' + (nConn ? '<span class="dl" style="margin-right:6px"></span>' + plural(nConn, 'Telegram connection') + ' · ' + esc(s.workspace.name) : esc(s.workspace.name)) + '</small></div>' +
       '<h2>' + greet + (first ? ', ' + esc(first) : '') + ' 👋</h2><p>' + esc(line) + '</p>' +
       (aiOn && nConn ? '<div class="qchips"><button type="button" data-go="ai" data-q="ask=' + encodeURIComponent('How did my last broadcast do?') + '">How did my last message do?</button><button type="button" data-go="ai" data-q="ask=' + encodeURIComponent('What should I send next?') + '">What should I send next?</button></div>' : '') +
       '<div class="acts">' + (nConn ? (s.plan.welcome_only ? '<button type="button" class="btn b-w" data-go="flows">' + icon('join') + 'Welcome Flows</button>' : '<button type="button" class="btn b-w" data-go="broadcast">' + icon('send') + 'Send a message</button>') + '<button type="button" class="btn b-g" data-connect>' + icon('plus') + 'Connect</button>' : '<button type="button" class="btn b-w" data-connect>' + icon('plus') + 'Connect Telegram</button>') + '<button type="button" class="btn b-g" data-go="guides">' + icon('play') + 'Video guides</button></div></div>' +
-      '<div class="hart" data-cas="wave"></div></div>' +
+      (u.avatar ? '<button type="button" class="hav" data-avatar-edit aria-label="Edit your avatar">' + AV.render(u.avatar, { size: 168, live: true, label: 'Your avatar' }) + '<span class="hav-ed" aria-hidden="true">' + icon('pencil') + '</span></button>' : '<div class="hart" data-cas="wave"></div>') + '</div>' +
+      (u.avatar ? '' : '<button type="button" class="avnudge" data-avatar-edit><span class="avn-f" aria-hidden="true">' + AV.render(AV.PRESETS[0], { size: 40 }) + AV.render(AV.PRESETS[1], { size: 40 }) + AV.render(AV.PRESETS[10], { size: 40 }) + '</span><span class="avn-t"><b>Make your Castvoo avatar</b><small>A cartoon face for your account, in a few taps</small></span><span class="go">Make it →</span></button>') +
       planBanner(s.plan) +
       connStrip(s.connections) +
       '<div class="dg">' +
@@ -105,14 +106,14 @@ PAGES.overview = {
       if (!alive()) return;
       const rows = (r.broadcasts || []).slice(0, 4);
       $('#ovRecent').innerHTML = rows.length ? '<div class="tw">' + castTable(rows, { compact: true }) + '</div>' : emptyBox({ plain: 1, emoji: '📨', title: 'No messages yet', text: 'Your first broadcast will appear here.', action: nConn ? '<button type="button" class="btn b-blue sm" data-go="broadcast">' + icon('send') + 'Send a message</button>' : '' });
-      wireCastTable($('#ovRecent'), () => renderPage('overview', {}));
+      wireCastTable($('#ovRecent'), () => renderPage('overview', {}, { keepScroll: true }));
     }).catch(() => { if (alive()) $('#ovRecent').innerHTML = '<p class="muted">Could not load messages.</p>'; });
     // While something is sending, check every 5 seconds.
     if (s.sending) {
       const iv = every(5000, async () => {
         const ns = await refreshState();
         if (!alive() || !ns) return;
-        $('#ovSend').innerHTML = sendingBox(ns.sending);
+        putHtml($('#ovSend'), sendingBox(ns.sending)); // only when the numbers changed
         if (!ns.sending) { clearInterval(iv); toast('Your message finished sending.'); }
       });
     }

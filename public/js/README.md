@@ -5,6 +5,7 @@ Plain JavaScript, no framework, no build step. `index.html` loads these classic 
 | File | What it holds |
 |---|---|
 | `core.js` | Helpers used everywhere: `$`, `$$`, `esc`, `fmt`, `money`, dates, `toast()`, `confetti()`, Cas the mascot (`cas()`), illustrated people for examples (`moji()`), initials avatars for real people (`ava()`), pop-ups (`sheet()`, `confirmBox()`, `closeModal()`), the setup guide player (`guide()`, `openGuide()`), the Gatevoo badge. |
+| `avatar.js` | `AV`: customer cartoon avatars (options, `render`, `random`, 24 presets, `greetName`). Also used by the server to check saved avatars. |
 | `api.js` | Talking to the server. `CFG` (site config from `/api/public/config`, with defaults), `ME` (who is logged in), `api()/GET()/POST()`, `apiErr()` (friendly error toasts, Wallet/Plan buttons for 402s), `upload()` for photos and videos, `WS` (which workspace). |
 | `qr.js` | `qrSvg(text)`: real QR codes for crypto addresses. |
 | `site.js` | The public website: texts, prices and FAQ from the config, example animations (always labelled "Example"), language switcher, help bubble. |
@@ -19,7 +20,9 @@ Plain JavaScript, no framework, no build step. `index.html` loads these classic 
 | `app-cas.js` | Ask Cas chat and Train Cas. |
 | `app-money.js` | Wallet and plan, top-up sheet (card, local methods, Gatevoo, manual crypto), Earn (referrals). |
 | `app-account.js` | Settings and Help (support chat). |
+| `app-avatar.js` | The avatar builder, the one-time "Make your Castvoo avatar" prompt, `myAva()` / `userAva()` / `greetName()`. |
 | `app-zedapex.js` | Joinvoo / Replyvoo pages and the "More from Zedapex" cards. |
+| `widget.js` | The floating support widget (launcher + chat panel) on the website and in the dashboard. |
 | `main.js` | Starts everything and routes by the address bar (`#…`). Loaded last. |
 
 Styles are in `css/castvoo.css` (the legal pages use `css/legal.css`).

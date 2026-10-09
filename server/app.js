@@ -120,12 +120,18 @@ async function serveStatic(ctx) {
     ctx.res.end(ctx.method === 'HEAD' ? undefined : body);
     return true;
   }
-  const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': st.size, 'Accept-Ranges': 'bytes', 'Last-Modified': st.mtime.toUTCString() };
+  // Never compressed (no Content-Encoding): Content-Length and the Range byte offsets are those of the file itself.
+  const etag = `"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
+  const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': st.size, 'Accept-Ranges': 'bytes', 'Last-Modified': st.mtime.toUTCString(), ETag: etag };
   if (ctx.query.v) headers['Cache-Control'] = 'public, max-age=31536000, immutable';
   else headers['Cache-Control'] = MEDIA_EXT.has(ext) ? 'public, max-age=86400' : 'public, max-age=300';
   if (ctx.cookieOut.length) headers['Set-Cookie'] = ctx.cookieOut;
   // Range requests ("bytes=0-1023", "bytes=500-", "bytes=-500"): one range, as video players ask for. 206 or 416.
-  const range = parseRange(ctx.req.headers.range, st.size);
+  // iPhones first ask for "bytes=0-1" and only play when that comes back as a 206 with the file's full size.
+  // If-Range (a player resuming a download): a range only while the file is unchanged, else the whole new file.
+  const ifRange = ctx.req.headers['if-range'];
+  const sameFile = !ifRange || ifRange === etag || ifRange === headers['Last-Modified'];
+  const range = sameFile ? parseRange(ctx.req.headers.range, st.size) : null;
   if (range === 'bad') {
     ctx.res.writeHead(416, { 'Content-Range': `bytes */${st.size}`, 'Accept-Ranges': 'bytes', 'Content-Type': 'text/plain; charset=utf-8' });
     ctx.res.end();
@@ -273,7 +279,7 @@ function createServer() {
       if (err instanceof HttpError) {
         if (err.extra && err.extra.retry_after) res.setHeader('Retry-After', err.extra.retry_after);
         if (!ctx.path.startsWith('/api/') && req.method === 'GET' && err.status !== 401) {
-          return ctx.html(err.status, `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Castvoo</title><body style="font-family:system-ui;padding:40px;text-align:center;color:#0B1430"><h2>${escHtml(err.message)}</h2><p><a href="/" style="color:#2F6BFF">Back to Castvoo</a></p>`);
+          return ctx.html(err.status, `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"><title>Castvoo</title><body style="font-family:system-ui;padding:40px;text-align:center;color:#0B1430"><h2>${escHtml(err.message)}</h2><p><a href="/" style="color:#2F6BFF">Back to Castvoo</a></p>`);
         }
         return sendJson(res, err.status, { error: err.message, code: err.code, ...(err.extra || {}) });
       }

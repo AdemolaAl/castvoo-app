@@ -174,6 +174,7 @@ const WS_ROUTES = {
   'POST /api/referrals/use': 'ws.earnings',
   'POST /api/referrals/withdraw': 'ws.earnings',
   'GET /api/support': 'ws.support',
+  'GET /api/support/unread': 'ws.support',
   'POST /api/support': 'ws.support',
   'POST /api/support/attachments': 'ws.support',
 };

@@ -24,31 +24,38 @@ function linkTelegram(onLinked) {
   if (!CFG.bot_username) { toast('Telegram linking is being switched on. Please check back soon.', { kind: 'info' }); return; }
   const h = sheet('Link your Telegram', '<svg width="36" height="36" style="flex:none"><use href="#i-tg"/></svg>',
     '<p class="muted" style="font-size:15px;margin-top:-6px">So Castvoo knows which channels and groups are yours, and can send you test messages.</p>' +
-    '<div class="cst"><div class="cs"><span class="n">1</span><span class="tx"><b>Tap "Open Telegram"</b><small>It opens @' + esc(CFG.bot_username) + '.</small></span></div><div class="cs"><span class="n">2</span><span class="tx"><b>Tap Start</b><small>That\'s it. Come back here, it updates by itself.</small></span></div></div>' +
+    '<div class="cst"><div class="cs"><span class="n">1</span><span class="tx"><b>Tap "Open Telegram"</b><small>It opens @' + esc(CFG.bot_username) + '.</small></span></div><div class="cs"><span class="n">2</span><span class="tx"><b>Tap Start, then "Yes, link it"</b><small>Come back here, it updates by itself.</small></span></div></div>' +
     '<div id="lkBox">' + loadingBox('Getting your link…') + '</div>');
-  let stop = false; onModalClose = () => { stop = true; };
+  // Coming back from Telegram (iPhones pause timers in the background): check at once instead of waiting for the next poll.
+  const onBack = () => { if (!document.hidden) poll(); };
+  let stop = false; onModalClose = () => { stop = true; document.removeEventListener('visibilitychange', onBack); };
+  let t0 = 0, pollT = null, polling = false;
+  const poll = async () => {
+    if (stop || !t0 || polling) return;
+    polling = true; clearTimeout(pollT);
+    try {
+      const me = await GET('/api/me');
+      if (!stop && me.user && me.user.tg_linked) {
+        ME = me; stop = true; onModalClose = null; document.removeEventListener('visibilitychange', onBack); closeModal();
+        toast('Telegram linked' + (me.user.tg_username ? ' as @' + me.user.tg_username : '') + '.'); confetti();
+        if (onLinked) onLinked();
+        return;
+      }
+    } catch (_) { /* keep trying */ } finally { polling = false; }
+    if (stop) return;
+    // The link works for 30 minutes (POST /api/me/telegram-link).
+    if (Date.now() - t0 < 30 * 60000) pollT = setTimeout(poll, 3000);
+    else if ($('#lkWait')) $('#lkWait').innerHTML = '<p class="ferr">The link expired. Close this and try again.</p>';
+  };
+  document.addEventListener('visibilitychange', onBack);
   POST('/api/me/telegram-link').then((r) => {
     if (stop || !$('#lkBox')) return;
     $('#lkBox').innerHTML = '<a class="btn b-blue full" id="lkGo" href="' + esc(r.url) + '" target="_blank" rel="noopener">' + icon('tg') + 'Open Telegram</a><div id="lkWait"></div>';
     $('#lkGo').onclick = () => {
-      $('#lkWait').innerHTML = '<div class="wait" style="margin-top:12px"><span class="rad"><i></i><i></i><svg><use href="#i-tg"/></svg></span><span><b>Waiting for you to tap Start…</b><br><small class="muted">This updates by itself.</small></span></div>';
+      $('#lkWait').innerHTML = '<div class="wait" style="margin-top:12px"><span class="rad"><i></i><i></i><svg><use href="#i-tg"/></svg></span><span><b>Waiting for you to tap Start…</b><br><small class="muted">This updates by itself. The bot answers with a "Yes, link it" button. No answer after a minute? <a href="#app/help">Chat with us</a>.</small></span></div>';
     };
-    const t0 = Date.now();
-    const poll = async () => {
-      if (stop) return;
-      try {
-        const me = await GET('/api/me');
-        if (me.user && me.user.tg_linked) {
-          ME = me; stop = true; onModalClose = null; closeModal();
-          toast('Telegram linked' + (me.user.tg_username ? ' as @' + me.user.tg_username : '') + '.'); confetti();
-          if (onLinked) onLinked();
-          return;
-        }
-      } catch (_) { /* keep trying */ }
-      if (Date.now() - t0 < 15 * 60000) setTimeout(poll, 3000);
-      else if ($('#lkWait')) $('#lkWait').innerHTML = '<p class="ferr">The link expired. Close this and try again.</p>';
-    };
-    setTimeout(poll, 3000);
+    t0 = Date.now();
+    pollT = setTimeout(poll, 3000);
   }).catch((e) => { if ($('#lkBox')) $('#lkBox').innerHTML = '<p class="ferr">' + esc(e.message) + '</p>'; });
 }
 
@@ -110,7 +117,28 @@ function openConnect(type, opts = {}) {
       '<div class="cs"><span class="n">3</span><span class="tx"><b>' + (word === 'channel' ? 'Switch on "Post messages"' : 'Make it an admin') + '</b><small>' + (word === 'channel' ? 'Castvoo needs it to post for you.' : 'Needed to pin and delete messages.') + ' Then come back here. It connects by itself within a minute.</small></span></div>' +
     '</div></details>' + back);
   wireBack(h, 3);
-  let stop = false; onModalClose = () => { stop = true; };
+  // Coming back from Telegram (iPhones pause timers in the background): check at once instead of waiting for the next poll.
+  const onBack = () => { if (!document.hidden) poll(); };
+  let stop = false; onModalClose = () => { stop = true; document.removeEventListener('visibilitychange', onBack); };
+  let t0 = 0, pollT = null, polling = false;
+  const poll = async () => {
+    if (stop || !t0 || polling) return;
+    polling = true; clearTimeout(pollT);
+    try {
+      const me = await GET('/api/me');
+      if (!stop && me.user && me.user.tg_linked) {
+        ME = me; stop = true; onModalClose = null; document.removeEventListener('visibilitychange', onBack); closeModal();
+        toast('Telegram linked' + (me.user.tg_username ? ' as @' + me.user.tg_username : '') + '.'); confetti();
+        if (onLinked) onLinked();
+        return;
+      }
+    } catch (_) { /* keep trying */ } finally { polling = false; }
+    if (stop) return;
+    // The link works for 30 minutes (POST /api/me/telegram-link).
+    if (Date.now() - t0 < 30 * 60000) pollT = setTimeout(poll, 3000);
+    else if ($('#lkWait')) $('#lkWait').innerHTML = '<p class="ferr">The link expired. Close this and try again.</p>';
+  };
+  document.addEventListener('visibilitychange', onBack);
   const before = new Set(APP.state.connections.map((c) => c.id));
   POST('/api/connections/request', { kind: word }).then((r) => {
     if (stop || !$('#cnReq')) return;
@@ -148,7 +176,7 @@ async function connected(c, opts = {}) {
   $('#okS', h).onclick = () => { closeModal(); COMP.conn = conn.id; appGo('broadcast'); };
   const d = $('#okD', h); if (d) d.onclick = () => { closeModal(); appGo('drips', { new: '1' }); };
   $('#okA', h).onclick = () => openConnect('');
-  if (!$('#v-app').hidden && (APP.page === 'bots' || APP.page === 'overview')) renderPage(APP.page, APP.q);
+  if (!$('#v-app').hidden && (APP.page === 'bots' || APP.page === 'overview')) renderPage(APP.page, APP.q, { keepScroll: true });
 }
 
 /* ---------- Channels & bots page ---------- */
@@ -173,12 +201,12 @@ PAGES.bots = {
           '<div class="cact">' + (c.kind === 'bot' ? '<a class="btn b-ghost xs" href="https://t.me/' + esc(c.username) + '" target="_blank" rel="noopener">' + icon('ext') + 'Open</a><button type="button" class="btn b-ghost xs" data-copy="https://t.me/' + esc(c.username) + '" data-msg="Bot link copied">' + icon('copy') + 'Copy link</button>' : '') + (ok ? '<button type="button" class="btn b-ghost xs" data-go="broadcast" data-q="conn=' + c.id + '">' + icon('send') + 'Send</button>' : '') + (owner ? '<button type="button" class="btn b-ghost xs danger" data-rm="' + c.id + '">' + icon('trash') + 'Remove</button>' : '') + '</div></div>';
       }).join('') + '</div>' : emptyBox({ cas: 'wave', title: 'Nothing connected yet', text: 'Pick a channel, group or bot above. It takes about a minute.' })) +
       '<div id="slWrap"></div>';
-    const lk = $('#bLk'); if (lk) lk.onclick = () => linkTelegram(() => renderPage('bots', {}));
+    const lk = $('#bLk'); if (lk) lk.onclick = () => linkTelegram(() => renderPage('bots', {}, { keepScroll: true }));
     el.addEventListener('click', async (e) => {
       const rm = e.target.closest('[data-rm]'); if (!rm) return;
       const c = d.connections.find((x) => x.id === +rm.dataset.rm);
       if (!(await confirmBox('Remove ' + connName(c) + '?', c.kind === 'bot' ? 'Castvoo stops sending from this bot and its follow-ups stop. Its subscriber list stays until you delete your data.' : 'Castvoo stops posting here. You can connect it again later.', 'Remove', true))) return;
-      try { await api('DELETE', '/api/connections/' + c.id); toast('Removed.'); await refreshState(); renderPage('bots', {}); } catch (ex) { apiErr(ex); }
+      try { await api('DELETE', '/api/connections/' + c.id); toast('Removed.'); await refreshState(); renderPage('bots', {}, { keepScroll: true }); } catch (ex) { apiErr(ex); }
     });
     const bots = d.connections.filter((c) => c.kind === 'bot');
     if (bots.length && CFG.features.start_links !== false) startLinks($('#slWrap'), bots, alive);

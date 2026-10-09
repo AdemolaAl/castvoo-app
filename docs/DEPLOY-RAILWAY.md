@@ -128,6 +128,30 @@ When you outgrow one service:
 |---|---|
 | Service won't start | Deploy logs: a `setup problem` line says which variable is missing |
 | Login codes don't arrive | `RESEND_API_KEY`, and the sending domain verified in Resend. Admin → Settings → Test email |
-| Channels won't connect | `CASTVOO_BOT_TOKEN`; Admin → System → Platform bot webhook shows the last Telegram error |
+| Channels won't connect | `CASTVOO_BOT_TOKEN`; Admin → Settings & connections → **Castvoo bot** card shows the webhook and Telegram's last error |
+| Castvoo bot doesn't answer Start | See [Castvoo bot not answering](#castvoo-bot-not-answering) below |
 | Payments stay "pending" | The webhook URL in Paystack/Flutterwave/Gatevoo; Admin → Payments → Recheck |
 | Messages queue up | Admin → System → queue per bot; a bot whose token was revoked shows in "Broken connections" |
+
+### Castvoo bot not answering
+Symptom: on "Link your Telegram" (or "Add a channel") people tap **Start** in @CastvooBot and nothing comes back, or an
+answer comes that Castvoo never writes (for example "welcome to our bot").
+
+Cause: **only one program may use a bot token.** Telegram sends a bot's updates to ONE place: the last webhook someone
+set, or whoever calls `getUpdates`. If an old test bot, a bot builder, a second Railway environment or a script on your
+laptop uses the same token as `CASTVOO_BOT_TOKEN`, Telegram sends the taps there and Castvoo never sees them.
+
+Fix:
+1. Stop the other program (or give it its own bot from @BotFather). If you are not sure what uses the token, revoke it
+   in @BotFather (`/revoke`), put the new token in `CASTVOO_BOT_TOKEN`, and let Railway restart Castvoo.
+2. `CASTVOO_BOT_TOKEN` and `CASTVOO_BOT_USERNAME` must belong to the **same** bot. Castvoo asks Telegram (`getMe`) for
+   the real username and uses it for every link, and the card warns when the two don't match.
+3. `APP_URL` must be exactly `https://castvoo.com` (no trailing slash, no `www`, https). The webhook is `APP_URL/tg/platform`.
+4. Admin → Settings & connections → **Castvoo bot**: check the bot name, the webhook address ("Right address"), updates
+   waiting and Telegram's last error, press **Fix webhook**, then **Send test message to me** (your own Telegram must be
+   linked). By hand: `https://api.telegram.org/bot<TOKEN>/getWebhookInfo` shows the same.
+
+Castvoo heals itself: at start-up and every 10 minutes it calls `getWebhookInfo` and, if the address is wrong or Telegram
+reports a new delivery error, sets the webhook again and writes a `platform bot webhook was wrong` warning to the deploy
+logs with Telegram's `last_error_message` and `pending_update_count`. If that warning keeps coming back every 10 minutes,
+another program is still using the token (two programs fighting over it): do step 1.

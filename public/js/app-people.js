@@ -137,14 +137,14 @@ PAGES.audiences = {
         const bad = SEGR.find((r) => !ruleOk(r));
         if (bad) { err.textContent = fields[bad.field].type === 'number' ? 'Days must be between 1 and 365.' : 'Fill in "' + fields[bad.field].label + '".'; err.hidden = false; return; }
         await busy(e.currentTarget, 'Saving…', async () => {
-          try { await POST('/api/segments', { name, rules: SEGR }); SEGR = []; toast('Audience saved.'); renderPage('audiences', {}); } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+          try { await POST('/api/segments', { name, rules: SEGR }); SEGR = []; toast('Audience saved.'); renderPage('audiences', {}, { keepScroll: true }); } catch (ex) { err.textContent = ex.message; err.hidden = false; }
         });
       };
       draw();
     }
     el.addEventListener('click', async (e) => {
       const del = e.target.closest('[data-sdel]');
-      if (del) { if (!(await confirmBox('Delete this audience?', 'Messages already sent are not affected.', 'Delete', true))) return; try { await api('DELETE', '/api/segments/' + del.dataset.sdel); toast('Deleted.'); renderPage('audiences', {}); } catch (ex) { apiErr(ex); } return; }
+      if (del) { if (!(await confirmBox('Delete this audience?', 'Messages already sent are not affected.', 'Delete', true))) return; try { await api('DELETE', '/api/segments/' + del.dataset.sdel); toast('Deleted.'); renderPage('audiences', {}, { keepScroll: true }); } catch (ex) { apiErr(ex); } return; }
       const go = e.target.closest('[data-sgo]');
       if (go) { const b = firstBot(); if (b && !APP.state.connections.some((c) => c.id === COMP.conn && c.kind === 'bot')) COMP.conn = b.id; COMP.seg = go.dataset.sgo; appGo('broadcast'); }
     });

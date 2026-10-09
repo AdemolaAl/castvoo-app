@@ -121,6 +121,9 @@ const ROUTES = [
   ['GET', '/api/admin/audit', 'audit.view'],
   ['GET', '/api/admin/system', 'system.view'],
   ['POST', '/api/admin/integrations/nope/test', 'system.view', {}],
+  ['GET', '/api/admin/platform-bot', 'system.view'],
+  ['POST', '/api/admin/platform-bot/fix', 'settings.edit', {}],
+  ['POST', '/api/admin/platform-bot/test', 'system.view', {}],
 ];
 
 describe('admin permissions', () => {
@@ -385,7 +388,8 @@ describe('admin screens', () => {
     assert.ok(o.body.users.total > 5);
     const s = await staff.admin.get('/api/admin/system');
     assert.equal(s.status, 200, s.text);
-    assert.equal(s.body.platform_bot.url, 'https://example/tg');
+    // The permissions matrix pressed "Fix webhook" already, so the fake Telegram has our address by now.
+    assert.ok(['https://example/tg', app.url + '/tg/platform'].includes(s.body.platform_bot.url), s.body.platform_bot.url);
     assert.deepEqual(s.body.problems, []);
   });
 

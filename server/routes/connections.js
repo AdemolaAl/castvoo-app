@@ -47,8 +47,9 @@ module.exports = (r) => {
   /** Link Telegram via t.me/CastvooBot?start=link_<token> (works on phones, no widget needed). */
   r.post('/api/me/telegram-link', async (ctx) => {
     if (!config.telegram.botUsername) throw httpError(503, 'Telegram linking is not set up yet.', 'not_configured');
+    // 24 characters of [A-Za-z0-9_-]: "link_<token>" stays inside Telegram's start payload rules (64 characters, that set).
     const token = randomToken(18).replace(/[^A-Za-z0-9_-]/g, '');
-    await db.query("insert into tg_link_tokens(token, user_id, expires_at) values ($1,$2, now() + interval '15 minutes')", [token, ctx.user.id]);
+    await db.query("insert into tg_link_tokens(token, user_id, expires_at) values ($1,$2, now() + interval '30 minutes')", [token, ctx.user.id]);
     return { url: `https://t.me/${config.telegram.botUsername}?start=link_${token}` };
   }, { auth: 'user', rate: [20, 600] });
 

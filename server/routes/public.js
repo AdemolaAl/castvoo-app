@@ -5,6 +5,13 @@ const db = require('../db');
 const config = require('../config');
 const settings = require('../services/settings');
 
+/** The faces on the floating support widget: the first active agents, when the AI support team is on. */
+async function supportTeam() {
+  const sa = require('../services/support-ai');
+  if (!(await sa.isOn())) return [];
+  return (await sa.personas({ activeOnly: true })).slice(0, 4).map(sa.publicPersona);
+}
+
 async function siteAgent() {
   const p = await db.one('select id, name, role, updated_at from support_personas where active order by sort, id limit 1');
   return p ? require('../services/support-ai').publicPersona(p) : null;
@@ -53,6 +60,7 @@ async function publicConfig() {
     company: { name: s.company.name, address: s.company.address },
     ai_available: f.ai && integ.ai,
     // The website chat bubble (visitors; knowledge only, no account access) and the face that answers there.
+    support_team: f.support_chat ? await supportTeam() : [],
     site_chat: f.site_chat && f.support_chat && integ.ai ? { agent: await siteAgent(), powered_by: await poweredBy() } : null,
     // VooSquare (Voo Connect): login button, "Part of VooSquare" links, support widget on the public website.
     voo: integ.voo_connect ? {

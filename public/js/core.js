@@ -82,6 +82,15 @@ const store = {
 };
 
 /* Toast. opts: { kind: 'ok' | 'err' | 'info', action: { label, onClick } , ms } */
+/* iPhone: a field that still has focus when its screen goes away keeps the keyboard up (and Safari's focus zoom) on
+   the next screen. Called after log-in and on every sign-up step and view change. */
+function dropFocus() {
+  try {
+    const a = document.activeElement;
+    if (a && a !== document.body && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable) && a.blur) a.blur();
+  } catch (_) { /* nothing focused */ }
+}
+
 function toast(text, opts = {}) {
   $$('.toast').forEach((x) => x.remove());
   const d = document.createElement('div');

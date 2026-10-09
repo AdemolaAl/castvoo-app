@@ -35,7 +35,7 @@ const linkTag = (s) => `${s.user.id}.${hmac(config.appSecret, 'voolink:' + s.use
 const SNIPPET = (() => { try { return fs.readFileSync(require.resolve('../../voo-connect/voo-connect-browser.js')); } catch { return Buffer.from(''); } })();
 
 function page(ctx, status, title, body) {
-  ctx.html(status, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(title)} · Castvoo</title><link rel="icon" href="/img/favicon.svg"></head>
+  ctx.html(status, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"><title>${escHtml(title)} · Castvoo</title><link rel="icon" href="/img/favicon.svg"></head>
 <body style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#F6F8FC;color:#0B1430;padding:24px;box-sizing:border-box">
 <main style="max-width:440px;width:100%;background:#fff;border:1px solid #E3E8F2;border-radius:20px;padding:32px 28px;text-align:center;box-shadow:0 18px 40px -24px rgba(11,20,48,.35)">${body}</main></body></html>`);
 }
@@ -118,7 +118,7 @@ module.exports = (r) => {
   r.get('/logout', async (ctx) => {
     const site = String(ctx.req.headers['sec-fetch-site'] || '');
     if (site && site !== 'same-origin' && site !== 'none') {
-      return ctx.html(200, '<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Log out · Castvoo</title>'
+      return ctx.html(200, '<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"><title>Log out · Castvoo</title>'
         + '<body style="font-family:system-ui;padding:40px;text-align:center;color:#0B1430"><h2>Log out of Castvoo?</h2>'
         + '<form method="post" action="/logout"><button type="submit" style="font:inherit;padding:10px 22px;border-radius:10px;border:0;background:#2F6BFF;color:#fff;cursor:pointer">Log out</button></form>'
         + '<p><a href="/#app" style="color:#2F6BFF">Back to Castvoo</a></p>');

@@ -13,6 +13,7 @@ function suStopGuide() { if (SU.guide) { SU.guide.stop(); SU.guide = null; } }
 /* Called by main.js for every #signup... / #login route. */
 async function signupRoute(sub, q) {
   suStopGuide();
+  dropFocus();
   const logged = !!(ME && ME.user);
   if (!sub || sub === 'login') {
     if (logged) { location.replace('#app'); return; }
@@ -29,6 +30,7 @@ async function signupRoute(sub, q) {
 
 /* Where to go after a successful log-in. */
 async function afterLogin(created) {
+  dropFocus();
   await loadMe();
   siteAuthUI();
   const join = store.sget('cv_join');
@@ -336,6 +338,7 @@ function suPlan() {
   window.scrollTo(0, 0);
 }
 function finishSignup(msg) {
+  dropFocus();
   location.hash = '#app';
   setTimeout(() => { confetti(); toast(msg ? 'Welcome to Castvoo. ' + msg : 'Welcome to Castvoo. Your free trial is live.'); }, 300);
 }

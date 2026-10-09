@@ -27,7 +27,7 @@ module.exports = (r) => {
     params.push((page - 1) * 50);
     // Total spent = money this person really paid us (confirmed top-ups) minus refunds we sent back.
     const order = q.sort === 'spent' ? 'spent_cents desc, u.id desc' : 'u.id desc';
-    const rows = await db.many(`select * from (select u.id, u.name, u.email, u.tg_username, u.country, u.status, u.staff_role, u.created_at, u.last_login_at,
+    const rows = await db.many(`select * from (select u.id, u.name, u.nickname, u.avatar, u.email, u.tg_username, u.country, u.status, u.staff_role, u.created_at, u.last_login_at,
         w.id as workspace_id, w.name as workspace_name, w.plan_code, w.plan_status, (w.plan_code is not null and ${FREE_OF_W}) as plan_free, w.trial_ends_at, w.period_end, w.wallet_cents, w.bonus_cents,
         (select count(*)::int from connections c where c.workspace_id = w.id and c.status <> 'removed') as connections,
         (select coalesce(sum(p.amount_cents), 0) from payments p where p.user_id = u.id and p.status = 'paid')
@@ -38,7 +38,7 @@ module.exports = (r) => {
 
   r.get('/api/admin/users/:id', async (ctx) => {
     const id = int(ctx.params.id, 'User');
-    const user = await db.one('select id, name, email, email_verified, tg_user_id, tg_username, voo_id, country, staff_role, status, ref_code, referred_by, marketing_opt_out, created_at, last_login_at from users where id = $1', [id]);
+    const user = await db.one('select id, name, nickname, avatar, email, email_verified, tg_user_id, tg_username, voo_id, country, staff_role, status, ref_code, referred_by, marketing_opt_out, created_at, last_login_at from users where id = $1', [id]);
     if (!user) throw notFound('That user');
     const workspaces = await db.many(`select w.*, m.role, ${FREE_OF_W} as plan_free from workspaces w join members m on m.workspace_id = w.id where m.user_id = $1 order by w.id`, [id]);
     const wsIds = workspaces.map((w) => w.id);

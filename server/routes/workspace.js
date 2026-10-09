@@ -140,9 +140,9 @@ module.exports = (r) => {
   r.get('/api/app/team', async (ctx) => {
     const ws = ctx.workspace;
     const owner = ctx.member.role === 'owner';
-    const rows = await db.many('select u.id, u.name, u.email, u.tg_username, m.role, m.created_at as joined_at, m.last_active_at from members m join users u on u.id = m.user_id where m.workspace_id = $1 order by m.created_at', [ws.id]);
+    const rows = await db.many('select u.id, u.name, u.email, u.tg_username, u.nickname, u.avatar, m.role, m.created_at as joined_at, m.last_active_at from members m join users u on u.id = m.user_id where m.workspace_id = $1 order by m.created_at', [ws.id]);
     // A setup helper sees who is on the team, not their logins (emails partly hidden, no Telegram usernames).
-    const members = rows.map((m) => (owner || m.id === ctx.user.id ? m : { id: m.id, name: m.name, email: maskEmail(m.email), tg_username: null, role: m.role, joined_at: m.joined_at }));
+    const members = rows.map((m) => (owner || m.id === ctx.user.id ? m : { id: m.id, name: m.name, email: maskEmail(m.email), tg_username: null, nickname: m.nickname, avatar: m.avatar, role: m.role, joined_at: m.joined_at }));
     const invites = owner ? await db.many("select email, role, kind, expires_at from invites where workspace_id = $1 and role <> 'helper' and accepted_at is null and declined_at is null and expires_at > now() order by created_at desc", [ws.id]) : [];
     const h = rows.find((m) => m.role === 'helper') || null;
     const pend = owner && !h ? await helper.pendingInvite(ws.id) : null;
@@ -152,7 +152,7 @@ module.exports = (r) => {
       extra_seats: await billing.seatsInfo(ws),
       helper: {
         included: 1,
-        member: h ? { id: h.id, name: h.name, email: owner ? h.email : maskEmail(h.email), tg_username: owner ? h.tg_username : null, joined_at: h.joined_at, last_active_at: h.last_active_at } : null,
+        member: h ? { id: h.id, name: h.name, nickname: h.nickname, avatar: h.avatar, email: owner ? h.email : maskEmail(h.email), tg_username: owner ? h.tg_username : null, joined_at: h.joined_at, last_active_at: h.last_active_at } : null,
         invite: pend ? { kind: pend.kind, email: pend.email, expires_at: pend.expires_at, link: `${config.appUrl}/#join/${pend.token}` } : null,
         settings: { billing: !!ws.helper_billing, send: ws.helper_send !== false },
         activity: owner && h ? await helperLog.list(ws.id, { limit: 30 }) : [],
