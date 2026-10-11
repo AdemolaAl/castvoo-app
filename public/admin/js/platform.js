@@ -7,7 +7,7 @@
   // Which connection each switch depends on. any: one of them is enough.
   const NEEDS = {
     login_email: { all: ['email'] }, login_telegram: { all: ['telegram'] }, login_voosquare: { all: ['voosquare_login'] },
-    ai: { all: ['ai'] }, sales_emails: { all: ['email'] }, topups: { any: ['paystack', 'flutterwave', 'gatevoo'], soft: 'Crypto by hand still works without them.' },
+    ai: { all: ['ai'] }, sales_emails: { all: ['email'] }, topups: { any: ['flutterwave', 'gatevoo'], soft: 'Crypto by hand still works without them.' },
     crypto: { any: ['gatevoo'], soft: 'Without Gatevoo, customers pay to the manual addresses in Settings.' },
   };
   const GROUP_IC = { Accounts: ['users', '#29A9EB'], Sending: ['send', '#2F6BFF'], AI: ['spark', '#A855F7'], Money: ['wallet', '#0E9F6E'], Support: ['chat', '#7B5CF5'], Emails: ['mail', '#F97316'], Platform: ['cpu', '#334155'] };
@@ -55,8 +55,8 @@
     { key: 'telegram', name: 'Telegram bot', ic: 'send', c: '#29A9EB', env: ['CASTVOO_BOT_TOKEN', 'CASTVOO_BOT_USERNAME'], test: 'telegram', about: 'The Castvoo bot that logs people in and joins their channels and groups. Make it with @BotFather. Press Test to set its webhook.' },
     { key: 'email', name: 'Email (Resend)', ic: 'mail', c: '#111827', env: ['RESEND_API_KEY', 'EMAIL_FROM'], test: 'email', about: 'Sends login codes, receipts and every other email. Verify your domain in Resend first. Without it, emails are only written to the server log.' },
     { key: 'ai', name: 'Cas AI', ic: 'spark', c: '#A855F7', env: ['ANTHROPIC_API_KEY', 'AI_PROVIDER', 'OPENROUTER_API_KEY', 'OPENROUTER_MODEL'], test: 'ai', about: 'Lets Cas write messages, answer questions and suggest support replies. Claude direct by default (ANTHROPIC_API_KEY). For OpenRouter set AI_PROVIDER=openrouter and OPENROUTER_API_KEY, or pick it in Cas AI.' },
-    { key: 'paystack', name: 'Paystack', ic: 'card', c: '#0BA4DB', env: ['PAYSTACK_SECRET_KEY'], test: 'paystack', urls: [['Webhook URL — paste in Paystack → Settings → API Keys & Webhooks', '/pay/paystack']], about: 'Card, bank transfer and mobile money in Nigeria, Ghana and South Africa.' },
-    { key: 'flutterwave', name: 'Flutterwave', ic: 'card', c: '#F5A623', env: ['FLW_SECRET_KEY', 'FLW_WEBHOOK_HASH'], test: 'flutterwave', urls: [['Webhook URL — paste in Flutterwave → Settings → Webhooks (use the same secret hash as FLW_WEBHOOK_HASH)', '/pay/flutterwave']], about: 'Cards everywhere, M-Pesa in Kenya, MTN and Orange money in Cameroon.' },
+    { key: 'paystack', name: 'Paystack (old payments only)', ic: 'card', c: '#0BA4DB', env: ['PAYSTACK_SECRET_KEY'], test: 'paystack', urls: [['Webhook URL — keep it in Paystack while old payments may still arrive', '/pay/paystack']], about: 'No longer offered to customers: Nigeria, Ghana and South Africa now pay through Flutterwave. Keep the key only so old Paystack payments can still be checked; remove it when none are pending.' },
+    { key: 'flutterwave', name: 'Flutterwave', ic: 'card', c: '#F5A623', env: ['FLW_SECRET_KEY', 'FLW_WEBHOOK_HASH'], test: 'flutterwave', urls: [['Webhook URL — paste in Flutterwave → Settings → Webhooks (use the same secret hash as FLW_WEBHOOK_HASH)', '/pay/flutterwave']], about: 'Cards everywhere; bank transfer and USSD in Nigeria; mobile money in Ghana; M-Pesa in Kenya; MTN and Orange money in Cameroon.' },
     { key: 'gatevoo', name: 'Gatevoo', ic: 'wallet', c: '#111111', gv: true, env: ['GATEVOO_URL', 'GATEVOO_KEY', 'GATEVOO_WEBHOOK_SECRET'], test: 'gatevoo', urls: [['Webhook URL — paste in Gatevoo → Connect', '/pay/gatevoo']], about: 'Our own crypto checkout for USDT and Bitcoin. Payments are confirmed automatically.' },
     { key: 'voosquare', name: 'VooSquare', ic: 'home', c: '#5B3DF5', status: (i) => i.voosquare_login && i.voosquare_api, partial: (i) => i.voosquare_login || i.voosquare_api, env: ['VOO_BASE', 'VOO_CLIENT_ID', 'VOO_CLIENT_SECRET', 'VOO_API_KEY'], urls: [['Redirect URI — paste in VooSquare → Admin → Products → Castvoo', '/api/auth/voosquare/callback'], ['Support webhook — paste in VooSquare → Admin → Products → Castvoo', '/api/voosquare/support/webhook'], ['Summary URL — paste in VooSquare → Admin → Products → Castvoo', '/api/voosquare/summary']], about: 'Log in with a VooSquare account. Castvoo support chats also appear in the VooSquare HQ inbox, and replies written there come back here. Activity events feed the VooSquare dashboard.' },
   ];
@@ -171,16 +171,16 @@
           { name: 'inactive_free_days', label: 'Clear unused Free workspaces after (days)', type: 'number', min: 90, max: 3650, value: b.inactive_free_days ?? 365, hint: 'No owner login or visit, no join requests and no money in the wallet for this long. The owner is emailed 30 and 7 days before; logging in keeps everything. The legal pages say 12 months, so change them too if you change this.' },
         ])}
         ${sform('referral', 'Referral program', 'users', 'How much people earn for bringing paying customers.', [
-          { name: 'rate_1', label: 'Tier 1 share (%)', type: 'number', min: 0, max: 60, value: r.rates[0], hint: 'From the first paying referral.' },
+          { name: 'rate_1', label: 'Tier 1 share (%)', type: 'number', min: 0, max: 15, value: r.rates[0], hint: 'From the first paying referral. 5 to 15%, never above 15%.' },
           { name: 'tier2_min', label: 'Tier 2 starts at (paying referrals)', type: 'number', min: 2, value: r.tier2_min },
-          { name: 'rate_2', label: 'Tier 2 share (%)', type: 'number', min: 0, max: 60, value: r.rates[1] },
+          { name: 'rate_2', label: 'Tier 2 share (%)', type: 'number', min: 0, max: 15, value: r.rates[1] },
           { name: 'tier3_min', label: 'Tier 3 starts at (paying referrals)', type: 'number', min: 3, value: r.tier3_min },
-          { name: 'rate_3', label: 'Tier 3 share (%)', type: 'number', min: 0, max: 60, value: r.rates[2] },
+          { name: 'rate_3', label: 'Tier 3 share (%)', type: 'number', min: 0, max: 15, value: r.rates[2] },
           { name: 'settle_days', label: 'Earnings settle after (days)', type: 'number', min: 0, max: 120, value: r.settle_days, hint: 'Covers refunds and chargebacks.' },
           { name: 'min_withdraw', label: 'Smallest withdrawal', type: 'number', step: '0.01', prefix: '$', value: r.min_withdraw_cents / 100 },
           { name: 'cookie_days', label: 'Referral link remembered for (days)', type: 'number', min: 1, max: 365, value: r.cookie_days },
-          { name: 'commission_cap_pct', label: 'Highest commission on a payment (%)', type: 'number', min: 0, max: 50, value: r.commission_cap_pct ?? 50, hint: 'Never above 50%. Tier shares can not be higher than this.' },
-          { name: 'yearly_cap_pct', label: 'Highest commission on a yearly payment (%)', type: 'number', min: 0, max: 50, value: r.yearly_cap_pct ?? 35, hint: 'Never above the cap above.' },
+          { name: 'commission_cap_pct', label: 'Highest commission on a payment (%)', type: 'number', min: 0, max: 15, value: r.commission_cap_pct ?? 15, hint: 'Never above 15%. Tier shares can not be higher than this.' },
+          { name: 'yearly_cap_pct', label: 'Highest commission on a yearly payment (%)', type: 'number', min: 0, max: 15, value: r.yearly_cap_pct ?? 15, hint: 'Never above the cap above (15% at most).' },
           { name: 'first_attribution', label: 'When a Castvoo referral and a VooSquare affiliate both brought the customer', type: 'select', value: r.first_attribution === false ? 'false' : 'true', options: [{ value: 'true', label: 'The one that came first earns' }, { value: 'false', label: 'The Castvoo referral always earns' }] },
           { name: 'net_of_fees', label: 'Pay commission on the payment minus the processor fee (when the provider reports it)', type: 'checkbox', value: r.net_of_fees !== false },
         ])}

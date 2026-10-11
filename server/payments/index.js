@@ -1,7 +1,11 @@
 'use strict';
 /*
- * Wallet top-ups: automatic gateways (Paystack, Flutterwave, Gatevoo), manual USDT, and the team's own
+ * Wallet top-ups: automatic gateways (Flutterwave, Gatevoo), manual USDT, and the team's own
  * manual methods (bank transfer, mobile money, a crypto wallet... added in Admin → Countries & payments).
+ *
+ * PAYSTACK is no longer offered (October 2026, migration 022). No new Paystack top-up can start (start() refuses it),
+ * but old Paystack payments still verify: verifyPaystack(), the /pay/paystack webhook and recheck stay, so a pending
+ * or disputed Paystack reference is still checked with Paystack and credited (or charged back) correctly.
  *
  *   start()   creates a pending payment and returns what the customer does next
  *   credit()  marks a payment paid and adds the money to the wallet (safe to call twice)
@@ -32,7 +36,8 @@ const email = require('../services/email');
 const { randomToken, httpError, badRequest, fmtUSD, cents } = require('../lib/util');
 
 const localAmount = (usdCents, rate) => Math.round(usdCents * Number(rate)) / 100; // e.g. 1550.00 NGN per $1
-const FLW_OPTIONS = { flw_ke: 'card,mpesa', flw_cm: 'card,mobilemoneyfranco', flw_card: 'card' };
+// What Flutterwave's checkout offers for each method (payment_options). Nigeria, Ghana and South Africa replaced Paystack.
+const FLW_OPTIONS = { flw_ng: 'card,banktransfer,ussd', flw_gh: 'card,mobilemoneyghana', flw_za: 'card', flw_ke: 'card,mpesa', flw_cm: 'card,mobilemoneyfranco', flw_card: 'card' };
 
 async function start(ctx, { amount, methodKey }) {
   await settings.requireFeature('topups');
@@ -47,6 +52,7 @@ async function start(ctx, { amount, methodKey }) {
   const ref = 'cv_' + randomToken(12).replace(/[^A-Za-z0-9]/g, '').slice(0, 14);
   const base = { workspace_id: ctx.workspace.id, user_id: ctx.user.id, method_key: m.key, reference: ref, amount_cents: amountCents, bonus_cents: bonus };
 
+  if (m.provider === 'paystack') return retired();
   if (m.gatevoo) return GATEWAYS.gatevoo.start(ctx, m, base);
   if (GATEWAYS[m.provider]) return GATEWAYS[m.provider].start(ctx, m, base);
   if (m.provider === 'crypto' && m.key === 'usdt') return startUsdt(ctx, m, base);
@@ -56,34 +62,25 @@ async function start(ctx, { amount, methodKey }) {
 
 /* ---------- Automatic gateways: start ---------- */
 
+async function retired() { throw badRequest('Paystack is no longer available. Pick another payment method.', 'method_retired'); }
+
+/** Flutterwave checkout (card, bank transfer, USSD, mobile money, M-Pesa: FLW_OPTIONS). */
 async function startCard(ctx, m, base) {
   if (!ctx.user.email) throw httpError(409, 'Add your email in Settings first. The payment provider sends your receipt there.', 'email_needed');
   const ref = base.reference, ws = ctx.workspace, amountCents = base.amount_cents;
   const local = localAmount(amountCents, m.usd_rate);
   await insert({ ...base, provider: m.provider, currency: m.currency, amount_local: local });
   const returnUrl = `${config.appUrl}/pay/return?ref=${ref}`;
-  let url, ext;
-  if (m.provider === 'paystack') {
-    const r = await fetch(config.paystack.apiBase + '/transaction/initialize', {
-      method: 'POST', signal: AbortSignal.timeout(20000),
-      headers: { Authorization: 'Bearer ' + config.paystack.secretKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: ctx.user.email, amount: Math.round(local * 100), currency: m.currency, reference: ref, callback_url: returnUrl, metadata: { workspace_id: ws.id, usd: amountCents / 100 } }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.status) { await fail(ref, 'Paystack: ' + (j.message || r.status)); throw httpError(502, 'Paystack could not start the payment: ' + (j.message || 'please try again'), 'paystack_error'); }
-    url = j.data.authorization_url; ext = j.data.access_code;
-  } else {
-    const r = await fetch(config.flutterwave.apiBase + '/v3/payments', {
-      method: 'POST', signal: AbortSignal.timeout(20000),
-      headers: { Authorization: 'Bearer ' + config.flutterwave.secretKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tx_ref: ref, amount: local, currency: m.currency, redirect_url: returnUrl, payment_options: FLW_OPTIONS[m.key] || 'card',
-        customer: { email: ctx.user.email, name: ctx.user.name }, customizations: { title: 'Castvoo wallet top-up', description: `${fmtUSD(amountCents)} for your Castvoo wallet` }, meta: { workspace_id: ws.id } }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.status !== 'success') { await fail(ref, 'Flutterwave: ' + (j.message || r.status)); throw httpError(502, 'Flutterwave could not start the payment: ' + (j.message || 'please try again'), 'flutterwave_error'); }
-    url = j.data.link;
-  }
-  await db.query('update payments set checkout_url = $2, external_id = $3 where reference = $1', [ref, url, ext || null]);
+  const r = await fetch(config.flutterwave.apiBase + '/v3/payments', {
+    method: 'POST', signal: AbortSignal.timeout(20000),
+    headers: { Authorization: 'Bearer ' + config.flutterwave.secretKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tx_ref: ref, amount: local, currency: m.currency, redirect_url: returnUrl, payment_options: FLW_OPTIONS[m.key] || 'card',
+      customer: { email: ctx.user.email, name: ctx.user.name }, customizations: { title: 'Castvoo wallet top-up', description: `${fmtUSD(amountCents)} for your Castvoo wallet` }, meta: { workspace_id: ws.id } }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.status !== 'success') { await fail(ref, 'Flutterwave: ' + (j.message || r.status)); throw httpError(502, 'Flutterwave could not start the payment: ' + (j.message || 'please try again'), 'flutterwave_error'); }
+  const url = j.data.link;
+  await db.query('update payments set checkout_url = $2 where reference = $1', [ref, url]);
   return { kind: 'redirect', url, reference: ref, currency: m.currency, amount_local: local };
 }
 
@@ -357,7 +354,8 @@ function fingerprint(v) {
  * Keyed by payments.provider. Add a new gateway here (see the steps at the top of this file).
  */
 const GATEWAYS = {
-  paystack: { start: startCard, verify: (ref) => verifyPaystack(ref) },
+  // Retired: no new Paystack payment starts, but old references still verify (webhook, return page, recheck).
+  paystack: { start: retired, verify: (ref) => verifyPaystack(ref) },
   flutterwave: { start: startCard, verify: (ref, extra) => verifyFlutterwave(ref, extra.transaction_id) },
   gatevoo: { start: startGatevoo, verify: (ref) => verifyGatevoo(ref) },
 };

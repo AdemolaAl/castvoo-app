@@ -59,8 +59,12 @@ Admin → Cas AI shows the last 24 hours of tokens and cost.
 **Privacy.** The privacy page (`server/legal/privacy.html`) and `docs/PRODUCT-FACTS.md` name Anthropic as the AI
 sub-processor. Before you switch Cas to OpenRouter, add OpenRouter (and the model's maker) there.
 
-## Paystack (Nigeria, Ghana, South Africa)
-Paystack checkout is disabled by default. Enable **Admin → Features → Paystack payments** before offering it to customers.
+## Paystack (RETIRED: old payments only)
+Paystack is no longer a payment method (October 2026, migration 022): Nigeria, Ghana and South Africa pay through
+Flutterwave (`flw_ng` card, bank transfer, USSD; `flw_gh` card, mobile money; `flw_za` card). The Paystack method rows
+are switched off and hidden (kept for the history), and no new Paystack top-up can start. Keep `PAYSTACK_SECRET_KEY`
+and the webhook only while old Paystack payments may still be pending or disputed; they are still verified as below.
+
 1. dashboard.paystack.com → Settings → API Keys & Webhooks → copy the **Secret key** → `PAYSTACK_SECRET_KEY`
    (use the test key first: `sk_test_...`).
 2. Webhook URL: `https://castvoo.com/pay/paystack`. Castvoo checks the `x-paystack-signature` and then asks
@@ -70,7 +74,6 @@ Paystack checkout is disabled by default. Enable **Admin → Features → Paysta
    before paying.
 
 ## Flutterwave (Kenya, Cameroon, cards everywhere)
-Flutterwave checkout is disabled by default. Enable **Admin → Features → Flutterwave payments** before offering it to customers.
 1. dashboard.flutterwave.com → Settings → API Keys → **Secret key** → `FLW_SECRET_KEY`.
 2. Settings → Webhooks → URL `https://castvoo.com/pay/flutterwave`, and type a long random **Secret hash**.
    Put the same value in `FLW_WEBHOOK_HASH`.
@@ -122,7 +125,7 @@ account and presses **Approve** (wallet credited once with the usual top-up bonu
 person approving can credit a different USD amount. Approving twice credits once. A reference can't be used for two top-ups
 with the same method.
 
-Editing and deleting: built-in methods (Paystack, Flutterwave, crypto) can be renamed and switched off, never deleted.
+Editing and deleting: built-in methods (Flutterwave, crypto) can be renamed and switched off, never deleted.
 Your own methods can be edited and deleted; one that payments already use is switched off and hidden instead, so payment
 history keeps its name. A method with open (pending) payments can't be deleted until they are approved or rejected.
 Every add, change and delete is in the audit log.
@@ -160,7 +163,7 @@ In VooSquare: **Admin → Products → Castvoo**:
 
 Railway → Variables: `VOO_BASE=https://voosquare.com`, `VOO_CLIENT_ID`, `VOO_CLIENT_SECRET`, `VOO_API_KEY` (from
 Credentials), `VOO_SIGNAL_SECRET` (`openssl rand -hex 32`, made once, never changed). `VOO_CONNECT=off` switches all of
-it off at once (the other logins keep working); `VOO_SUPPORT_WIDGET=off` keeps our own help bubble on the website.
+it off at once (the other logins keep working); our own support widget is the website chat (`VOO_SITE_WIDGET=on` would put VooSquare's widget there instead for logged-out visitors; off by default, and `VOO_SUPPORT_WIDGET` is no longer read).
 
 Then check every setting against VooSquare (changes nothing there):
 ```bash
@@ -212,8 +215,9 @@ Every line must say PASS. Add `--voo-id <your Voo ID>` to prove the API key and 
   twice. Events VooSquare refuses for good are kept with `failed_at` and shown in **Admin → System**.
 - **Support in VooSquare's inbox**: every message a customer writes in Castvoo's Help chat is copied to VooSquare with
   `external_ref = castvoo-<conversation id>` (one Castvoo conversation = one ticket). Replies written in VooSquare come
-  back through the support webhook and appear in the customer's chat. On the public website the VooSquare support
-  widget (`data-product="castvoo"`) replaces our help bubble; inside the dashboard, Help stays our own chat.
+  back through the support webhook and appear in the customer's chat. On the public website our own support widget
+  answers too (the same agents and speed as inside; logged-in visitors get their real support conversation there).
+  VooSquare's widget (`data-product="castvoo"`) only replaces it for logged-out visitors when `VOO_SITE_WIDGET=on`.
 - **Two-way desk** (VooSquare's "Support HQ"): Castvoo exposes
   ```
   GET  /api/voosquare/support/boxes

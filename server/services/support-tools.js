@@ -15,7 +15,7 @@
  *
  * Money rules are enforced HERE, in code, whatever the model writes:
  *   - recheck_payment only asks the provider (payments.verify, the same server-to-server check as the wallet page).
- *     The wallet is credited only when Paystack / Flutterwave / Gatevoo confirm it, and crediting twice does nothing.
+ *     The wallet is credited only when Flutterwave / Gatevoo (or Paystack, for an old Paystack payment) confirm it, and crediting twice does nothing.
  *   - Manual methods (bank, mobile money, manual USDT...) are read-only: the AI can see the status and hands the
  *     conversation to Finance. No tool can approve, credit, refund, give a bonus or discount, change a price or move money.
  *
@@ -77,6 +77,22 @@ function maskEmail(e) {
   if (!d) return '***';
   return (u.length <= 2 ? u[0] + '*' : u.slice(0, 2) + '***' + u.slice(-1)) + '@' + d;
 }
+/** A Telegram delivery error in plain words (the raw text stays next to it for the model). */
+function plainError(e) {
+  const s = String(e || '');
+  if (/blocked by the user/i.test(s)) return 'they blocked the bot';
+  if (/user is deactivated/i.test(s)) return 'their Telegram account was deleted';
+  if (/chat not found|PEER_ID_INVALID/i.test(s)) return 'Telegram could not find the chat (they never pressed Start, or left)';
+  if (/bot was kicked|bot is not a member/i.test(s)) return 'the bot was removed from that chat';
+  if (/not enough rights|have no rights|CHAT_WRITE_FORBIDDEN|need administrator rights|CHAT_ADMIN_REQUIRED/i.test(s)) return 'the bot lost its admin rights there';
+  if (/Unauthorized|401/i.test(s)) return 'the bot token stopped working';
+  if (/Too Many Requests|429/i.test(s)) return 'Telegram asked to slow down (Castvoo retries by itself)';
+  if (/too long/i.test(s)) return 'the message was too long';
+  if (/wrong file|HTTP URL content|wrong type of the web page|failed to get/i.test(s)) return 'Telegram could not use the photo or video';
+  if (/stopped|\/stop/i.test(s)) return 'they asked to stop messages';
+  return null;
+}
+const errLine = (e, n) => { const p = plainError(e); return `${e}${p ? ' = ' + p : ''} (${n})`; };
 const providerLabel = (p, coin, label) => ({ paystack: 'Paystack', flutterwave: 'Flutterwave', gatevoo: 'Crypto checkout (Gatevoo)', manual_crypto: (coin || 'USDT') + ' sent by hand' }[p] || (p === 'manual' ? (label || 'Manual method') : p));
 const MANUAL = new Set(['manual', 'manual_crypto']);
 const connName = (c) => (c.kind === 'bot' ? '@' + (c.username || 'bot') : c.title || (c.username ? '@' + c.username : c.kind));
@@ -94,6 +110,169 @@ async function myConnection(scope, id) {
   return db.one("select * from connections where id = $1 and workspace_id = $2 and status <> 'removed'", [n, scope.workspaceId]);
 }
 
+/** Bots, lead answers, Cas builds and devices: the plan's bot limits (billing.BOT_PLANS) next to what is used. */
+async function botsUsage(ws, l, lim) {
+  const b = l.bots || billing.botLimitsFor(l.plan, ws.plan_status === 'trial');
+  const [live, refLive, ans, paused] = [await billing.liveBots(ws.id), await billing.liveReferralBots(ws.id), await billing.answersMeter(ws),
+    await db.one("select count(*)::int n from sequences where workspace_id = $1 and paused_by_plan and not active and trigger_type in ('join_request','bot_start')", [ws.id])];
+  let builds = null;
+  try {
+    const cb = require('./cas-builder');
+    const x = await cb.builds(ws);
+    builds = { included: x.unlimited ? 'unlimited (fair use)' : x.limit, period: x.period === 'lifetime' ? 'for the life of the workspace (Free: the first build)' : 'this calendar month (UTC)',
+      used: x.used, left: x.left < 0 ? 'unlimited' : x.left, cas_credits_bought: x.credits, resets: day(x.resets_at), resting_today: await cb.resting().catch(() => false) };
+  } catch { /* Cas Builder not available */ }
+  return {
+    bots: { live_now: live, live_limit: lim(b.max_bots), fair_use: b.max_bots_fair_use || null, bot_types_on_plan: b.bot_types, messages_per_bot: lim(b.bot_steps), menu_buttons: lim(b.menu_buttons),
+      lead_questions_per_bot: lim(b.lead_questions_per_form), referral_bots_live: refLive, referral_bots_limit: lim(b.referral_bots), lead_csv: b.lead_export === 'csv' ? 'yes (owner)' : 'no',
+      free_branding_line: !!b.branding, paused_by_plan: paused.n, note: 'Live bots = Welcome bots + Chat bots switched on; drafts never count.' },
+    lead_answers_this_month: { used: ans.used, limit: lim(ans.limit), stops_showing_after: lim(ans.hard), over_limit: ans.over, resets: day(ans.resets_at), note: 'Over the limit (+10%) the bot still says thanks; answers are kept hidden until next month or an upgrade.' },
+    cas_builder_builds: builds,
+    devices_per_person: b.concurrent_sessions_per_seat,
+  };
+}
+
+/** The steps of a bot in a few words: "1 welcome message · 2 check they joined 'VIP' · 3 question (email)". */
+function stepWords(steps, chats) {
+  const trig = { after_previous: 'right away', wait: 'after a wait', on_start: 'when they tap Start', on_button: 'when they tap a button', no_response: 'reminder if no response', on_goal: 'when they reach the invite goal' };
+  return steps.map((s, i) => {
+    const c = s.config || {};
+    let what = 'message';
+    if (s.step_type === 'check_join') { const ch = chats.get(String(c.chat_id)); what = `check they joined ${ch ? JSON.stringify(ch) : '(no channel picked)'}`; }
+    else if (s.step_type === 'ask') what = `question (${c.answer || 'text'}${c.label ? ': ' + String(c.label).slice(0, 30) : ''})`;
+    else if (s.step_type === 'referral') what = `invite friends (goal ${c.goal || 3})`;
+    return `${i + 1}. ${what}${i ? ', ' + (trig[s.trigger_type] || s.trigger_type || 'right away') : ''}`;
+  });
+}
+
+const PAYMENT_AUTO = new Set(['flutterwave', 'gatevoo', 'paystack']);
+/**
+ * Everything that commonly goes wrong, found automatically, each with a plain fix and a link key for share_link.
+ * live: also ask Telegram (token, webhook, admin rights), at most a few calls, rate-limited per workspace.
+ */
+async function diagnose(scope, { live = true } = {}) {
+  const { ws, user } = await scopeRows(scope);
+  const P = [];
+  // ("problem", not "code": redact() removes keys named code.)
+  const add = (problem, severity, what, fix, link = null) => P.push({ problem, severity, what, fix, link });
+  const platform = config.telegram.botUsername ? '@' + config.telegram.botUsername : '@CastvooBot';
+  const l = await billing.limits(ws);
+  const free = billing.isFreePlan(l.plan);
+  let liveOk = live && !scope.sandbox;
+  if (liveOk && !(await rl.hitShared('diag:' + ws.id, 6, 600)).ok) liveOk = false;
+
+  // Plan and sending.
+  try { await billing.assertCanSend(ws); } catch (e) { add('cannot_send', 'high', e.message, 'Top up the wallet and pick a plan; a plan that stopped because the wallet was short starts again by itself once a top-up covers it.', 'topup'); }
+  const u = await billing.usage(ws.id);
+  if (l.subscribers !== billing.UNLIMITED && Number(l.subscribers) > 0 && u.bot_subscribers >= Number(l.subscribers)) add('subscriber_limit', 'high', `${u.bot_subscribers} bot subscribers, the plan allows ${l.subscribers}. Broadcasts pause above the limit (nothing is deleted).`, 'Upgrade to a bigger plan.', 'plans');
+  if (l.connections !== billing.UNLIMITED && u.connections >= Number(l.connections)) add('connection_limit', 'low', `All ${l.connections} connections on the plan are used.`, 'Remove a bot, channel or group you no longer use, or upgrade.', 'channels');
+  const meter = await billing.joinMeter(ws);
+  if (meter.paused) add('join_limit', 'high', `This month's join requests (${meter.used}) are over the plan limit, so welcomes pause until ${day(meter.resets_at)}. People are still let in.`, 'Upgrade to keep welcoming everyone, or wait for the new month.', 'plans');
+  const b = l.bots || billing.botLimitsFor(l.plan, ws.plan_status === 'trial');
+  const liveBots = await billing.liveBots(ws.id);
+  if (b.max_bots !== billing.UNLIMITED && liveBots >= b.max_bots) add('bot_limit', 'medium', `${liveBots} of ${b.max_bots} live bots are switched on, the most the ${l.plan.name} plan runs.`, 'Switch a bot off first (drafts don\'t count), or upgrade.', 'plans');
+  const paused = await db.many("select id, name from sequences where workspace_id = $1 and paused_by_plan and not active and trigger_type in ('join_request','bot_start') order by id limit 5", [ws.id]);
+  if (paused.length) add('paused_by_plan', 'medium', `${paused.length} bot${paused.length > 1 ? 's were' : ' was'} switched off when the plan changed: ${paused.map((x) => JSON.stringify(x.name)).join(', ')}.`, 'Upgrade, then switch them on again on the Bots page.', 'bots');
+  const ans = await billing.answersMeter(ws);
+  if (ans.over) add('lead_answers_over', 'medium', `Lead answers this month (${ans.used}) are over the plan limit. New answers are kept hidden until next month or an upgrade.`, 'Upgrade to see them now; nothing is deleted.', 'plans');
+  if (Number(l.ai_writes) > 0 && u.ai_used >= Number(l.ai_writes)) add('ai_writes_out', 'low', `Cas has used all ${l.ai_writes} AI writes this period.`, `They refill on ${day(billing.aiRefillAt(ws)) || 'the next billing date'}. There is never an extra charge.`, 'plans');
+  try { const cb = await require('./cas-builder').builds(ws); if (!cb.available) add('cas_builds_out', 'low', 'No Cas Builder builds are left on the plan right now.', 'Keep building in the builder (free), buy Cas credits from the wallet, or upgrade.', 'wallet'); } catch { /* not available */ }
+  if (free) {
+    const anyLive = await db.one("select 1 from sequences where workspace_id = $1 and active and trigger_type in ('join_request','bot_start') limit 1", [ws.id]);
+    if (anyLive) add('free_branding', 'low', 'On the Free plan every welcome ends with "⚡ Free welcome bot by Castvoo.com" (and each Free Chat bot\'s first message with "⚡ Free bot by Castvoo.com"). It links to the owner\'s referral link.', 'It can\'t be removed on Free; any paid plan removes it.', 'plans');
+  }
+
+  // Connections.
+  const conns = await db.many("select * from connections where workspace_id = $1 and status <> 'removed' order by id", [ws.id]);
+  for (const c of conns.filter((x) => x.status === 'error')) {
+    add('needs_attention', 'high', `${connName(c)} shows "Needs attention"${c.last_error ? ': ' + c.last_error : ''}.`, c.kind === 'bot' ? 'Paste a fresh token from @BotFather in Channels & bots (subscribers, follow-ups and stats stay).' : `Add ${platform} as an admin of the ${c.kind} again from Channels & bots, with "Post messages".`, 'channels');
+  }
+  const connections = require('./connections');
+  if (liveOk) {
+    for (const c of conns.filter((x) => x.kind === 'bot' && x.status !== 'error' && x.token_enc).slice(0, 4)) {
+      const token = connections.tokenOf(c);
+      try { await tg.call(token, 'getMe'); } catch (e) {
+        if (e.code === 401 || e.code === 404) add('token_invalid', 'high', `Telegram says the token of ${connName(c)} is not valid any more (revoked or changed in @BotFather).`, 'Get the token again in @BotFather (/token) and paste it in Channels & bots. Subscribers stay.', 'channels');
+        continue;
+      }
+      try {
+        const info = await tg.call(token, 'getWebhookInfo');
+        if (info.url !== `${config.appUrl}/tg/b/${c.id}`) add('webhook_taken', 'high', `${connName(c)} is not listening to Castvoo: ${info.url ? 'another program set its own webhook' : 'its webhook was removed (another program may be reading it with getUpdates)'}. New subscribers and taps are not seen.`, `Stop using this token in other tools or scripts, then let support re-point it (repair_webhook, after the customer says yes) or paste the token again. connection_id ${c.id}.`, 'channels');
+        else if (info.last_error_date && Date.now() / 1000 - info.last_error_date < 3600) add('webhook_errors', 'medium', `Telegram reported a recent delivery error for ${connName(c)}: ${info.last_error_message || 'unknown'}.`, 'Usually temporary. If it keeps happening, re-point the webhook (repair_webhook).', null);
+      } catch { /* Telegram unreachable: skip */ }
+    }
+  }
+
+  // Bots: Welcome bots need their own bot as admin with "Add members"; join checks need the bot admin in that channel.
+  const seqs = await db.many(`select q.*, c.username, c.tg_chat_id as bot_tg_id, c.status as cstatus from sequences q join connections c on c.id = q.connection_id
+    where q.workspace_id = $1 and c.status <> 'removed' and q.trigger_type in ('join_request','bot_start') order by q.active desc, q.id desc limit 40`, [ws.id]);
+  const byId = new Map(conns.map((c) => [String(c.id), c]));
+  const byChat = new Map(conns.filter((c) => c.kind !== 'bot').map((c) => [String(c.tg_chat_id), c]));
+  let checks = 0;
+  const flowsSvc = require('./flows'), botsSvc = require('./bots');
+  for (const q of seqs.filter((x) => x.active)) {
+    const bot = byId.get(String(q.connection_id));
+    if (q.trigger_type === 'join_request') {
+      const chat = byChat.get(String(q.trigger_value));
+      if (!chat) { add('welcome_no_channel', 'high', `Welcome bot "${q.name}" is live but its channel is not connected any more.`, 'Connect the channel again, or open the bot and pick another channel.', 'bot:' + q.id); continue; }
+      if (liveOk && bot && checks < 4) {
+        checks++;
+        const r = await flowsSvc.checkAdmin(bot, chat).catch(() => ({ ok: true }));
+        if (!r.ok) add('welcome_bot_not_admin', 'high', r.message, 'Telegram only sends join requests to admins who can let people in. After fixing it in Telegram, ask support to check again.', 'bot:' + q.id);
+      }
+      const jr = await db.one('select count(*)::int n, max(requested_at) last from join_requests where sequence_id = $1', [q.id]);
+      const ageH = (Date.now() - new Date(q.updated_at || q.created_at).getTime()) / 3600000;
+      if (!jr.n && ageH > 24) add('no_join_requests', 'medium', `Welcome bot "${q.name}" has been live for over a day with no join requests on "${chat.title || 'the channel'}".`, 'Likely the invite link people use does not have "Approve new members" (join requests) on. In Telegram: the channel → Invite links → edit the link → turn on "Approve new members". Also share that link, not a public @username.', 'bot:' + q.id);
+      const wf = await db.one("select count(*)::int n, max(error) err from join_requests where sequence_id = $1 and welcome = 'failed' and requested_at > now() - interval '7 days'", [q.id]);
+      if (wf.n) add('welcome_failed', 'medium', `${wf.n} welcome${wf.n > 1 ? 's' : ''} from "${q.name}" could not be sent in the last 7 days${wf.err ? ' (' + (plainError(wf.err) || wf.err) + ')' : ''}.`, 'Check the bot is still an admin with "Add members" and its token works.', 'bot:' + q.id);
+    } else {
+      const steps = await db.many("select config from sequence_steps where sequence_id = $1 and variant = 0 and step_type = 'check_join'", [q.id]);
+      for (const s of steps) {
+        const chat = byId.get(String((s.config || {}).chat_id));
+        if (!chat) { add('check_no_channel', 'high', `Chat bot "${q.name}" checks a channel that is not connected any more.`, 'Open the bot and pick the channel again in the ✅ Check they joined step.', 'bot:' + q.id); continue; }
+        if (liveOk && bot && checks < 4) {
+          checks++;
+          const r = await botsSvc.checkCanCheck(bot, chat).catch(() => ({ ok: true }));
+          if (!r.ok) add('check_bot_not_admin', 'high', r.message, 'Without admin rights the bot can\'t see who joined, so everyone gets "you haven\'t joined yet".', 'bot:' + q.id);
+        }
+      }
+    }
+  }
+  // Start-code clash: a draft Chat bot with the same start link (or plain Start) as a live one on the same Telegram bot.
+  for (const d of seqs.filter((x) => !x.active && x.trigger_type === 'bot_start')) {
+    const other = seqs.find((x) => x.active && x.trigger_type === 'bot_start' && Number(x.connection_id) === Number(d.connection_id) && (String(x.trigger_value).toLowerCase() === String(d.trigger_value).toLowerCase() || (d.is_default && x.is_default)));
+    if (other) add('start_code_clash', 'low', `Draft "${d.name}" uses the same ${String(other.trigger_value).toLowerCase() === String(d.trigger_value).toLowerCase() ? 'start link (' + d.trigger_value + ')' : 'plain Start'} as live bot "${other.name}" on @${d.username}.`, 'Give the draft its own start code, or switch to it (switching it on offers to replace the live one).', 'bot:' + d.id);
+  }
+  for (const w of await botsSvc.ownershipWarnings(ws.id).catch(() => [])) add('team_telegram_tip', 'low', w.message, 'Nothing is blocked; it just shows the bot belongs to the team.', null);
+  const drip = await db.one("select count(*)::int n from sequences where workspace_id = $1 and paused_by_plan and not active and trigger_type not in ('join_request','bot_start')", [ws.id]);
+  if (drip.n) add('follow_ups_off_by_plan', 'medium', `${drip.n} auto follow-up${drip.n > 1 ? 's were' : ' was'} switched off by a plan change.`, 'Auto follow-ups are on Starter and up. Upgrade, then switch them on again.', 'follow_ups');
+
+  // Broadcasts.
+  const bl = await db.one(`select count(*) filter (where d.status = 'blocked' or d.error ilike '%blocked by the user%')::int blocked, count(*)::int total
+    from deliveries d where d.workspace_id = $1 and d.broadcast_id is not null and d.created_at > now() - interval '14 days'`, [ws.id]);
+  if (bl.blocked >= 20 && bl.blocked / Math.max(1, bl.total) >= 0.05) add('many_blocked', 'medium', `${bl.blocked} of ${bl.total} broadcast messages in the last 14 days failed because people blocked the bot.`, 'A few percent is normal. Send less often, keep the "Stop these messages" button on, and set "Most messages one person gets per day" to 2 or 3 in Settings → Workspace.', 'settings');
+  const fb = await db.many("select id, title from broadcasts where workspace_id = $1 and status = 'failed' and created_at > now() - interval '14 days' order by id desc limit 3", [ws.id]);
+  if (fb.length) add('broadcast_failed', 'medium', `Broadcast${fb.length > 1 ? 's' : ''} that failed: ${fb.map((x) => JSON.stringify(x.title || '#' + x.id)).join(', ')}.`, 'Run get_broadcasts for the reasons (often a paused plan at send time, or the bot lost its rights).', 'send');
+  const stuck = await db.one("select count(*)::int n from broadcasts where workspace_id = $1 and status = 'sending' and started_at < now() - interval '3 hours' and sent = 0", [ws.id]);
+  if (stuck.n) add('broadcast_stuck', 'high', 'A broadcast shows "Sending" for over 3 hours with nothing delivered.', 'Hand it to the technical team with the broadcast name.', null);
+
+  // Payments (status only).
+  const pays = await db.many("select reference, provider, status, reason, created_at, amount_cents from payments where workspace_id = $1 and created_at > now() - interval '30 days' order by id desc limit 10", [ws.id]);
+  for (const p of pays.filter((x) => x.status === 'pending' && PAYMENT_AUTO.has(x.provider) && Date.now() - new Date(x.created_at).getTime() > 10 * 60000).slice(0, 2)) add('payment_pending', 'medium', `Top-up ${p.reference} (${usd(p.amount_cents)}, ${providerLabel(p.provider)}) is still pending.`, 'recheck_payment asks the provider again; the wallet is credited only if they confirm it.', 'wallet');
+  for (const p of pays.filter((x) => x.status === 'pending' && MANUAL.has(x.provider)).slice(0, 2)) add('manual_payment_pending', 'low', `Manual top-up ${p.reference} (${usd(p.amount_cents)}) waits for the finance team.`, 'They confirm by hand, usually within a few hours. If they paid and sent proof long ago, hand it to finance.', 'wallet');
+  for (const p of pays.filter((x) => ['failed', 'rejected'].includes(x.status)).slice(0, 2)) add('payment_failed', 'low', `Top-up ${p.reference} ${p.status}${p.reason ? ': ' + p.reason : ''}.`, 'Try again (the right amount and network for crypto), or another method in Wallet → Top up.', 'topup');
+
+  // Account.
+  if (user.email && !user.email_verified) add('email_not_verified', 'low', 'The account email is not verified yet.', 'resend_email_verification sends a new code (after the customer says yes); they type it in Settings → Profile.', 'profile');
+  const devs = await db.one('select count(*)::int n from sessions where user_id = $1 and expires_at > now()', [user.id]);
+  const per = b.concurrent_sessions_per_seat || 2;
+  if (devs.n >= per) add('devices_full', 'low', `Logged in on ${devs.n} devices, the most per person (${per}). One more login logs out the oldest.`, 'Teammates should use their own login (seats) or the free setup helper.', 'security');
+
+  const order = { high: 0, medium: 1, low: 2 };
+  P.sort((a, b2) => order[a.severity] - order[b2.severity]);
+  return { checked_with_telegram: liveOk, problems: P, all_good: !P.some((p) => p.severity !== 'low'), plan: l.plan.name };
+}
+
 /* ---------------- the tools ---------------- */
 const S = (props = {}, required = []) => ({ type: 'object', properties: props, required, additionalProperties: false });
 
@@ -107,7 +286,14 @@ const TOOLS = {
       const members = await db.many('select u.id, u.name, u.email, m.role from members m join users u on u.id = m.user_id where m.workspace_id = $1 order by m.created_at', [ws.id]);
       const pending = ws.pending_plan_code ? await settings.plan(ws.pending_plan_code) : null;
       const helperView = scope.role === 'helper';
+      const helperInvite = await db.one("select created_at, expires_at from invites where workspace_id = $1 and role = 'helper' and accepted_at is null and expires_at > now() order by created_at desc limit 1", [ws.id]).catch(() => null);
+      const helperRow = members.find((m) => m.role === 'helper');
+      const extra = Number(ws.extra_seats) || 0;
       return {
+        you_are_role: ROLE_NAMES[scope.role] || scope.role,
+        setup_helper: { has_one: !!helperRow, name: helperRow ? (helperRow.name || '').split(' ')[0] || 'Helper' : null, invite_waiting: !!helperInvite, invite_expires: helperInvite ? day(helperInvite.expires_at) : null,
+          can_send_broadcasts: ws.helper_send !== false, can_manage_billing: !!ws.helper_billing },
+        extra_seats: extra,
         // A setup helper is not the owner: they get the workspace, never the owner's login details (SEC-1).
         ...(helperView ? { you_are: 'the setup helper of this workspace, not its owner', helper_rules: { can: HELPER.CAN, cannot: HELPER.CANNOT, can_change_plan: !!ws.helper_billing, can_send_broadcasts: ws.helper_send !== false } } : {}),
         user: { first_name: (user.name || '').split(' ')[0] || null, email: maskEmail(user.email), email_verified: user.email_verified, country: user.country, telegram_linked: !!user.tg_user_id, telegram_username: user.tg_username || null, voosquare_linked: !!user.voo_id, since: day(user.created_at) },
@@ -152,7 +338,7 @@ const TOOLS = {
   },
 
   recheck_payment: {
-    description: 'Ask the payment provider again whether a top-up was paid. For Paystack, Flutterwave and Gatevoo the wallet is credited automatically ONLY if the provider confirms it. For manual methods (bank transfer, mobile money, USDT sent by hand) this only shows the status: the finance team confirms those.',
+    description: 'Ask the payment provider again whether a top-up was paid. For Flutterwave and Gatevoo (and old Paystack payments, from before Paystack was removed) the wallet is credited automatically ONLY if the provider confirms it. For manual methods (bank transfer, mobile money, USDT sent by hand) this only shows the status: the finance team confirms those.',
     parameters: S({ reference: { type: 'string', description: 'The payment reference, like cv_xxxxx (from get_payments)' } }, ['reference']),
     async run(scope, input) {
       const ref = String(input.reference || '').trim().slice(0, 40);
@@ -207,6 +393,7 @@ const TOOLS = {
           waiting_for_owner_decision: open.n, people_waiting_to_press_start: jr.waiting,
         },
         welcome_flows: { made: u.flows, live: u.active_flows, limit: lim(l.flows), messages_per_flow: lim(l.flow_steps), ab_versions: l.ab_variants, switched_off_by_plan: offByPlan.n },
+        ...(await botsUsage(ws, l, lim)),
       };
     },
   },
@@ -222,7 +409,10 @@ const TOOLS = {
         from connections c where c.workspace_id = $1 and c.status <> 'removed' order by c.id`, [scope.workspaceId]);
       return {
         platform_bot: config.telegram.botUsername ? '@' + config.telegram.botUsername : null,
-        connections: rows.map((c) => ({ id: c.id, kind: c.kind, name: connName(c), status: c.status === 'error' ? 'needs attention' : c.status, last_error: c.last_error || null, reach: c.reach, failed_last_7_days: c.failed_7d, waiting_to_send: c.queued, connected_at: day(c.created_at) })),
+        connections: rows.map((c) => ({ id: c.id, kind: c.kind, name: connName(c), username: c.username ? '@' + c.username : null, title: c.kind === 'bot' ? null : c.title || null,
+          status: c.status === 'error' ? 'needs attention' : c.status, last_error: c.last_error || null, reach: c.reach, members: c.kind === 'bot' ? null : c.member_count,
+          failed_last_7_days: c.failed_7d, waiting_to_send: c.queued, connected_at: day(c.created_at) })),
+        tip: 'For token, webhook and admin-rights health, run test_connection (one) or diagnose_account (everything).',
       };
     },
   },
@@ -274,10 +464,17 @@ const TOOLS = {
   },
 
   repair_webhook: {
-    description: "Point a connected bot's webhook at Castvoo again (the same step Castvoo does when you connect a bot). Safe: keeps subscribers, follow-ups and pending updates. Bots only.",
+    description: "Point a connected bot's webhook at Castvoo again (the same step Castvoo does when you connect a bot). Keeps subscribers, follow-ups and pending updates. Bots only. It CHANGES the bot: first ask the customer and get a clear yes; the system only runs it after they agreed in their own message.",
     parameters: S({ connection_id: { type: 'integer', description: 'id of a bot from get_connections' } }, ['connection_id']),
     write: true,
     owner: true, // the dashboard keeps reconnecting bots for the workspace owner
+    confirm: true,
+    async prepare(scope, input) {
+      const c = await myConnection(scope, input.connection_id);
+      if (!c) return { stop: { found: false, message: 'No connection with that id in this workspace.' } };
+      if (c.kind !== 'bot') return { stop: { id: c.id, repaired: false, message: `Channels and groups have no webhook. If posting fails, add @${config.telegram.botUsername} as admin again.` } };
+      return { key: String(c.id), ask: `Point @${c.username || 'your bot'} back at Castvoo (re-register its webhook)? Subscribers, follow-ups and stats stay. If another tool uses the same token, it stops getting updates.` };
+    },
     async run(scope, input) {
       const c = await myConnection(scope, input.connection_id);
       if (!c) return { found: false, message: 'No connection with that id in this workspace.' };
@@ -305,9 +502,9 @@ const TOOLS = {
         const errs = b.failed_now ? await db.many(`select coalesce(error, 'unknown') error, count(*)::int n from deliveries where broadcast_id = $1 and status in ('failed','blocked') group by 1 order by 2 desc limit 3`, [b.id]) : [];
         out.push({ id: b.id, title: b.title, status: b.status, to: connName({ kind: b.kind, username: b.username, title: b.ctitle }), send_mode: b.send_mode, send_at: day(b.send_at), total: b.total,
           delivered: b.status === 'sending' ? b.delivered_now : b.sent, failed: b.status === 'sending' ? b.failed_now : b.failed, still_waiting: b.waiting, started_at: day(b.started_at), finished_at: day(b.finished_at),
-          top_errors: errs.map((e) => `${e.error} (${e.n})`) });
+          top_errors: errs.map((e) => errLine(e.error, e.n)) });
       }
-      return { broadcasts: out, note: 'Telegram gives bots no read receipts, so there are no read numbers.' };
+      return { broadcasts: out, note: 'Telegram gives bots no read receipts, so there are no read numbers. "Blocked the bot" failures are people who blocked it: a few percent is normal.' };
     },
   },
 
@@ -319,6 +516,8 @@ const TOOLS = {
       const rows = await db.many(`select q.id, q.name, q.trigger_type, q.trigger_value, q.active, q.paused_by_plan, q.approve_mode, q.start_button, q.invite_link, c.kind, c.username, c.title as ctitle, c.status as cstatus,
           (select count(*)::int from sequence_steps s where s.sequence_id = q.id and s.variant = 0) steps,
           (select count(*)::int from sequence_steps s where s.sequence_id = q.id and s.variant > 0) ab_versions,
+          (select coalesce(json_agg(s.trigger_type order by s.position), '[]') from sequence_steps s where s.sequence_id = q.id and s.variant = 0) triggers,
+          (select count(*)::int from sequence_runs r where r.sequence_id = q.id and r.status = 'awaiting') awaiting_tap,
           (select count(*)::int from sequence_runs r where r.sequence_id = q.id and r.status = 'active') running,
           (select count(*)::int from sequence_runs r where r.sequence_id = q.id and r.status = 'waiting') waiting_start,
           (select count(*)::int from sequence_runs r where r.sequence_id = q.id and r.status = 'done') finished,
@@ -326,7 +525,7 @@ const TOOLS = {
           (select count(*)::int from deliveries d join sequence_steps s on s.id = d.step_id where s.sequence_id = q.id and d.status = 'failed' and d.created_at > now() - interval '7 days') failed_7d
         from sequences q join connections c on c.id = q.connection_id where q.workspace_id = $1 and c.status <> 'removed' order by q.active desc, q.id desc limit 30`, [scope.workspaceId]);
       const trig = { start: 'someone presses Start', start_tag: 'Start through a start link', join_request: 'someone asks to join', tag: 'a subscriber gets a tag' };
-      const modes = { instant: 'straight away', after_welcome: 'after the welcome', tap: 'when they tap the button and press Start', manual: 'the owner decides (Requests tab)' };
+      const modes = { instant: 'straight away', after_welcome: 'after the welcome', tap: 'when they tap Start in the bot', manual: 'the owner decides (Requests tab)' };
       const errorsOf = async (q) => (q.failed_7d ? (await db.many(`select coalesce(d.error, 'unknown') error, count(*)::int n from deliveries d join sequence_steps s on s.id = d.step_id where s.sequence_id = $1 and d.status = 'failed' and d.created_at > now() - interval '7 days' group by 1 order by 2 desc limit 3`, [q.id])).map((e) => `${e.error} (${e.n})`) : []);
       const welcome = [], follow = [];
       for (const q of rows) {
@@ -341,7 +540,10 @@ const TOOLS = {
           const err = await db.one("select error from join_requests where sequence_id = $1 and error is not null order by id desc limit 1", [q.id]);
           welcome.push({ ...base, channel: chat ? connName({ kind: chat.kind, username: chat.username, title: chat.title }) : 'not connected any more', channel_status: chat ? (chat.status === 'error' ? 'needs attention' : chat.status) : null,
             how_people_get_in: modes[q.approve_mode] || q.approve_mode, tap_to_start_button: q.start_button, own_invite_link: !!q.invite_link, ab_versions: q.ab_versions ? q.ab_versions + 1 : 1,
-            people_waiting_to_press_start: q.waiting_start, ...j, last_join_error: err ? err.error : null });
+            people_waiting_to_press_start: q.waiting_start, people_waiting_for_a_tap: q.awaiting_tap,
+            // When each message comes: right_away, wait, when_they_tap_start, when_they_tap_a_button, reminder_if_no_response.
+            when_each_message_comes: (q.triggers || []).map((t, i) => (i === 0 ? 'welcome' : ({ after_previous: 'right_away', wait: 'after_a_wait', on_start: 'when_they_tap_start', on_button: 'when_they_tap_a_button', no_response: 'reminder_if_no_response' })[t] || t)),
+            ...j, last_join_error: err ? err.error : null });
         } else {
           follow.push({ ...base, trigger: trig[q.trigger_type] || q.trigger_type, trigger_tag: q.trigger_type === 'start_tag' || q.trigger_type === 'tag' ? q.trigger_value : null, people_in_progress: q.running, finished: q.finished });
         }
@@ -410,9 +612,16 @@ const TOOLS = {
   },
 
   resend_email_verification: {
-    description: "Send a fresh verification code to the customer's own account email (only if it is not verified yet), through the normal Settings flow. The code goes only to their inbox; you never see it.",
+    description: "Send a fresh verification code to the customer's own account email (only if it is not verified yet), through the normal Settings flow. The code goes only to their inbox; you never see it. Ask first; it runs only after the customer says yes.",
     parameters: S(),
     write: true,
+    confirm: true,
+    async prepare(scope) {
+      const { user } = await scopeRows(scope);
+      if (!user.email) return { stop: { sent: false, message: 'There is no email on this account yet. Add one in Settings → Profile.' } };
+      if (user.email_verified) return { stop: { sent: false, already_verified: true, email: maskEmail(user.email) } };
+      return { key: 'verify', ask: `Send a new verification code to ${maskEmail(user.email)}?` };
+    },
     async run(scope) {
       const { user } = await scopeRows(scope);
       if (!user.email) return { sent: false, message: 'There is no email on this account yet. Add one in Settings → Profile.' };
@@ -484,6 +693,173 @@ const TOOLS = {
     },
   },
 
+  get_bots: {
+    description: 'All Bots (🤖 Bots page): Welcome bots (join requests) and Chat bots (start links): id, kind and template type, live / draft / paused by plan, which Telegram bot and channel, start link, the steps in a few words, people started, leads (answers), invite stats, join requests and recent errors. Pass bot_id for one bot only.',
+    parameters: S({ bot_id: { type: 'integer', description: 'optional: one bot id from an earlier get_bots' } }),
+    async run(scope, input) {
+      const { ws } = await scopeRows(scope);
+      const one = Number(input.bot_id) > 0 ? Number(input.bot_id) : null;
+      const rows = await db.many(`select q.id, q.name, q.trigger_type, q.trigger_value, q.active, q.paused_by_plan, q.is_default, q.bot_type, q.approve_mode, q.start_button, q.created_at, q.updated_at,
+          c.id as conn_id, c.username, c.status as cstatus,
+          (select count(*)::int from sequence_runs r where r.sequence_id = q.id) started,
+          (select count(*)::int from sequence_runs r where r.sequence_id = q.id and r.status = 'awaiting') waiting_on_a_step,
+          (select count(distinct a.subscriber_id)::int from bot_answers a where a.sequence_id = q.id) people_answered,
+          (select count(*)::int from bot_answers a where a.sequence_id = q.id and a.created_at >= date_trunc('month', now())) answers_this_month,
+          (select count(*)::int from bot_answers a where a.sequence_id = q.id and a.hidden) answers_hidden_over_limit,
+          (select count(*)::int from bot_referrals x where x.sequence_id = q.id and x.counted) invites_counted,
+          (select coalesce(json_object_agg(t.reason, t.n), '{}') from (select coalesce(reason, 'other') reason, count(*)::int n from bot_referrals x where x.sequence_id = q.id and not x.counted group by 1) t) invites_not_counted,
+          (select count(*)::int from bot_invites i where i.sequence_id = q.id and i.reached_at is not null) reached_invite_goal,
+          (select count(*)::int from join_requests j where j.sequence_id = q.id) join_requests,
+          (select max(j.requested_at) from join_requests j where j.sequence_id = q.id) last_join_request,
+          (select count(*)::int from deliveries d join sequence_steps s on s.id = d.step_id where s.sequence_id = q.id and d.status = 'failed' and d.created_at > now() - interval '7 days') failed_7d
+        from sequences q join connections c on c.id = q.connection_id
+        where q.workspace_id = $1 and c.status <> 'removed' and q.trigger_type in ('join_request','bot_start') ${one ? 'and q.id = $2' : ''}
+        order by q.active desc, q.id desc limit 40`, one ? [ws.id, one] : [ws.id]);
+      if (one && !rows.length) return { found: false, message: 'No bot with that id in this workspace. Call get_bots without bot_id.' };
+      const chats = await db.many("select id, tg_chat_id, title, username from connections where workspace_id = $1 and kind <> 'bot' and status <> 'removed'", [ws.id]);
+      const chatName = new Map(chats.map((c) => [String(c.id), c.title || (c.username ? '@' + c.username : 'channel')]));
+      const byTg = new Map(chats.map((c) => [String(c.tg_chat_id), c.title || (c.username ? '@' + c.username : 'channel')]));
+      const flowsSvc = require('./flows');
+      const out = [];
+      for (const q of rows) {
+        const steps = await db.many('select step_type, trigger_type, config from sequence_steps where sequence_id = $1 and variant = 0 order by position', [q.id]);
+        const errs = q.failed_7d ? await db.many(`select coalesce(d.error, 'unknown') error, count(*)::int n from deliveries d join sequence_steps s on s.id = d.step_id where s.sequence_id = $1 and d.status = 'failed' and d.created_at > now() - interval '7 days' group by 1 order by 2 desc limit 3`, [q.id]) : [];
+        const welcome = q.trigger_type === 'join_request';
+        out.push({
+          id: q.id, name: q.name, kind: welcome ? 'Welcome bot' : 'Chat bot', type: q.bot_type || (welcome ? 'welcome' : null),
+          status: q.active ? 'live' : q.paused_by_plan ? 'paused by plan' : 'draft', telegram_bot: '@' + (q.username || 'bot'), telegram_bot_status: q.cstatus === 'error' ? 'needs attention' : q.cstatus,
+          ...(welcome ? { channel: byTg.get(String(q.trigger_value)) || 'not connected any more', how_people_get_in: q.approve_mode, tap_start_button: q.start_button, join_requests: q.join_requests, last_join_request: day(q.last_join_request) }
+            : { start_link: q.username ? flowsSvc.startUrl({ username: q.username }, q.trigger_value) : null, answers_plain_start: !!q.is_default }),
+          steps: stepWords(steps, chatName), people_started: q.started, waiting_on_a_check_or_question: q.waiting_on_a_step,
+          ...(steps.some((s) => s.step_type === 'ask') ? { leads: { people: q.people_answered, answers_this_month: q.answers_this_month, hidden_over_limit: q.answers_hidden_over_limit } } : {}),
+          ...(steps.some((s) => s.step_type === 'referral') ? { invites: { counted: q.invites_counted, not_counted_by_reason: q.invites_not_counted, reached_goal: q.reached_invite_goal } } : {}),
+          failed_7d: q.failed_7d, top_errors: errs.map((e) => errLine(e.error, e.n)), updated_at: day(q.updated_at),
+        });
+      }
+      return { bots: out, link_keys: 'share_link with bot:<id>, bot_leads:<id>, bot_invites:<id>, bot_requests:<id>', tip: 'check_bot_setup asks Telegram whether a bot is set up right (admin rights, token, webhook).' };
+    },
+  },
+
+  check_bot_setup: {
+    description: "Live check of one Bot with Telegram (read-only, changes nothing): the Telegram bot's token and webhook, for a Welcome bot whether it is an admin of the channel with \"Add members\", for a Chat bot's ✅ Check they joined steps whether it is an admin of each channel (the same check as the builder), and start-link clashes. Use it to re-check admin rights after the customer fixed them.",
+    parameters: S({ bot_id: { type: 'integer', description: 'Bot id from get_bots' } }, ['bot_id']),
+    async run(scope, input) {
+      const id = Number(input.bot_id);
+      const q = Number.isInteger(id) && id > 0 ? await db.one("select * from sequences where id = $1 and workspace_id = $2 and trigger_type in ('join_request','bot_start')", [id, scope.workspaceId]) : null;
+      if (!q) return { found: false, message: 'No bot with that id in this workspace. Use get_bots.' };
+      const bot = await db.one("select * from connections where id = $1 and workspace_id = $2 and status <> 'removed'", [q.connection_id, scope.workspaceId]);
+      if (!bot) return { id: q.id, ok: false, problems: ['Its Telegram bot is not connected any more. Connect it again in Channels & bots.'] };
+      if (!scope.sandbox && !(await rl.hitShared('botcheck:' + q.id, 8, 600)).ok) return { id: q.id, message: 'Checked several times just now. Wait a minute.' };
+      const problems = [], fine = [];
+      if (scope.sandbox) return { id: q.id, sandbox: true, message: 'Sandbox: Telegram was not asked.' };
+      const token = require('./connections').tokenOf(bot);
+      try { await tg.call(token, 'getMe'); fine.push(`the token of @${bot.username} works`); } catch (e) {
+        problems.push(e.code === 401 || e.code === 404 ? `Telegram says the token of @${bot.username} is not valid any more. Paste a fresh token from @BotFather in Channels & bots.` : 'Telegram could not be reached just now.');
+        return { id: q.id, name: q.name, ok: false, problems, fine };
+      }
+      try {
+        const info = await tg.call(token, 'getWebhookInfo');
+        if (info.url === `${config.appUrl}/tg/b/${bot.id}`) fine.push('it listens to Castvoo');
+        else problems.push(`@${bot.username} is not listening to Castvoo (another program took it over). repair_webhook can fix it after the customer says yes (connection_id ${bot.id}).`);
+      } catch { /* skip */ }
+      if (q.trigger_type === 'join_request') {
+        const chat = await db.one("select * from connections where workspace_id = $1 and kind <> 'bot' and status <> 'removed' and tg_chat_id::text = $2", [scope.workspaceId, q.trigger_value || '']);
+        if (!chat) problems.push('Its channel or group is not connected any more.');
+        else { const r = await require('./flows').checkAdmin(bot, chat); if (r.ok) fine.push(`@${bot.username} is an admin of "${chat.title}" and can let people in`); else problems.push(r.message); }
+      } else {
+        const steps = await db.many("select config from sequence_steps where sequence_id = $1 and variant = 0 and step_type = 'check_join'", [q.id]);
+        for (const s of steps) {
+          const chat = await db.one("select * from connections where id = $1 and workspace_id = $2 and kind <> 'bot' and status <> 'removed'", [Number((s.config || {}).chat_id) || 0, scope.workspaceId]);
+          if (!chat) { problems.push('A ✅ Check they joined step points at a channel that is not connected any more.'); continue; }
+          const r = await require('./bots').checkCanCheck(bot, chat);
+          if (r.ok) fine.push(`@${bot.username} can check who joined "${chat.title}"`); else problems.push(r.message);
+        }
+        const clash = await require('./bots').botClash({ id: scope.workspaceId }, bot.id, q.trigger_value, q.is_default, q.id);
+        if (clash) problems.push(`Live bot "${clash.name}" already uses ${clash.why === 'code' ? 'this start link' : 'the plain Start'} on @${bot.username}. Only one can be live with it.`);
+      }
+      return { id: q.id, name: q.name, ok: !problems.length, problems, fine };
+    },
+  },
+
+  diagnose_account: {
+    description: 'Checks the whole workspace for the common problems at once and returns each with a plain fix and a link key: plan paused or limits hit (live bots, subscribers, join requests, lead answers, AI writes, Cas builds), bots paused by plan, Needs attention, bot token not valid, webhook taken by another program, own bot not admin of the channel (Welcome bots) or of the checked channel (join checks), no join requests (invite link without "Approve new members"), failed welcomes, start-link clashes, many people blocking the bot, failed or stuck broadcasts, pending or failed payments, the Free plan branding line, unverified email, devices limit. Read-only. Use it first when something "doesn\'t work".',
+    parameters: S(),
+    async run(scope) { return diagnose(scope, { live: true }); },
+  },
+
+  get_security: {
+    description: "The customer's own login security: how many devices are logged in now (device, browser, country, last active; never IP addresses), the most per person on the plan, recent new-login alerts and new devices.",
+    personal: false,
+    parameters: S(),
+    async run(scope) {
+      const { user } = await scopeRows(scope);
+      const list = await require('./security').list(user.id, null);
+      const alerts = await db.many("select created_at, status from email_log where user_id = $1 and template = 'new_login' and created_at > now() - interval '30 days' order by id desc limit 5", [user.id]);
+      const per = await billing.sessionsPerSeat(user.id).catch(() => 2);
+      return {
+        devices_logged_in: list.length, most_per_person: per,
+        devices: list.slice(0, 6).map((d) => ({ device: d.device, country: d.country_name, first_seen: day(d.created_at), last_active: day(d.last_seen_at) })),
+        new_login_alerts_30d: alerts.map((a) => ({ at: day(a.created_at), email: a.status })),
+        telegram_alerts_on: user.login_alert_tg !== false && !!user.tg_user_id,
+        how_to: 'Settings → Security: "Log out" one device or "Log out all other devices". You cannot log devices out for them.',
+      };
+    },
+  },
+
+  get_cas_builder: {
+    description: 'Cas Builder (build a bot by chatting with Cas): builds included, used and left this month (Free: lifetime), Cas credits bought, whether Cas is resting today, and the recent Cas Builder chats (new or edit, open / saved, which bot, whether it counted as a build).',
+    parameters: S(),
+    async run(scope) {
+      const { ws } = await scopeRows(scope);
+      const cb = require('./cas-builder');
+      const x = await cb.builds(ws);
+      const cf = await cb.conf();
+      const rows = await db.many(`select s.id, s.kind, s.status, s.counted_at, s.paid_by, s.updated_at, s.flow_id, q.name from cas_sessions s left join sequences q on q.id = s.flow_id
+        where s.workspace_id = $1 order by s.updated_at desc limit 6`, [ws.id]);
+      return {
+        builds: { included: x.unlimited ? 'unlimited (fair use ' + (x.fair || 'about 500') + ' a month)' : x.limit, period: x.period, used: x.used, left: x.left < 0 ? 'unlimited' : x.left, credits: x.credits, resets: day(x.resets_at), can_build_now: x.available },
+        credit_pack: Number(cf.credit_pack_price_cents) > 0 ? `${cf.credit_pack_builds} builds for ${usd(cf.credit_pack_price_cents)} from the wallet (cash, not bonus; never expire)` : 'not sold right now',
+        resting_today: await cb.resting().catch(() => false),
+        sessions: rows.map((r) => ({ kind: r.kind === 'edit' ? 'changing a saved bot (never counts)' : 'new bot', status: r.status, bot: r.name || null, bot_id: r.flow_id || null, counted_as_build: !!r.counted_at, paid_by: r.paid_by, last_used: day(r.updated_at) })),
+      };
+    },
+  },
+
+  toggle_bot: {
+    description: 'Switch one Bot on (live) or off (draft), with every check the Bots page does (plan limits, admin rights, one live bot per channel or start link). It CHANGES the account: first explain what will happen and get a clear yes; the system only runs it after the customer agreed in their own message. Not for drafts-only members.',
+    parameters: S({ bot_id: { type: 'integer', description: 'Bot id from get_bots' }, on: { type: 'boolean', description: 'true = switch on, false = switch off' } }, ['bot_id', 'on']),
+    write: true,
+    confirm: true,
+    async prepare(scope, input) {
+      if (scope.role === 'drafter') return { stop: { done: false, not_allowed: true, message: 'Drafts-only members can\'t switch bots on or off. Ask the owner.' } };
+      const q = await db.one("select id, name, active from sequences where id = $1 and workspace_id = $2 and trigger_type in ('join_request','bot_start')", [Number(input.bot_id) || 0, scope.workspaceId]);
+      if (!q) return { stop: { found: false, message: 'No bot with that id in this workspace. Use get_bots.' } };
+      const on = input.on === true || input.on === 'true';
+      if (q.active === on) return { stop: { id: q.id, already: true, status: on ? 'live' : 'draft', message: `"${q.name}" is already ${on ? 'live' : 'switched off'}.` } };
+      return { key: `${q.id}:${on ? 1 : 0}`, ask: `Switch ${on ? 'ON' : 'OFF'} the bot "${q.name}"${on ? '' : ' (people stop getting it until it is switched on again; nothing is deleted)'}?` };
+    },
+    async run(scope, input) {
+      const q = await db.one('select * from sequences where id = $1 and workspace_id = $2', [Number(input.bot_id) || 0, scope.workspaceId]);
+      const on = input.on === true || input.on === 'true';
+      if (scope.sandbox) return { id: q.id, done: false, sandbox: true, message: 'Sandbox: nothing was changed.' };
+      if (!on) { await db.query('update sequences set active = false, paused_by_plan = false, updated_at = now() where id = $1 and workspace_id = $2', [q.id, scope.workspaceId]); return { id: q.id, name: q.name, done: true, status: 'draft' }; }
+      try {
+        const ws = await db.one('select * from workspaces where id = $1', [scope.workspaceId]);
+        await require('../routes/flows').switchOn(ws, q, false);
+        return { id: q.id, name: q.name, done: true, status: 'live' };
+      } catch (e) { return { id: q.id, name: q.name, done: false, why: e.message }; }
+    },
+  },
+
+  share_link: {
+    description: 'Send the customer a tappable link card that opens the exact place: a dashboard page, one of their bots, a video guide, a help article, a blog post, a legal page or a Zedapex site. Only keys from the list work (any other web address is refused). The card appears under your next message, so say in words what it opens. Keys:\n' + require('./support-links').keysText(),
+    parameters: S({ key: { type: 'string', description: 'e.g. "topup", "bot:12", "guide:connect-bot", "article:wallet", "site:joinvoo"' }, label: { type: 'string', description: 'optional short button text' }, url: { type: 'string', description: 'instead of key: a Castvoo dashboard link (#app/...) or a Zedapex site home page; anything else is refused' } }),
+    async run(scope, input) {
+      const r = await require('./support-links').resolve({ key: input.key, label: input.label, url: input.url }, scope);
+      return r.ok ? { ok: true, card: r.card, shown: 'The card shows under your reply.' } : { ok: false, refused: true, reason: r.reason };
+    },
+  },
+
   search_knowledge: {
     description: 'Search the Castvoo help articles. Use it for how-to questions and error messages.',
     parameters: S({ query: { type: 'string' } }, ['query']),
@@ -516,13 +892,40 @@ async function searchKnowledge(q, limit = 3) {
 }
 const STOP = new Set(['the', 'and', 'for', 'you', 'your', 'how', 'what', 'why', 'can', 'does', 'not', 'are', 'with', 'this', 'that', 'have', 'from', 'when', 'did', 'was', 'its', 'but', 'get', 'got', 'any', 'into']);
 
+/*
+ * "Yes" in the customer's own words (English, Pidgin, French, Portuguese, Spanish, Swahili). A message with a "no",
+ * "wait", "don't"... is never a yes.
+ */
+const YES_RX = /^(?:(?:yes|yeah|yea|yep|yup|ya|ok|okay|okey|k|sure|alright|all right|go ahead|go on|please do|do it|do am|abeg do am|oya|oya do am|confirm|confirmed|proceed|sounds good|correct|right|exactly|please|pls|abeg|yes please|ok please|yes do it|na so|e don do|make you do am|oui|d'accord|vas-y|sim|pode|claro|sí|si|vale|dale|ndiyo|sawa)\b[\s,.!👍🙏]*)+(?:(?:please|pls|abeg|thanks|thank you|go ahead|do it|now|o|sir|ma|boss)\b[\s,.!👍🙏]*)*$/i;
+const NO_RX = /\b(no|not|don'?t|dont|do not|wait|stop|cancel|later|hold on|never|abeg no|non|não|nao|hapana)\b/i;
+function saidYes(text) {
+  const t = String(text || '').normalize('NFKC').replace(/[‘’]/g, "'").trim().toLowerCase();
+  if (!t || t.length > 80 || NO_RX.test(t)) return false;
+  return YES_RX.test(t) || /^👍+$/.test(t);
+}
+
+async function confirmGate(name, tool, args, prep, scope) {
+  if (!scope.threadId) return { done: false, needs_confirmation: true, ask: prep.ask, message: 'This can only be done from the support chat.' };
+  const key = String(prep.key || '').slice(0, 200);
+  const pending = await db.one(`select * from support_ai_actions where thread_id = $1 and tool = $2 and input_key = $3 and used_at is null and expires_at > now()
+    order by id desc limit 1`, [scope.threadId, name, key]);
+  const yesAt = scope.customerAt ? new Date(scope.customerAt) : null;
+  if (pending && yesAt && new Date(pending.created_at) < yesAt && saidYes(scope.customerText)) {
+    const used = await db.one('update support_ai_actions set used_at = now() where id = $1 and used_at is null returning id', [pending.id]);
+    if (used) return { ...(await tool.run(scope, args)), confirmed_by_customer: true };
+  }
+  if (!pending) await db.query('insert into support_ai_actions(thread_id, workspace_id, tool, input_key, summary) values ($1,$2,$3,$4,$5)', [scope.threadId, scope.workspaceId || null, name, key, String(prep.ask || '').slice(0, 300)]);
+  return { done: false, needs_confirmation: true, ask: prep.ask,
+    rule: 'Nothing was changed yet. Ask the customer this in your own warm words (one short question) and wait. When they answer yes in their next message, call this tool again with the same input.' };
+}
+
 /** The tool list in the neutral format llm.complete() takes. */
 function definitions(names) {
   return names.filter((n) => TOOLS[n]).map((n) => ({ name: n, description: TOOLS[n].description, parameters: TOOLS[n].parameters }));
 }
 const SUPPORT_TOOLS = Object.keys(TOOLS);
 // Cas (the in-app helper) only reads the workspace. Account and payment questions go to the support chat.
-const CAS_TOOLS = ['get_usage', 'get_connections', 'get_broadcasts', 'get_flows', 'get_subscribers_summary', 'get_recent_errors', 'search_knowledge'];
+const CAS_TOOLS = ['get_usage', 'get_connections', 'get_broadcasts', 'get_flows', 'get_bots', 'get_subscribers_summary', 'get_recent_errors', 'search_knowledge'];
 
 /**
  * Run one tool for one scope. Never throws: returns { ok, output } with a redacted output.
@@ -540,7 +943,14 @@ async function run(name, input, scope) {
   // Referral money belongs to each person's own account; while helping a customer, the helper's own earnings are not shown.
   else if (tool.personal && !scope.sandbox && scope.role === 'helper') { ok = true; output = { not_available: true, message: 'This chat is about the workspace this person helps set up. Referral earnings and withdrawals are only shown in their own workspace.' }; }
   else {
-    try { output = await tool.run(scope, args); } catch (e) {
+    try {
+      // Confirm before acting (enforced here, not by the model): a tool that changes something first returns the
+      // question; it runs only when the customer's newest message says yes AFTER that question was asked.
+      if (tool.confirm && !scope.sandbox) {
+        const prep = await tool.prepare(scope, args);
+        output = prep.stop ? prep.stop : await confirmGate(name, tool, args, prep, scope);
+      } else output = await tool.run(scope, args);
+    } catch (e) {
       ok = false;
       log.warn('support tool failed', { tool: name, err: e.message });
       output = { error: 'This check did not work just now.' };
@@ -554,4 +964,4 @@ async function run(name, input, scope) {
   return { ok, output: clean };
 }
 
-module.exports = { TOOLS, SUPPORT_TOOLS, CAS_TOOLS, definitions, run, redact, maskEmail, searchKnowledge };
+module.exports = { TOOLS, SUPPORT_TOOLS, CAS_TOOLS, definitions, run, redact, maskEmail, searchKnowledge, diagnose, saidYes, plainError };

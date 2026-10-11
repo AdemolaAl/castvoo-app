@@ -51,7 +51,7 @@ const SAMPLE = {
   billing_url: 'https://castvoo.com/#app/billing',
   renewal_date: '10 November 2026',
   bonus: '$0.00',
-  method: 'Paystack (card)',
+  method: 'Flutterwave (card)',
   new_balance: '$61.00',
   wallet_url: 'https://castvoo.com/#app/wallet',
   coin: 'USDT (TRC20)',

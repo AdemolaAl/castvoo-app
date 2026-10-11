@@ -14,21 +14,27 @@
  * To change a video: replace its 3 files and bump GUIDE_V so browsers fetch the new ones.
  */
 
-const GUIDE_V = 2;
+const GUIDE_V = 4;
 const VGUIDES = [
   { id: 'connect-bot', title: 'Connect your Telegram bot', text: 'Make a bot with @BotFather and connect it in a minute.', dur: 75, pages: ['bots'] },
   { id: 'add-channel', title: 'Add a channel or group', text: 'Link your Telegram, then connect a channel or group in one tap.', dur: 74, pages: ['bots'] },
-  { id: 'welcome-flow', title: 'Build a Welcome Flow', text: 'Welcome, let in and follow up everyone who asks to join.', dur: 104, pages: ['flows'] },
+  // 🤖 Bots (page key 'flows') shows all five, labelled by `link`; the Cas Builder chooser links them too.
+  // The first two are Welcome bots (people who ask to join a channel), the next three Chat bots (people who tap Start).
+  { id: 'cas-builder', title: 'Build a welcome bot with Cas', link: 'Welcome bot with Cas', text: 'For people who ask to join your channel: tap a few answers and Cas builds the welcome bot. Watch it play, test it, switch it on.', dur: 81, pages: ['flows'] },
+  { id: 'welcome-flow', title: 'Build a welcome bot yourself', link: 'Welcome bot yourself', text: 'Messages, Tap Start, when each one comes, two buttons, a reminder, previews and a test on your Telegram.', dur: 104, pages: ['flows'] },
+  { id: 'bots-with-cas', title: 'Build any bot with Cas', link: 'Chat bot with Cas', text: 'Join my channel first, a free gift, a menu, questions or invites: tap a few answers and Cas builds it. See it play, switch it on, copy the start link.', dur: 104, pages: ['flows'] },
+  { id: 'bots-yourself', title: 'Build a bot yourself', link: 'Chat bot yourself', text: 'Start from a template, change the words, add buttons and a question, preview it, test it on your Telegram, switch it on.', dur: 103, pages: ['flows'] },
+  { id: 'bots-leads-invites', title: 'Leads, invites & broadcasts', link: 'Leads & invites', text: 'See every answer and download a CSV, reward people who invite friends, and message everyone who started your bot.', dur: 69, pages: ['flows'] },
   { id: 'send-broadcast', title: 'Send a broadcast', text: 'A personal message with {name}, buttons and scheduling.', dur: 79, pages: ['broadcast', 'calendar'] },
   { id: 'auto-follow-ups', title: 'Auto follow-ups', text: 'Messages your bot sends by itself, on a timer.', dur: 72, pages: ['drips'] },
   { id: 'audiences-start-links', title: 'Audiences & start links', text: 'See which ad brought each subscriber, then message just them.', dur: 71, pages: ['audiences', 'subscribers', 'clicks'] },
   { id: 'wallet-plans', title: 'Wallet, plans & the Free plan', text: 'Top up, pick a plan, and what happens on Free.', dur: 84, pages: ['wallet'] },
-  { id: 'referrals-help', title: 'Earn with referrals & get help', text: 'Share your link, earn monthly, and chat with support 24/7.', dur: 85, pages: ['earn', 'help'] },
+  { id: 'referrals-help', title: 'Earn with referrals & get help', text: 'Share your link, earn monthly, and chat with support 24/7.', dur: 84, pages: ['earn', 'help'] },
   // Linked from the Setup helper card (Settings → Team) and the "Get help setting up" cards, not from a page header.
   { id: 'setup-helper', title: 'Invite a setup helper', text: 'Let your media buyer set things up with their own login. No password sharing.', dur: 84, pages: [] },
 ];
 /* Smaller sets of guides for places outside the dashboard. */
-const VG_SETS = { site: ['welcome-flow', 'connect-bot', 'send-broadcast', 'wallet-plans'] };
+const VG_SETS = { site: ['cas-builder', 'welcome-flow', 'connect-bot', 'send-broadcast'] };
 const vgSrc = (id, ext) => '/videos/' + id + '.' + ext + '?v=' + GUIDE_V;
 const vgTime = (s) => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 
@@ -45,10 +51,10 @@ function vgNavTag() {
 function guideLink(id, label) {
   const g = VGUIDES.find((x) => x.id === id); if (!g) return '';
   const seen = vgSeen()[id];
-  return '<button type="button" class="vgl' + (seen ? ' seen' : '') + '" data-vguide="' + esc(id) + '"><span class="vgl-p">' + icon(seen ? 'check' : 'play') + '</span><span><b>' + esc(label || 'Watch the guide') + '</b><small>' + (label === g.title ? (seen ? 'Watched' : 'Video guide') : esc(g.title)) + ' · ' + vgTime(g.dur) + '</small></span></button>';
+  return '<button type="button" class="vgl' + (seen ? ' seen' : '') + '" data-vguide="' + esc(id) + '"><span class="vgl-p">' + icon(seen ? 'check' : 'play') + '</span><span><b>' + esc(label || 'Watch the guide') + '</b><small>' + (label === g.title ? (seen ? 'Watched' : 'Video guide') : label && label === g.link ? (seen ? 'Watched' : 'Watch the guide') : esc(g.title)) + ' · ' + vgTime(g.dur) + '</small></span></button>';
 }
 /* Every guide for a dashboard page, as a row of links (or ''). */
-function guideLinksFor(page) { const l = VGUIDES.filter((g) => g.pages.includes(page)); return l.length ? '<div class="vgls">' + l.map((g) => guideLink(g.id, l.length > 1 ? g.title : 'Watch the guide')).join('') + '</div>' : ''; }
+function guideLinksFor(page) { const l = VGUIDES.filter((g) => g.pages.includes(page)); return l.length ? '<div class="vgls">' + l.map((g) => guideLink(g.id, l.length > 1 ? g.link || g.title : 'Watch the guide')).join('') + '</div>' : ''; }
 
 function vgCard(g, i, seen) {
   return '<button type="button" class="vgc' + (seen ? ' seen' : '') + '" data-vguide="' + esc(g.id) + '"><span class="vgc-th"><img src="' + vgSrc(g.id, 'jpg') + '" alt="" loading="lazy" width="640" height="360"><span class="vgc-pl">' + icon('play') + '</span><span class="vgc-d">' + vgTime(g.dur) + '</span>' + (seen ? '<span class="vgc-ok">' + icon('check') + 'Watched</span>' : '') + '</span>' +

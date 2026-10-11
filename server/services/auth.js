@@ -39,8 +39,19 @@ async function createSession(ctx, user, { created = false } = {}) {
       .catch(() => {});
   }
   ctx.setCookie(COOKIE, token, cookieOpts(SESSION_DAYS * 86400));
+  // Logged-in devices per seat (docs/BOTS-PRICING.md §6): one login too many logs out the oldest (never blocks), and
+  // the new-login alert goes out so the person notices.
+  const removed = await capSessions(user.id, sha256(token)).catch(() => 0);
   // New device + country for this account: email (and Telegram) alert. Never fails the login.
-  await security.onLogin(ctx, user, { created, dev, country });
+  await security.onLogin(ctx, user, { created, dev, country, force: removed > 0 });
+}
+
+/** Keep at most the plan's logged-in devices per person (billing.sessionsPerSeat): the oldest go. Returns how many were logged out. */
+async function capSessions(userId, keepHash) {
+  const cap = await require('./billing').sessionsPerSeat(userId);
+  const r = await db.query(`delete from sessions where user_id = $1 and token_hash <> $2 and token_hash in (
+      select token_hash from sessions where user_id = $1 and token_hash <> $2 and expires_at > now() order by created_at desc, id desc offset $3)`, [userId, keepHash, Math.max(0, cap - 1)]);
+  return r.rowCount || 0;
 }
 
 async function loadSession(ctx) {
@@ -234,4 +245,4 @@ async function currentWorkspace(user, wanted) {
   return rows[0] || null;
 }
 
-module.exports = { COOKIE, createSession, loadSession, destroySession, loginWith, loginWithVoo, createWorkspace, currentWorkspace, TZ_BY_COUNTRY };
+module.exports = { capSessions, COOKIE, createSession, loadSession, destroySession, loginWith, loginWithVoo, createWorkspace, currentWorkspace, TZ_BY_COUNTRY };

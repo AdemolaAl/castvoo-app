@@ -96,6 +96,10 @@ process.env.QUIET_LOGS = '1';
     // | Plan | Price | Connections | Bot subscribers | Join requests | Welcome Flows | Steps per flow | AI writes | Seats |
     const want = [p.name, `$${p.price_month_cents / 100}`, fmt(p.connections), fmt(p.subscribers), lim(p.join_requests), lim(p.flows), lim(p.flow_steps), fmt(p.ai_writes), fmt(p.seats)];
     want.forEach((w, i) => { if (cells[i] !== w) fail('pricing', `${p.name}: PRODUCT-FACTS row "${row.trim()}" column ${i + 1} should be ${w}`); });
+    // Cas Builder builds (plans.cas_builds): the 10th column, the AI's live plan list and the pricing page all say it.
+    const cb = p.cas_builds == null ? 0 : p.cas_builds;
+    const cbWant = cb < 0 ? 'Unlimited (fair use, ' + fmt(SETTINGS.cas_builder.fair_use_monthly) + ' a month)' : p.price_month_cents === 0 ? `${fmt(cb)} (first flow, lifetime)` : `${fmt(cb)} a month`;
+    if (cells[9] !== cbWant) fail('pricing', `${p.name}: PRODUCT-FACTS "Cas Builder builds" column should be "${cbWant}" (is "${cells[9] || ''}")`);
     if (p.price_year_cents !== p.price_month_cents * 10) fail('pricing', `${p.name}: yearly price should be 10 × monthly (2 months free)`);
     if (p.price_year_cents && !facts.includes(`${p.name} $${fmt(p.price_year_cents / 100)}`)) fail('pricing', `PRODUCT-FACTS does not give the yearly price of ${p.name} ($${fmt(p.price_year_cents / 100)})`);
     if (p.ai_writes > 0 && !faq.includes(`${fmt(p.ai_writes)} on ${p.name}`)) fail('pricing', `FAQ "What is an AI write?" does not say ${fmt(p.ai_writes)} on ${p.name}`);
@@ -109,6 +113,7 @@ process.env.QUIET_LOGS = '1';
     }
     if (p.flow_steps && !line.includes(`${p.flow_steps < 0 ? 'unlimited' : fmt(p.flow_steps)} ${p.price_month_cents === 0 ? 'welcome message' : 'messages each'}`)) fail('pricing', `the AI's live plan list for ${p.name} does not give the steps per flow`);
     if (p.ai_writes > 0 && !line.includes(`${fmt(p.ai_writes)} AI writes`)) fail('pricing', `the AI's live plan list for ${p.name} does not give ${fmt(p.ai_writes)} AI writes`);
+    if (p.cas_builds && !live.split('\n').find((l) => l.startsWith(`- ${p.name}: $`)).includes('Cas Builder')) fail('pricing', `the AI's live plan list for ${p.name} does not mention its Cas Builder builds`);
     if (/\$(19|49|99)\b/.test(kb)) fail('pricing', 'knowledge text must not repeat plan prices (the AI reads them live)');
     if (p.code === 'free' && !kb.includes(`${fmt(p.join_requests)} join requests a month`)) fail('pricing', `knowledge must state the Free plan rule of ${fmt(p.join_requests)} join requests a month`);
     if (p.branding && !(facts.includes('Free welcome bot by Castvoo.com') && kb.includes('Free welcome bot by Castvoo.com'))) fail('pricing', `the "${p.name}" branding line must be described in PRODUCT-FACTS and knowledge`);
@@ -145,6 +150,13 @@ process.env.QUIET_LOGS = '1';
   }
   // Plans must be affordable and profitable: AI cost at full use stays under 20% of the price (Haiku ≈ $0.003 a write).
   for (const p of PLANS) { const aiCost = p.ai_writes * 0.003 * 100; if (aiCost > p.price_month_cents * 0.2) fail('pricing', `${p.name}: AI writes could cost $${(aiCost / 100).toFixed(2)}, over 20% of the price`); }
+  {
+    const c = SETTINGS.cas_builder;
+    const pack = `${c.credit_pack_builds} builds for $${c.credit_pack_price_cents / 100}`;
+    if (c.credit_pack_price_cents > 0 && !facts.includes(pack)) fail('pricing', `PRODUCT-FACTS does not give the Cas credits pack "${pack}"`);
+    if (!kb.includes('Cas Builder') || !require('../server/knowledge-defaults').some((k) => k.key === 'cas-builder')) fail('pricing', 'knowledge needs the "cas-builder" article');
+    if (!read('public/js/site.js').includes('cas_builds')) fail('pricing', 'the pricing page (public/js/site.js) must show each plan\'s Cas Builder builds');
+  }
   passed.push(`pricing: ${PLANS.length} plans (incl. Free), join requests, flows, trial, top-up bonuses, referral rates and limits agree across seed, FAQ, knowledge, the AI's live plan list and PRODUCT-FACTS`);
 }
 
@@ -277,7 +289,20 @@ process.env.QUIET_LOGS = '1';
   const allowed = last ? [...last.match(/payment_methods_provider_check check \(provider in \(([^)]*)\)/)[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]) : [];
   for (const pv of new Set([...METHODS.map((m) => m.provider), 'manual'])) if (!allowed.includes(pv)) fail('payments', `provider ${pv} is not allowed by payment_methods_provider_check (add a migration)`);
   for (const k of ['topup_received', 'topup_submitted', 'topup_rejected', 'crypto_submitted', 'crypto_rejected']) if (!T[k]) fail('payments', `email template ${k} is missing`);
-  passed.push(`payments: ${Object.keys(GATEWAYS).length} automatic gateways, ${METHODS.length} built-in methods; the database allows ${allowed.join(', ')}`);
+  // Paystack is retired (migration 022): never seeded, never on a country, never offered by methodsFor, never started;
+  // its verify path stays for old payments. Customer copy only mentions it as "no longer" / "before".
+  const { COUNTRIES } = require('../server/seed');
+  const RETIRED = ['paystack'];
+  for (const m of METHODS) if (RETIRED.includes(m.provider)) fail('payments', `seed method ${m.key} uses retired provider ${m.provider}`);
+  const keys = new Set(METHODS.map((m) => m.key));
+  for (const c of COUNTRIES) for (const k of c.methods) if (!keys.has(k)) fail('payments', `${c.code} lists ${k}, which is not a seeded method`);
+  for (const code of ['NG', 'GH', 'ZA']) { const c = COUNTRIES.find((x) => x.code === code); if (!c || !c.methods.some((k) => (METHODS.find((m) => m.key === k) || {}).provider === 'flutterwave')) fail('payments', `${code} has no Flutterwave method`); }
+  if (!GATEWAYS.paystack || typeof GATEWAYS.paystack.verify !== 'function') fail('payments', 'keep GATEWAYS.paystack.verify: old Paystack payments must still be checked');
+  if (!/m\.provider === 'paystack'\) continue/.test(read('server/services/settings.js'))) fail('payments', 'settings.methodsFor must never offer Paystack');
+  for (const f of ['server/legal/privacy.html', 'server/legal/terms.html', 'server/legal/refunds.html', 'server/knowledge-defaults.js', 'docs/PRODUCT-FACTS.md']) {
+    for (const line of read(f).split('\n')) if (/paystack/i.test(line) && !/(no longer|before|previously|old paystack|older paystack|retired|removed|earlier)/i.test(line)) fail('payments', `${f} still offers Paystack: "${line.trim().slice(0, 90)}"`);
+  }
+  passed.push(`payments: ${Object.keys(GATEWAYS).length} automatic gateways (Paystack: old payments only), ${METHODS.length} built-in methods; the database allows ${allowed.join(', ')}`);
 }
 
 /* 11. Guide videos: every guide in public/js/app-guides.js has its mp4, captions and poster in public/videos (a deploy

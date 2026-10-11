@@ -25,6 +25,7 @@ const PLAN_FEATURES = [
   { key: 'ai', name: 'Cas AI' },
   { key: 'ab_welcome_2', name: 'A/B welcome (2 versions)' },
   { key: 'condition_clicked', name: 'Clicked / didn\'t click conditions' },
+  { key: 'start_another_flow', name: 'Start another flow (from a Welcome Flow message)' },
   { key: 'audiences', name: 'Audiences' },
   { key: 'start_links', name: 'Start links' },
   { key: 'flow_funnel_stats', name: 'Flow funnel and A/B stats' },
@@ -133,6 +134,8 @@ module.exports = (r) => {
       ai_writes: int(b.ai_writes, 'AI writes', { min: 0, max: 1000000 }), seats: int(b.seats, 'Seats', { min: 1, max: 500 }),
       join_requests: limit(b.join_requests, 'Join requests a month', cur && cur.join_requests, 5000),
       flows: limit(b.flows, 'Welcome Flows', cur && cur.flows, 3), flow_steps: limit(b.flow_steps, 'Steps per flow', cur && cur.flow_steps, 5),
+      // Flows built with Cas Builder a month (the Free plan: for the life of the workspace). -1 = unlimited (fair use).
+      cas_builds: limit(b.cas_builds, 'Cas Builder builds', cur && cur.cas_builds, 10),
       branding: b.branding === undefined ? (cur ? !!cur.branding : false) : bool(b.branding), features,
       bullets, popular: bool(b.popular), active: b.active === undefined ? true : bool(b.active), sort: int(b.sort ?? 0, 'Order', { min: 0, max: 100 }),
     };
@@ -148,9 +151,9 @@ module.exports = (r) => {
     const f = await planFields(ctx.body);
     if (await db.one('select 1 from plans where code = $1', [code])) throw badRequest('A plan with that code already exists.');
     if (f.popular) await db.query('update plans set popular = false');
-    await db.query(`insert into plans(code,name,tagline,price_month_cents,price_year_cents,connections,subscribers,ai_writes,seats,bullets,popular,active,sort,join_requests,flows,flow_steps,branding,features)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`, [code, f.name, f.tagline, f.price_month_cents, f.price_year_cents, f.connections, f.subscribers, f.ai_writes, f.seats, JSON.stringify(f.bullets), f.popular, f.active, f.sort,
-      f.join_requests, f.flows, f.flow_steps, f.branding, JSON.stringify(f.features)]);
+    await db.query(`insert into plans(code,name,tagline,price_month_cents,price_year_cents,connections,subscribers,ai_writes,seats,bullets,popular,active,sort,join_requests,flows,flow_steps,branding,features,cas_builds)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`, [code, f.name, f.tagline, f.price_month_cents, f.price_year_cents, f.connections, f.subscribers, f.ai_writes, f.seats, JSON.stringify(f.bullets), f.popular, f.active, f.sort,
+      f.join_requests, f.flows, f.flow_steps, f.branding, JSON.stringify(f.features), f.cas_builds]);
     return changed(ctx, 'plan.create', 'plan:' + code, f);
   }, { staff: 'pricing.edit' });
 
@@ -165,9 +168,9 @@ module.exports = (r) => {
     if (f.popular) await db.query('update plans set popular = false where code <> $1', [p.code]);
     if (p.code === 'free' && (f.price_month_cents > 0 || f.price_year_cents > 0)) throw badRequest('The Free plan must stay at $0. Workspaces drop to it when a plan ends.');
     await db.query(`update plans set name=$2, tagline=$3, price_month_cents=$4, price_year_cents=$5, connections=$6, subscribers=$7, ai_writes=$8, seats=$9, bullets=$10, popular=$11, active=$12, sort=$13,
-      join_requests=$14, flows=$15, flow_steps=$16, branding=$17, features=$18 where code = $1`,
+      join_requests=$14, flows=$15, flow_steps=$16, branding=$17, features=$18, cas_builds=$19 where code = $1`,
       [p.code, f.name, f.tagline, f.price_month_cents, f.price_year_cents, f.connections, f.subscribers, f.ai_writes, f.seats, JSON.stringify(f.bullets), f.popular, f.active, f.sort,
-        f.join_requests, f.flows, f.flow_steps, f.branding, JSON.stringify(f.features)]);
+        f.join_requests, f.flows, f.flow_steps, f.branding, JSON.stringify(f.features), f.cas_builds]);
     // A price rise: everyone already paying for this plan keeps the old price for 30 days and gets an email now.
     let notified = 0;
     for (const cycle of ['month', 'year']) {
@@ -260,7 +263,8 @@ module.exports = (r) => {
     const code = String(ctx.params.code).toUpperCase();
     const b = ctx.body;
     // Manual methods pick their countries themselves (on the method), so only automatic ones are listed per country.
-    const known = new Set((await db.many("select key from payment_methods where provider <> 'manual'")).map((m) => m.key));
+    // Paystack is retired (migration 022): it can't be put back on a country.
+    const known = new Set((await db.many("select key from payment_methods where provider not in ('manual', 'paystack') and deleted_at is null")).map((m) => m.key));
     const methods = (Array.isArray(b.methods) ? b.methods : []).filter((k) => known.has(k));
     const rate = Number(b.usd_rate);
     if (!Number.isFinite(rate) || rate <= 0 || rate > 1000000) throw badRequest('Exchange rate must be a positive number (local money per 1 US dollar).');
@@ -273,10 +277,11 @@ module.exports = (r) => {
   }, { staff: 'countries.edit' });
 
   /*
-   * Payment methods. The seeded ones (Paystack, Flutterwave, crypto) are automatic: only their name, detail and
+   * Payment methods. The seeded ones (Flutterwave, crypto) are automatic: only their name, detail and
    * on/off change here, and they can't be deleted. The team adds its own "manual" methods (bank transfer, mobile
    * money, a crypto wallet...): customers see the instructions, pay, send proof, and Finance approves in Payments.
    * A new AUTOMATIC gateway needs code: see the steps at the top of server/payments/index.js.
+   * Paystack (retired) is switched off and hidden here; its record stays for the payment history.
    */
   r.post('/api/admin/methods', async (ctx) => {
     const f = await manualFields(ctx.body);
@@ -382,20 +387,31 @@ module.exports = (r) => {
         seat_price_cents: v.seat_price === undefined || v.seat_price === '' ? Number(cur.seat_price_cents ?? 500) : Math.min(money(v.seat_price, 'Extra team seat price'), 100000) };
     },
     referral: async (v) => {
-      // AUD-1: one commission per payment, never more than 50% of the cash (minus processor fees), 35% on yearly payments.
+      // AUD-1: one commission per payment, never more than 15% of the cash (minus processor fees), monthly or yearly (5 to 15% program).
       const cur = (await settings.get('referral')) || {};
       const keep = (k, label, max, dflt) => (v[k] === undefined || v[k] === '' ? Math.min(max, Number(cur[k] ?? dflt)) : int(v[k], label, { min: 0, max }));
       const flag = (k, dflt) => (v[k] === undefined ? (cur[k] ?? dflt) !== false : bool(v[k]));
-      const cap = keep('commission_cap_pct', 'Highest commission (%)', 50, 50);
+      const cap = keep('commission_cap_pct', 'Highest commission (%)', 15, 15);
       const rates = [int(v.rate_1, 'Tier 1 %', { min: 0, max: cap }), int(v.rate_2, 'Tier 2 %', { min: 0, max: cap }), int(v.rate_3, 'Tier 3 %', { min: 0, max: cap })];
       const t2 = int(v.tier2_min, 'Tier 2 starts at', { min: 2, max: 1000 }), t3 = int(v.tier3_min, 'Tier 3 starts at', { min: 3, max: 10000 });
       if (t3 <= t2) throw badRequest('Tier 3 must start higher than tier 2.');
       return { rates, tier2_min: t2, tier3_min: t3, settle_days: int(v.settle_days, 'Settle days', { min: 0, max: 120 }), min_withdraw_cents: money(v.min_withdraw, 'Minimum withdrawal'), cookie_days: int(v.cookie_days, 'Referral cookie days', { min: 1, max: 365 }),
-        commission_cap_pct: cap, yearly_cap_pct: Math.min(cap, keep('yearly_cap_pct', 'Highest commission on yearly payments (%)', 50, 35)),
+        commission_cap_pct: cap, yearly_cap_pct: Math.min(cap, keep('yearly_cap_pct', 'Highest commission on yearly payments (%)', 15, 15)),
         first_attribution: flag('first_attribution', true), net_of_fees: flag('net_of_fees', true) };
     },
     ai: (v) => ({ model: str(v.model, 'Model', { min: 3, max: 80 }), max_output_tokens: int(v.max_output_tokens, 'Max answer length', { min: 200, max: 4000 }),
       temperature: Math.max(0, Math.min(1, Number(v.temperature) || 0.7)), house_rules: str(v.house_rules, 'House rules', { max: 4000, required: false }) || '' }),
+    // Cas Builder (services/cas-builder.js): models, the daily cost cap (USD, 0 = no cap), the fair-use soft cap on
+    // unlimited plans, and the Cas credits pack (builds, price; price 0 = not sold).
+    cas_builder: (v) => {
+      const model = (x, what) => { const m = String(x || '').trim(); if (m && (m.length > 100 || !/^~?[a-z0-9][a-z0-9._:/-]*$/i.test(m))) throw badRequest(`${what}: use a model name like claude-sonnet-4-5 (or anthropic/claude-sonnet-4.5 on OpenRouter).`); return m; };
+      const cap = Number(v.daily_cap_usd);
+      if (!Number.isFinite(cap) || cap < 0 || cap > 10000) throw badRequest('Daily spend cap: a number of US dollars from 0 to 10,000 (0 = no cap).');
+      return { model_write: model(v.model_write, 'Writing model'), model_fast: model(v.model_fast, 'Fast model'), daily_cap_usd: Math.round(cap * 100) / 100,
+        fair_use_monthly: int(v.fair_use_monthly ?? 500, 'Fair use a month', { min: 0, max: 100000 }),
+        credit_pack_builds: int(v.credit_pack_builds ?? 20, 'Builds in a credit pack', { min: 0, max: 1000 }),
+        credit_pack_price_cents: money(v.credit_pack_price ?? 5, 'Credit pack price') };
+    },
     crypto: (v) => {
       const usdt = (str(v.usdt_address, 'USDT address', { max: 100, required: false }) || '').trim();
       const btc = (str(v.btc_address, 'BTC address', { max: 100, required: false }) || '').trim();

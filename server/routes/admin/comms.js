@@ -130,7 +130,7 @@ module.exports = (r) => {
     const base = email.TEMPLATES[key];
     const S = { code: '482913', trial_end_date: '10 October 2026', guide_url: '#', inviter_name: 'Ejiro', workspace_name: 'Zedapex', invite_url: '#', role_name: 'Support', admin_url: '#',
       plan_name: 'Growth', plan_price: '$49.00', wallet_balance: '$120.00', topup_url: '#', amount: '$100.00', period_start: '3 October 2026', period_end: '2 November 2026', receipt_id: 'cv_sample123',
-      billing_url: '#', renewal_date: '2 November 2026', bonus: '$0.00', method: 'Paystack', new_balance: '$220.00', wallet_url: '#', coin: 'USDT', txid: 'a1b2c3d4e5f6a7b8c9d0', reference: 'FT2610081234567', reason: 'The transaction was not found on the TRON network.',
+      billing_url: '#', renewal_date: '2 November 2026', bonus: '$0.00', method: 'Flutterwave', new_balance: '$220.00', wallet_url: '#', coin: 'USDT', txid: 'a1b2c3d4e5f6a7b8c9d0', reference: 'FT2610081234567', reason: 'The transaction was not found on the TRON network.',
       referral_name: 'Tunde', settle_date: '2 November 2026', referrals_url: '#', address: 'TQ7mZ2r9VbKx4LwN8pHc3eYd6sFa1JuXo5', agent_name: 'Ada', message_preview: 'Hi! I checked your bot and it is connected now.',
       support_url: '#', broadcast_title: 'Weekend sale', delivered: '9,640', failed: '12', clicks: '1,104', report_url: '#', limit_name: 'subscribers', upgrade_url: '#', download_url: '#',
       connect_url: '#', broadcast_url: '#', drips_url: '#', train_url: '#', pricing_url: '#', coupon_code: 'COMEBACK20', coupon_percent: '20', coupon_expiry: '17 October 2026', reply_url: '#', first_name: 'Ejiro', unsubscribe_url: '#', old_price: '$49.00', new_price: '$59.00', billing_period: 'month', start_date: '2 November 2026',
@@ -200,6 +200,9 @@ module.exports = (r) => {
     }
     return { ok: true, key_cleared: /cleared/.test(v.key), ai: await llm.publicInfo() };
   }, { staff: 'ai.edit', rate: [30, 600] });
+
+  /** Cas Builder: builds today and in 7 days, the average cost of a build, today's spend against the cap, the settings. */
+  r.get('/api/admin/cas-builder', async () => ({ cas_builder: await require('../../services/cas-builder').adminStats() }), { staff: 'overview.view' });
 
   /** Try Cas with the current knowledge and house rules (no customer data). */
   r.post('/api/admin/ai/test', async (ctx) => {

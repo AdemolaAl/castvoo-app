@@ -66,11 +66,12 @@ const LINES = {
   'POST /api/flows/:id/duplicate': ['flow', (ctx, n) => named('Duplicated Welcome Flow', n)],
   'DELETE /api/flows/:id': ['flow', (ctx, n) => named('Deleted Welcome Flow', n)],
   'POST /api/flows/:id/invite-link': ['flow', (ctx, n) => named('Made an invite link for Welcome Flow', n)],
+  'POST /api/flows/:id/audience': ['flow', (ctx, n) => named('Made the "Tapped Start" audience of Welcome Flow', n)],
   'POST /api/wallet/topup': [null, (ctx) => `Started a wallet top-up of $${q(ctx.body.amount, 12)}`],
   'POST /api/support': [null, () => 'Wrote to Castvoo support'],
 };
 // Routes that change nothing worth a line (AI writing helpers, previews, uploads of support screenshots).
-const QUIET = new Set(['POST /api/ai/write', 'POST /api/ai/rewrite', 'POST /api/ai/translate', 'POST /api/ai/sequence', 'POST /api/ai/ask',
+const QUIET = new Set(['POST /api/ai/write', 'POST /api/ai/rewrite', 'POST /api/ai/translate', 'POST /api/ai/sequence', 'POST /api/ai/flow', 'POST /api/ai/ask',
   'POST /api/flows/check', 'POST /api/segments/preview', 'POST /api/support/attachments', 'POST /api/wallet/check', 'POST /api/wallet/crypto-txid',
   'POST /api/wallet/manual/:ref/screenshot', 'POST /api/wallet/manual/:ref/submit']);
 

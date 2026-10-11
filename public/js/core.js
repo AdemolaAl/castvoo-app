@@ -156,7 +156,7 @@ const P = {
   kwame: { n: 'Kwame', skin: '#5C3A21', hair: '#1E1611', st: 'short', beard: 1, shirt: '#F59F00', bg: '#FCF2DE' },
   thandi: { n: 'Thandi', skin: '#A0693F', hair: '#2B1B12', st: 'long', shirt: '#E64980', bg: '#FDECEC' },
   zainab: { n: 'Zainab', skin: '#C68642', hair: '#1E1611', st: 'long', glasses: 1, shirt: '#7950F2', bg: '#EFEBFF' },
-  ejiro: { n: 'Ejiro', skin: '#8D5524', hair: '#1E1611', st: 'short', glasses: 1, shirt: '#0B1430', bg: '#DCE6FF' },
+  dayo: { n: 'Dayo', skin: '#8D5524', hair: '#1E1611', st: 'short', glasses: 1, shirt: '#0B1430', bg: '#DCE6FF' },
   sipho: { n: 'Sipho', skin: '#6B4226', hair: '#1E1611', st: 'bald', beard: 1, shirt: '#15AABF', bg: '#E5F4FC' },
   fatou: { n: 'Fatou', skin: '#5C3A21', hair: '#1E1611', st: 'puff', glasses: 1, shirt: '#FA5252', bg: '#FDECEC' },
   emeka: { n: 'Emeka', skin: '#7A4B2A', hair: '#1E1611', st: 'short', shirt: '#2F9E44', bg: '#E2F6EE' },

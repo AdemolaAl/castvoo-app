@@ -16,6 +16,11 @@ async function siteAgent() {
   const p = await db.one('select id, name, role, updated_at from support_personas where active order by sort, id limit 1');
   return p ? require('../services/support-ai').publicPersona(p) : null;
 }
+/** Every active agent (the same 16 faces as inside): the website chat keeps one per browser (sticky). */
+async function siteAgents() {
+  const sa = require('../services/support-ai');
+  return (await sa.personas({ activeOnly: true })).map(sa.publicPersona);
+}
 
 /** The "Powered by Replyvoo" line under the chats (Admin → Support AI), or null when switched off. */
 async function poweredBy() {
@@ -31,7 +36,9 @@ async function publicConfig() {
   const plans = all.plans.filter((p) => p.active).map((p) => ({
     code: p.code, name: p.name, tagline: p.tagline, price_month: p.price_month_cents / 100, price_year: p.price_year_cents / 100,
     connections: p.connections, subscribers: p.subscribers, ai_writes: p.ai_writes, seats: p.seats, bullets: p.bullets, popular: p.popular,
-    join_requests: p.join_requests, flows: p.flows, flow_steps: p.flow_steps, branding: !!p.branding, features: p.features || [],
+    join_requests: p.join_requests, flows: p.flows, flow_steps: p.flow_steps, branding: !!p.branding, features: p.features || [], cas_builds: p.cas_builds ?? 0,
+    // Bots on this plan (services/billing.js BOT_PLANS): how many can be live and which bot types it may build.
+    bots: (() => { const b = require('../services/billing').botPlanOf(p); return { max: b.max_bots, types: b.bot_types.slice() }; })(),
   }));
   const banners = (await settings.activeOffers('banner')).map((o) => ({ title: o.title, text: o.description, link: o.link_url }));
   const bonuses = (await settings.activeOffers('topup_bonus')).map((o) => ({ min: Number(o.min_topup_cents) / 100, bonus: Number(o.bonus_cents) / 100 })).sort((a, b) => a.min - b.min);
@@ -54,6 +61,8 @@ async function publicConfig() {
     billing: { min_topup: s.billing.min_topup_cents / 100, max_topup: s.billing.max_topup_cents / 100, refund_days: s.billing.refund_days,
       // Extra team seats on paid plans, per seat per month (0 = not sold). Yearly plans pay 12 months.
       seat_price: Math.max(0, Number(s.billing.seat_price_cents ?? 500)) / 100 },
+    // Cas Builder's optional credit pack (null when not sold) and the fair-use amount on unlimited plans.
+    cas_builder: (() => { const c = { ...require('../services/cas-builder').DEFAULTS, ...(s.cas_builder || {}) }; return { pack: Number(c.credit_pack_price_cents) > 0 && Number(c.credit_pack_builds) > 0 ? { builds: Number(c.credit_pack_builds), price: Number(c.credit_pack_price_cents) / 100 } : null, fair_use: Number(c.fair_use_monthly) || 0 }; })(),
     topup_bonuses: f.topups ? bonuses : [],
     banners,
     support: { reply_time: s.support.reply_time, email: s.company.support_email, telegram: s.support.telegram_username || null },
@@ -61,7 +70,7 @@ async function publicConfig() {
     ai_available: f.ai && integ.ai,
     // The website chat bubble (visitors; knowledge only, no account access) and the face that answers there.
     support_team: f.support_chat ? await supportTeam() : [],
-    site_chat: f.site_chat && f.support_chat && integ.ai ? { agent: await siteAgent(), powered_by: await poweredBy() } : null,
+    site_chat: f.site_chat && f.support_chat && integ.ai ? { agent: await siteAgent(), agents: await siteAgents(), powered_by: await poweredBy() } : null,
     // VooSquare (Voo Connect): login button, "Part of VooSquare" links, support widget on the public website.
     voo: integ.voo_connect ? {
       app_url: config.voosquare.base + '/app',
@@ -100,11 +109,12 @@ module.exports = (r) => {
   r.get('/api/public/personas/:id/photo', async (ctx) => { await require('../services/support-ai').streamPhoto(ctx, ctx.params.id); });
 
   /**
-   * Website chat for visitors (not logged in): product and pricing answers from the knowledge only.
-   * No tools and no account data. Per-IP limits here and per day in services/support-ai.js siteChat().
-   * In: { message, history: [{ role: 'user'|'assistant', content }] }   Out: { persona, bubbles, cta }
+   * Website chat for visitors (not logged in): the same support agents, knowledge and model as inside the dashboard,
+   * without tools or account data. Per-IP limits here and per day in services/support-ai.js siteChat().
+   * In: { message, history: [{ role: 'user'|'assistant', content }], persona_id }
+   * Out: { persona, bubbles, delays (ms before each bubble shows), cta, login }
    */
-  r.post('/api/public/chat', async (ctx) => require('../services/support-ai').siteChat({ ip: ctx.ip, visitor: require('../lib/visitor').read(ctx), message: ctx.body.message, history: ctx.body.history, images: ctx.body.images || ctx.body.attachments || ctx.body.image }), { rate: [20, 600], shared: true, csrf: true });
+  r.post('/api/public/chat', async (ctx) => require('../services/support-ai').siteChat({ ip: ctx.ip, visitor: require('../lib/visitor').read(ctx), message: ctx.body.message, history: ctx.body.history, personaId: ctx.body.persona_id, images: ctx.body.images || ctx.body.attachments || ctx.body.image }), { rate: [30, 600], shared: true, csrf: true });
 
   r.get('/health', async () => {
     await db.one('select 1 as ok');

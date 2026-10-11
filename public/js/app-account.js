@@ -417,7 +417,7 @@ PAGES.help = {
     let lastKey = '';
     const draw = (force) => {
       const L = $('#hpL'); if (!L) return;
-      const key = d.messages.map((m) => m.id + ':' + (m.attachments || []).length).join(',') + '|' + (d.typing ? d.typing.name : '');
+      const key = d.messages.map((m) => m.id + ':' + (m.attachments || []).length + ':' + (m.links || []).length).join(',') + '|' + (d.typing ? d.typing.name : '');
       if (!force && key === lastKey) return;
       lastKey = key;
       const atBottom = L.scrollHeight - L.scrollTop - L.clientHeight < 80;
@@ -437,7 +437,8 @@ PAGES.help = {
         const nm = !mine && first ? '<small class="cn">' + esc(m.author_name || 'Castvoo team') + (m.author_type === 'staff' ? ' <span class="steam-tag">Team</span>' : '') + '</small>' : '';
         const pics = supPics(m.attachments);
         const text = m.body ? esc(m.body).replace(/\n/g, '<br>') : '';
-        h += '<div class="cmsg ' + (mine ? 'u' : 'a') + (first ? ' first' : '') + (last ? ' last' : '') + '">' + ava + '<div class="cb' + (pics && !text ? ' po' : '') + '">' + nm + pics + text + (last ? '<small class="ct">' + (m.sending ? 'Sending…' : fmtDate(m.created_at)) + '</small>' : '') + '</div></div>';
+        const cards = !mine && typeof supLinkCards === 'function' ? supLinkCards(m.links, 'h' + m.id) : '';
+        h += '<div class="cmsg ' + (mine ? 'u' : 'a') + (first ? ' first' : '') + (last ? ' last' : '') + '">' + ava + '<div class="cb' + (pics && !text ? ' po' : '') + '">' + nm + pics + text + cards + (last ? '<small class="ct">' + (m.sending ? 'Sending…' : fmtDate(m.created_at)) + '</small>' : '') + '</div></div>';
       });
       if (d.typing) h += '<div class="cmsg a typing last">' + supAva({ avatar: d.typing.avatar, author_name: d.typing.name }) + '<div class="cb"><span class="tg-typing in"><i></i><i></i><i></i></span></div><span class="tlabel">' + esc(d.typing.name) + ' is typing…</span></div>';
       L.innerHTML = h;
@@ -451,7 +452,7 @@ PAGES.help = {
       draw.done = true;
     };
     status(); draw(true);
-    $('#hpL').onclick = (e) => { const b = e.target.closest('[data-lb]'); if (b) openLightbox(b.dataset.lb); };
+    $('#hpL').onclick = (e) => { if (typeof supLinkClick === 'function' && supLinkClick(e)) return; const b = e.target.closest('[data-lb]'); if (b) openLightbox(b.dataset.lb); };
     let fastUntil = d.typing ? Date.now() + 60000 : 0;
     let busy = false;
     const refresh = async () => {

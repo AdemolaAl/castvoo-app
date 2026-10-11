@@ -11,30 +11,32 @@ const { FEATURES } = require('./features');
 // Feature keys each plan includes (see docs/PRODUCT-FACTS.md). Each plan includes everything in the plan before it.
 const F_FREE = ['auto_approve', 'welcome_message'];
 const F_STARTER = [...F_FREE, 'welcome_flows', 'tap_to_start', 'broadcasts', 'schedule', 'drips', 'tracked_buttons', 'basic_stats', 'ai'];
-const F_GROWTH = [...F_STARTER, 'ab_welcome_2', 'condition_clicked', 'audiences', 'start_links', 'flow_funnel_stats'];
+const F_GROWTH = [...F_STARTER, 'ab_welcome_2', 'condition_clicked', 'start_another_flow', 'audiences', 'start_links', 'flow_funnel_stats'];
 // AUD-3: no tag branching (it does not exist), and CSV export is on every plan, so neither is listed as a Scale feature.
 const F_SCALE = [...F_GROWTH, 'ab_welcome_4', 'onboarding_call'];
 
 // join_requests: per calendar month. flows / flow_steps: -1 = unlimited.
+// cas_builds: new flows built with Cas Builder a month (Free: for the life of the workspace); -1 = unlimited (fair use).
 const PLANS = [
   { code: 'free', name: 'Free', tagline: 'Greet every join, free.', price_month_cents: 0, price_year_cents: 0, connections: 1, subscribers: 0, ai_writes: 0, seats: 1, popular: false, sort: 0,
-    join_requests: 500, flows: 1, flow_steps: 1, branding: true, features: F_FREE,
-    bullets: ['1 channel or group + your welcome bot', '500 join requests a month', '1 welcome message', 'Auto-approve join requests'] },
+    join_requests: 500, flows: 1, flow_steps: 1, cas_builds: 1, branding: true, features: F_FREE,
+    bullets: ['1 channel or group + your own Telegram bot', '2 bots switched on at once', '500 join requests a month', '1 message per bot', 'Auto-approve join requests'] },
   { code: 'starter', name: 'Starter', tagline: 'For one channel and its bot, getting started.', price_month_cents: 1900, price_year_cents: 19000, connections: 2, subscribers: 5000, ai_writes: 150, seats: 1, popular: false, sort: 1,
-    join_requests: 5000, flows: 3, flow_steps: 5, branding: false, features: F_STARTER,
-    bullets: ['2 bots, channels or groups', '5,000 bot subscribers', '5,000 join requests a month', '3 Welcome Flows, 5 steps each', 'Broadcasts and auto follow-ups', '150 AI writes a month'] },
+    join_requests: 5000, flows: 3, flow_steps: 5, cas_builds: 10, branding: false, features: F_STARTER,
+    bullets: ['2 Telegram bots, channels or groups connected', '5 bots switched on at once', '5,000 bot subscribers', '5,000 join requests a month', '3 welcome bots, 5 messages each', 'Broadcasts and auto follow-ups', '150 AI writes a month'] },
   { code: 'growth', name: 'Growth', tagline: 'For buyers running several channels.', price_month_cents: 4900, price_year_cents: 49000, connections: 5, subscribers: 25000, ai_writes: 600, seats: 3, popular: true, sort: 2,
-    join_requests: 30000, flows: 15, flow_steps: 20, branding: false, features: F_GROWTH,
-    bullets: ['5 bots, channels or groups', '25,000 bot subscribers', '30,000 join requests a month', '15 Welcome Flows, 20 steps each', 'A/B welcome and click conditions', '600 AI writes a month'] },
+    join_requests: 30000, flows: 15, flow_steps: 20, cas_builds: 50, branding: false, features: F_GROWTH,
+    bullets: ['5 Telegram bots, channels or groups connected', '15 bots switched on at once', '25,000 bot subscribers', '30,000 join requests a month', '15 welcome bots, 20 messages each', 'A/B welcome and click conditions', '600 AI writes a month'] },
   { code: 'scale', name: 'Scale', tagline: 'For big audiences and teams.', price_month_cents: 9900, price_year_cents: 99000, connections: 20, subscribers: 100000, ai_writes: 1500, seats: 10, popular: false, sort: 3,
-    join_requests: 150000, flows: -1, flow_steps: -1, branding: false, features: F_SCALE,
-    bullets: ['20 bots, channels or groups', '100,000 bot subscribers', '150,000 join requests a month', 'Unlimited Welcome Flows and steps', 'A/B welcome with 4 versions', '1,500 AI writes a month'] },
+    join_requests: 150000, flows: -1, flow_steps: -1, cas_builds: -1, branding: false, features: F_SCALE,
+    bullets: ['20 Telegram bots, channels or groups connected', 'Unlimited bots switched on (fair use)', '100,000 bot subscribers', '150,000 join requests a month', 'Unlimited welcome bots and messages', 'A/B welcome with 4 versions', '1,500 AI writes a month'] },
 ];
 
 const METHODS = [
-  { key: 'paystack_ng', provider: 'paystack', label: 'Paystack', detail: 'Card, bank transfer, USSD', color: '#0BA4DB', icon: 'P', sort: 1 },
-  { key: 'paystack_gh', provider: 'paystack', label: 'Paystack', detail: 'Card, mobile money', color: '#0BA4DB', icon: 'P', sort: 2 },
-  { key: 'paystack_za', provider: 'paystack', label: 'Paystack', detail: 'Card, instant EFT', color: '#0BA4DB', icon: 'P', sort: 3 },
+  // Paystack is no longer offered (migration 022): Nigeria, Ghana and South Africa pay through Flutterwave.
+  { key: 'flw_ng', provider: 'flutterwave', label: 'Flutterwave', detail: 'Card, bank transfer, USSD', color: '#F5A623', icon: 'F', sort: 1 },
+  { key: 'flw_gh', provider: 'flutterwave', label: 'Flutterwave', detail: 'Card, mobile money', color: '#F5A623', icon: 'F', sort: 2 },
+  { key: 'flw_za', provider: 'flutterwave', label: 'Flutterwave', detail: 'Card', color: '#F5A623', icon: 'F', sort: 3 },
   { key: 'flw_ke', provider: 'flutterwave', label: 'Flutterwave', detail: 'Card, M-Pesa', color: '#F5A623', icon: 'F', sort: 4 },
   { key: 'flw_cm', provider: 'flutterwave', label: 'Flutterwave', detail: 'Card, MTN and Orange mobile money', color: '#F5A623', icon: 'F', sort: 5 },
   { key: 'flw_card', provider: 'flutterwave', label: 'Card', detail: 'Visa, Mastercard', color: '#0B1430', icon: '💳', sort: 6 },
@@ -45,10 +47,10 @@ const METHODS = [
 const C = (code, name, flag, currency, usd_rate, methods, featured = false, sort = 100) => ({ code, name, flag, currency, usd_rate, methods, featured, sort });
 const CARD = ['flw_card', 'crypto'];
 const COUNTRIES = [
-  C('NG', 'Nigeria', '🇳🇬', 'NGN', 1550, ['paystack_ng', 'crypto'], true, 1),
+  C('NG', 'Nigeria', '🇳🇬', 'NGN', 1550, ['flw_ng', 'crypto'], true, 1),
   C('KE', 'Kenya', '🇰🇪', 'KES', 129, ['flw_ke', 'crypto'], true, 2),
-  C('GH', 'Ghana', '🇬🇭', 'GHS', 12.5, ['paystack_gh', 'crypto'], true, 3),
-  C('ZA', 'South Africa', '🇿🇦', 'ZAR', 18, ['paystack_za', 'crypto'], true, 4),
+  C('GH', 'Ghana', '🇬🇭', 'GHS', 12.5, ['flw_gh', 'crypto'], true, 3),
+  C('ZA', 'South Africa', '🇿🇦', 'ZAR', 18, ['flw_za', 'crypto'], true, 4),
   C('CM', 'Cameroon', '🇨🇲', 'XAF', 570, ['flw_cm', 'crypto'], true, 5),
   C('UG', 'Uganda', '🇺🇬', 'USD', 1, CARD), C('TZ', 'Tanzania', '🇹🇿', 'USD', 1, CARD), C('RW', 'Rwanda', '🇷🇼', 'USD', 1, CARD),
   C('ZM', 'Zambia', '🇿🇲', 'USD', 1, CARD), C('ET', 'Ethiopia', '🇪🇹', 'USD', 1, CARD), C('EG', 'Egypt', '🇪🇬', 'USD', 1, CARD),
@@ -70,10 +72,15 @@ const SETTINGS = {
   company: { name: 'Zedapex', address: 'Lagos, Nigeria', support_email: 'support@castvoo.com', privacy_email: 'privacy@castvoo.com', billing_email: 'billing@castvoo.com' },
   trial: { days: 7, plan: 'growth', ai_writes: 50, join_requests: 3000, on_end: 'free' },
   billing: { refund_days: 14, data_retention_days: 60, min_topup_cents: 1000, max_topup_cents: 500000, renew_reminder_days: 3, limit_grace_pct: 10, seat_price_cents: 500 },
-  referral: { rates: [10, 20, 30], tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw_cents: 30000, cookie_days: 60 },
+  referral: { rates: [5, 10, 15], commission_cap_pct: 15, yearly_cap_pct: 15, tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw_cents: 30000, cookie_days: 60 },
   ai: { model: 'claude-haiku-4-5-20251001', max_output_tokens: 900, temperature: 0.7, house_rules: '' },
   // Who answers for Cas. provider '' = AI_PROVIDER env. key_enc is encrypted and only used for the endpoint in key_for.
   ai_provider: { provider: '', openrouter_model: '', fallback_models: '', key_enc: '', key_for: '' },
+  // Cas Builder (Admin → Cas AI → Cas Builder): build a flow by chatting. model_write writes message text; model_fast
+  // reads free-typed instructions. Empty = the provider's default model. daily_cap_usd: when the day's Cas Builder AI cost
+  // reaches it (UTC day), Cas rests until tomorrow. fair_use_monthly: the soft cap on "unlimited" plans. Credit pack:
+  // credit_pack_builds builds for credit_pack_price_cents from the wallet (0 = not sold).
+  cas_builder: { model_write: 'claude-sonnet-4-5', model_fast: 'claude-haiku-4-5-20251001', daily_cap_usd: 25, fair_use_monthly: 500, credit_pack_builds: 20, credit_pack_price_cents: 500 },
   crypto: { use_gatevoo: true, usdt_address: '', btc_address: '' },
   support: { reply_time: 'We usually reply within a few hours, every day from 8am to 10pm West Africa Time.', telegram_username: '' },
   // The 24/7 AI support team (services/support-ai.js, Admin → Support AI).
@@ -91,8 +98,9 @@ const SETTINGS = {
     team_hours: { start: 8, end: 22, tz: 'Africa/Lagos', label: '8am to 10pm WAT' },
     priority_plans: ['scale'],
     site_chat_daily_cap: 500, site_chat_per_ip_day: 40,
-    // Website chat budget: after 60% of the daily cap only visitors who loaded the site 5+ minutes ago are answered.
-    site_chat_soft_pct: 0.6, site_chat_known_after_s: 300,
+    // Website chat budget: after 60% of the daily cap only browsers that loaded a Castvoo page are answered (no waiting);
+    // after 90%, only those that loaded it 5+ minutes ago (services/support-ai.js siteChat).
+    site_chat_soft_pct: 0.6, site_chat_strict_pct: 0.9, site_chat_known_after_s: 300,
     // Answer up to 4 conversations at once per server; one answer may take at most 90 s, then a person takes over.
     concurrency: 4, turn_max_ms: 90000,
     // Admin → Support AI shows the AI resolution rate against this goal.
@@ -105,6 +113,14 @@ const SETTINGS = {
   legal_updated: '9 October 2026',
 };
 
+// Plan bullets as seeded before the Bots release ("bots, channels or groups" read like bots switched on; "Welcome
+// Flows" is now "welcome bots"). Moved to the new default only when the team never edited them.
+const PLAN_BULLETS_OLD = {
+  free: [['1 channel or group + your welcome bot', '500 join requests a month', '1 welcome message', 'Auto-approve join requests']],
+  starter: [['2 bots, channels or groups', '5,000 bot subscribers', '5,000 join requests a month', '3 Welcome Flows, 5 steps each', 'Broadcasts and auto follow-ups', '150 AI writes a month']],
+  growth: [['5 bots, channels or groups', '25,000 bot subscribers', '30,000 join requests a month', '15 Welcome Flows, 20 steps each', 'A/B welcome and click conditions', '600 AI writes a month']],
+  scale: [['20 bots, channels or groups', '100,000 bot subscribers', '150,000 join requests a month', 'Unlimited Welcome Flows and steps', 'A/B welcome with 4 versions', '1,500 AI writes a month']],
+};
 // Earlier plan taglines, moved to the new default on start when nobody edited them.
 const PLAN_TAGLINES_OLD = {
   free: ['Welcome everyone who asks to join your channel.'],
@@ -124,38 +140,46 @@ const FAQ = [
   { q: 'How fast does a broadcast go out?', a: 'About 25 messages a second per bot, which keeps you safely inside Telegram\'s limits. That\'s about 7 minutes for 10,000 people and about an hour for 100,000. You see the estimate before you send.' },
   { q: 'Will my bot get banned for broadcasting?', a: 'Castvoo sends within Telegram\'s limits, skips people who blocked your bot and adds a "Stop these messages" button to bot messages by default. Bans come from spam reports, so only message people who asked to hear from you.' },
   { q: 'How long does setup take?', a: 'About five minutes. Create a bot with @BotFather and paste its token, or tap "Add to my channel" to connect a channel or group in one tap. The setup guide shows every step.' },
-  { q: 'How do I pay?', a: 'Add money to your Castvoo wallet with the methods for your country, like Paystack in Nigeria or M-Pesa in Kenya, a card anywhere else, or crypto (USDT or Bitcoin). Your plan renews from the wallet each month.' },
+  { q: 'How do I pay?', a: 'Add money to your Castvoo wallet with the methods for your country, like card, bank transfer or USSD in Nigeria or M-Pesa in Kenya, a card anywhere else, or crypto (USDT or Bitcoin). Your plan renews from the wallet each month.' },
   { q: 'What is an AI write?', a: 'One AI write is one time Cas writes, rewrites or translates a message for you, or answers one question. Every paid plan includes a monthly amount: 150 on Starter, 600 on Growth and 1,500 on Scale. The Free plan has no AI writes. If you run out, Cas rests until your next billing date. There is never an extra charge.' },
   { q: 'Can I cancel any time?', a: 'Yes. Cancel in Settings and your plan runs until the end of the period you paid for. Unused wallet top-ups can be refunded within 14 days if you haven\'t spent them.' },
   { q: 'Is there customer support?', a: 'Yes, 24/7. Open Help in your dashboard: AI support agents answer in seconds, day and night, check your own account for you and can read a screenshot you send. Our human team steps in whenever you need a person, and for refunds and payments checked by hand. You can also email support@castvoo.com. The Free plan includes a few instant AI chats a month, then the team answers.' },
   { q: 'Do I need Joinvoo or Replyvoo?', a: 'No. Castvoo works on its own with any Telegram bot, channel or group. Joinvoo and Replyvoo are separate Zedapex tools you can add later if you want them.' },
 ];
+// The FAQ before Paystack was removed (October 2026): the "How do I pay?" answer named Paystack.
+const FAQ_PAY_NEW = 'like card, bank transfer or USSD in Nigeria or M-Pesa in Kenya';
+const FAQ_PAY_OLD = 'like Paystack in Nigeria or M-Pesa in Kenya';
+const FAQ_V2 = FAQ.map((f) => ({ q: f.q, a: f.a.replace(FAQ_PAY_NEW, FAQ_PAY_OLD) }));
 // The FAQ exactly as the first seed stored it (see FAQ_V1_ORDER).
-const FAQ_V1 = [...FAQ_V1_ORDER.map((t) => FAQ.find((f) => f.q === t)), ...FAQ.filter((f) => !FAQ_V1_ORDER.includes(f.q))]
+const FAQ_V1 = [...FAQ_V1_ORDER.map((t) => FAQ_V2.find((f) => f.q === t)), ...FAQ_V2.filter((f) => !FAQ_V1_ORDER.includes(f.q))]
   .map((f) => ({ q: f.q, a: f.a.replace(FAQ_BLOCKED, FAQ_V1_BLOCKED) }));
 
-// Earlier default texts, replaced on start when nobody edited them (QA-17: the old hero was hype; v2: the join-request hero; v3: welcome + broadcasts + follow-ups).
+// Earlier default texts, replaced on start when nobody edited them (QA-17: the old hero was hype; v2: the join-request hero; v3: welcome + broadcasts + follow-ups; v4: + the bot builder; v5: broadcast, automate and build bots).
 const CONTENT_OLD = {
-  hero_title: ['Turn your Telegram into a *sales machine.*', 'Welcome everyone who asks to *join your channel.*', 'Turn every join into *a lead you can message.*'],
+  hero_title: ['Turn your Telegram into a *sales machine.*', 'Welcome everyone who asks to *join your channel.*', 'Turn every join into *a lead you can message.*', 'Welcome. Broadcast. Follow up. *All on autopilot.*', 'Telegram bots that welcome, broadcast and follow up. *All on autopilot.*'],
   hero_subtitle: ['Castvoo welcomes every new subscriber, follows up at the right time and sends each group the message written for them. Your bots and channels keep selling while you sleep.',
     'Your own bot greets each person the moment they ask to join your Telegram channel or group, lets them in and can follow up later. Start free with one channel. Paid plans add broadcasts, follow-ups and Cas, the AI helper.',
-    'Your bot welcomes everyone the moment they ask to join, lets them in, and invites them to tap Start so you can follow up.'],
+    'Your bot welcomes everyone the moment they ask to join, lets them in, and invites them to tap Start so you can follow up.',
+    'Greet everyone who asks to join, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links in a simple builder. Cas, the AI helper, writes the messages.',
+    'Accept every join request with a warm welcome, broadcast to all your subscribers and let follow-ups send themselves. Build gift, menu, lead and invite bots in minutes, or tell Cas and it builds them for you.'],
   hero_cta: ['Start free · 7 days on us'],
   pricing_subtitle: ['Start free with a welcome bot for your channel. Paid plans add follow-ups, broadcasts, tracked clicks and Cas the AI helper. No add-on fees.',
-    'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup or add-on fees.'],
+    'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup or add-on fees.',
+    'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup fees.'],
   footer_tagline: ['Telegram broadcasts and follow-ups that sell while you sleep.', 'Telegram welcomes, broadcasts and follow-ups, sent on time.'],
   announcement_text: ['New: Cas, your AI helper, now learns your business. Train it in two minutes.'],
-  faq: [JSON.stringify(FAQ_V1)],
+  // (migration 022 already swapped the Paystack sentence in place, so the V1 text may arrive in that form too)
+  faq: [JSON.stringify(FAQ_V1), JSON.stringify(FAQ_V1).replace(FAQ_PAY_OLD, FAQ_PAY_NEW), JSON.stringify(FAQ_V2)],
 };
 const CONTENT = {
   announcement_on: '0',
   announcement_text: 'Welcome Flows: greet, let in and follow up everyone who asks to join.',
   announcement_link: '#how',
-  hero_title: 'Welcome. Broadcast. Follow up. *All on autopilot.*',
-  hero_subtitle: 'Greet everyone who asks to join, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links in a simple builder. Cas, the AI helper, writes the messages.',
+  hero_title: 'Broadcast, automate and build bots on Telegram. *All on autopilot.*',
+  hero_subtitle: 'Welcome everyone who joins, send one message to all your subscribers, and let follow-ups and bots work for you, even while you sleep.',
   hero_cta: 'Start my 7-day free trial',
   pricing_title: 'Simple prices. *Start free.*',
-  pricing_subtitle: 'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup fees.',
+  pricing_subtitle: 'Free runs 2 bots and welcomes 500 join requests a month on one channel. Paid plans from $19 add more bots, broadcasts, follow-ups, lead forms and Cas. No setup fees.',
   maintenance_message: 'Castvoo is getting an upgrade. Sending is paused for a few minutes. Nothing is lost.',
   footer_tagline: 'Every Telegram join, greeted and followed up.',
   faq: JSON.stringify(FAQ),
@@ -192,10 +216,10 @@ const OFFERS = [
 async function run() {
   await db.tx(async (c) => {
     for (const p of PLANS) {
-      await c.query(`insert into plans(code,name,tagline,price_month_cents,price_year_cents,connections,subscribers,ai_writes,seats,bullets,popular,sort,join_requests,flows,flow_steps,branding,features)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) on conflict (code) do nothing`,
+      await c.query(`insert into plans(code,name,tagline,price_month_cents,price_year_cents,connections,subscribers,ai_writes,seats,bullets,popular,sort,join_requests,flows,flow_steps,branding,features,cas_builds)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) on conflict (code) do nothing`,
       [p.code, p.name, p.tagline, p.price_month_cents, p.price_year_cents, p.connections, p.subscribers, p.ai_writes, p.seats, JSON.stringify(p.bullets), p.popular, p.sort,
-        p.join_requests, p.flows, p.flow_steps, p.branding, JSON.stringify(p.features)]);
+        p.join_requests, p.flows, p.flow_steps, p.branding, JSON.stringify(p.features), p.cas_builds]);
     }
     for (const m of METHODS) {
       await c.query('insert into payment_methods(key,provider,label,detail,color,icon,sort) values ($1,$2,$3,$4,$5,$6,$7) on conflict (key) do nothing',
@@ -220,6 +244,10 @@ async function run() {
       and exists (select 1 from site_content t where t.key = 'announcement_text' and t.value = $2)`, [CONTENT.announcement_link, CONTENT_OLD.announcement_text[0]]);
     for (const [k, olds] of Object.entries(CONTENT_OLD)) {
       for (const old of olds) await c.query('update site_content set value = $2 where key = $1 and value = $3', [k, CONTENT[k], old]);
+    }
+    for (const [code, olds] of Object.entries(PLAN_BULLETS_OLD)) {
+      const now = PLANS.find((p) => p.code === code).bullets;
+      for (const old of olds) await c.query('update plans set bullets = $2::jsonb where code = $1 and bullets = $3::jsonb', [code, JSON.stringify(now), JSON.stringify(old)]);
     }
     for (const [code, olds] of Object.entries(PLAN_TAGLINES_OLD)) {
       const now = PLANS.find((p) => p.code === code).tagline;

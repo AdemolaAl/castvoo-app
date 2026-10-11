@@ -98,7 +98,10 @@ const config = {
     connect: bool(env.VOO_CONNECT, true),
     signalSecret: env.VOO_SIGNAL_SECRET || '',                // hashes fraud hints; make once, never change
     serverBase: trimSlash(env.VOO_SERVER_BASE || ''),         // optional private address for server-to-server calls
-    widget: bool(env.VOO_SUPPORT_WIDGET, true),               // VooSquare support widget on the public website
+    // VooSquare's own support widget in place of ours on the public website, for logged-out visitors only. Off by
+    // default (October 2026): the website chat is our own widget, the same agents, look and speed as inside the
+    // dashboard. The older VOO_SUPPORT_WIDGET variable is no longer read, so an old "on" can't bring it back by accident.
+    widget: bool(env.VOO_SITE_WIDGET, false),
   },
 
   paystack: {

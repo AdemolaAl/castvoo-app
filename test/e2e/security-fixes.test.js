@@ -181,14 +181,15 @@ describe('SEC-5: AI cost is counted even when the answer is unusable; shared lim
 });
 
 describe('SEC-5b: website chat budget cannot be used up by many IPs', () => {
-  it('after the open part of the daily cap only known visitors (who loaded the site earlier) are answered', async () => {
-    await app.setSetting('support_ai', { site_chat_daily_cap: 1000, site_chat_soft_pct: 0.5, site_chat_known_after_s: 0 });
+  it('after the open part of the daily cap only browsers that loaded the site are answered (at once); near the cap only older ones', async () => {
+    await app.setSetting('support_ai', { site_chat_daily_cap: 1000, site_chat_soft_pct: 0.5, site_chat_strict_pct: 0.9, site_chat_known_after_s: 3600 });
     try {
       ai.script = () => ({ text: 'Hi there.' });
       const today = (await app.db.one("select count(*)::int n from ai_usage where kind = 'site_chat' and created_at > date_trunc('day', now())")).n;
-      await app.setSetting('support_ai', { site_chat_daily_cap: (today + 2) * 2 });
+      const cap = (today + 4) * 2;
+      await app.setSetting('support_ai', { site_chat_daily_cap: cap });
       // Fill the open half from "many IPs".
-      await app.db.query("insert into ai_usage(workspace_id, kind, writes) select 0, 'site_chat', 0 from generate_series(1, 2)");
+      await app.db.query("insert into ai_usage(workspace_id, kind, writes) select 0, 'site_chat', 0 from generate_series(1, 4)");
       const bot = app.client();
       const r1 = await bot.post('/api/public/chat', { message: 'hi' });
       assert.equal(r1.status, 503, 'a script that never loaded the site is refused once the open part is used');
@@ -196,16 +197,19 @@ describe('SEC-5b: website chat budget cannot be used up by many IPs', () => {
       const page = await visitor.get('/');
       assert.equal(page.status, 200);
       assert.ok(visitor.jar.has('cv_vis'), 'the site sets the visitor cookie');
+      // A real visitor who just arrived (cookie seconds old, well under site_chat_known_after_s) does NOT wait.
       const r2 = await visitor.post('/api/public/chat', { message: 'how much is Castvoo?' });
       assert.equal(r2.status, 200, r2.text);
       // A forged cookie does not count.
       const forged = app.client();
       forged.jar.set('cv_vis', '1700000000.abcdefghij.0123456789abcdef');
       assert.equal((await forged.post('/api/public/chat', { message: 'hi' })).status, 503);
-      // A visitor whose cookie is too new waits like everyone else.
-      await app.setSetting('support_ai', { site_chat_known_after_s: 3600 });
+      // Close to the cap (strict part): only cookies older than site_chat_known_after_s.
+      await app.setSetting('support_ai', { site_chat_strict_pct: 0.5 });
       assert.equal((await visitor.post('/api/public/chat', { message: 'and again?' })).status, 503);
-    } finally { await app.setSetting('support_ai', { site_chat_daily_cap: 500, site_chat_soft_pct: 0.6, site_chat_known_after_s: 300 }); }
+      await app.setSetting('support_ai', { site_chat_known_after_s: 0 });
+      assert.equal((await visitor.post('/api/public/chat', { message: 'and again?' })).status, 200);
+    } finally { await app.setSetting('support_ai', { site_chat_daily_cap: 500, site_chat_soft_pct: 0.6, site_chat_strict_pct: 0.9, site_chat_known_after_s: 300 }); }
   });
 
   it('per-IP and per-network caps are shared counters', () => {
@@ -449,7 +453,7 @@ describe('SEC-13: state-changing GET routes', () => {
 describe('SEC-14 / SEC-15: money settings and the VooSquare staff sync', () => {
   it('finance cannot change referral rates; the router checks service keys; staff sync needs the inbound key', async () => {
     const finance = await app.staff('finance');
-    const ref = await finance.put('/api/admin/settings/referral', { value: { rate_1: 50, rate_2: 55, rate_3: 60, tier2_min: 5, tier3_min: 20, settle_days: 0, min_withdraw: 1, cookie_days: 60 } });
+    const ref = await finance.put('/api/admin/settings/referral', { value: { rate_1: 5, rate_2: 10, rate_3: 15, tier2_min: 5, tier3_min: 20, settle_days: 0, min_withdraw: 1, cookie_days: 60 } });
     assert.equal(ref.status, 403);
     const routes = app.require('app').buildRouter().routes.filter((x) => x.pattern.startsWith('/api/voosquare/'));
     assert.ok(routes.length && routes.every((x) => x.opts.auth === 'service'));

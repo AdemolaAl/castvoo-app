@@ -10,6 +10,7 @@ const settings = require('../services/settings');
 const support = require('../services/support');
 const supportAi = require('../services/support-ai');
 const images = require('../services/support-images');
+const LINKS = require('../services/support-links');
 const { httpError, int, notFound } = require('../lib/util');
 
 const IMG_BASE = '/api/support/attachments';
@@ -25,11 +26,12 @@ async function view(ctx) {
   const chat = chatOptions(await supportAi.conf());
   const t = await support.latestThread(ctx.user.id, ctx.workspace.id);
   if (!t) return { thread: null, messages: [], reply_time, ai: { on: aiOn, team }, typing: null, chat };
-  const rows = await db.many(`select m.id, m.author_type, m.author_name, m.body, m.persona_id, m.visible_at as created_at, p.updated_at as p_updated
+  const rows = await db.many(`select m.id, m.author_type, m.author_name, m.body, m.persona_id, m.links, m.visible_at as created_at, p.updated_at as p_updated
     from support_messages m left join support_personas p on p.id = m.persona_id
     where m.thread_id = $1 and not m.internal and m.visible_at <= now() order by m.visible_at, m.id`, [t.id]);
   const att = await images.forMessages(rows.map((m) => m.id));
-  const messages = rows.map(({ p_updated, ...m }) => ({ ...m, avatar: m.persona_id ? supportAi.avatarUrl({ id: m.persona_id, updated_at: p_updated }) : null,
+  // Link cards are re-checked on the way out too (support-links.js safeCards); only AI bubbles carry them.
+  const messages = rows.map(({ p_updated, links, ...m }) => ({ ...m, links: m.author_type === 'ai' ? LINKS.safeCards(links) : [], avatar: m.persona_id ? supportAi.avatarUrl({ id: m.persona_id, updated_at: p_updated }) : null,
     attachments: (att.get(Number(m.id)) || []).map((a) => images.publicRow(a, IMG_BASE)) }));
   await db.query('update support_threads set user_seen_at = now() where id = $1', [t.id]);
   if (t.unread_user) {

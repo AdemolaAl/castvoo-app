@@ -14,7 +14,7 @@ const db = require('../db');
 const settings = require('./settings');
 const llm = require('./llm');
 
-const PERSONA = `You are Cas, the friendly AI helper inside Castvoo, a Telegram tool. Its main feature is Welcome Flows: when someone asks to join a channel or group, the customer's own bot welcomes them at once, lets them in (straight away, after the welcome, when they tap a button, or when the owner decides) and can follow up later. Castvoo also sends broadcasts and automatic follow-up messages, and tracks button clicks.
+const PERSONA = `You are Cas, the friendly AI helper inside Castvoo, a Telegram tool. Its main feature is Welcome Flows: when someone asks to join a channel or group, the customer's own bot welcomes them at once, lets them in (straight away, after the welcome, when they tap Start, or when the owner decides) and follows up: right away, after a wait, when they tap Start, when they tap a button, or with a reminder if they don't respond. Castvoo also sends broadcasts and automatic follow-up messages, and tracks button clicks.
 Your voice: warm, clear, confident, never pushy. Short sentences. Plain words a 12-year-old understands.
 Hard rules you never break:
 - Never invent facts, numbers, prices, discounts, deadlines, testimonials or results. If you need a detail you don't have, write it as [ADD DETAIL] so the user fills it in.
@@ -37,10 +37,10 @@ async function knowledgeText(limit = 60000) {
 
 // Plan features worth telling a customer about (keys from seed.js FEATURE_SETS). Others are shown as-is.
 const FEATURE_TEXT = {
-  auto_approve: 'auto-approve join requests', welcome_message: 'a welcome message', welcome_flows: 'Welcome Flows builder (steps, waits, buttons, manual approval, invite links)',
+  auto_approve: 'auto-approve join requests', welcome_message: 'a welcome message', welcome_flows: 'Welcome Flows builder (follow-up messages that come right away, after a wait, when they tap Start or a button, or as a reminder; Reply buttons; manual approval; invite links)',
   tap_to_start: '"Tap to start" button', broadcasts: 'broadcasts', schedule: 'scheduling and 9am sending', drips: 'auto follow-ups', tracked_buttons: 'tracked buttons',
   basic_stats: 'stats', ai: 'Cas the AI helper', ab_welcome_2: 'A/B welcome (2 versions)', ab_welcome_4: 'A/B welcome (up to 4 versions)',
-  condition_clicked: 'clicked / did not click conditions', audiences: 'audiences', start_links: 'start links', flow_funnel_stats: 'flow funnel stats',
+  condition_clicked: 'clicked / did not click conditions', cas_builder: 'Cas Builder (build a flow by chatting with Cas)', start_another_flow: '"Start another flow" on a Welcome Flow message', audiences: 'audiences', start_links: 'start links', flow_funnel_stats: 'flow funnel stats',
   onboarding_call: 'an onboarding call',
 };
 // What a plan without these features cannot do (said for the Free plan, so the AI never offers it there).
@@ -51,7 +51,7 @@ const NOT_ON_FREE = [['drips', 'follow-ups'], ['broadcasts', 'broadcasts'], ['ta
  * scripts/check.js can check that every price and limit in seed.js reaches the AI. Knowledge articles never repeat
  * these numbers.
  */
-function formatPlans(plans, t = {}, billing = null) {
+function formatPlans(plans, t = {}, billing = null, cas = null) {
   const n = (v) => (v == null || Number(v) < 0 ? 'unlimited' : Number(v).toLocaleString('en-US'));
   const isFree = (p) => Number(p.price_month_cents) === 0 && Number(p.price_year_cents || 0) === 0;
   let prev = [];
@@ -62,20 +62,53 @@ function formatPlans(plans, t = {}, billing = null) {
     if (isFree(p)) {
       const no = NOT_ON_FREE.filter(([k]) => !f.includes(k)).map(([, w]) => w);
       return `- ${p.name}: $0, no card; ${n(p.connections)} channel or group plus its own welcome bot; ${n(p.join_requests)} join requests a month; ${n(p.flows)} Welcome Flow with ${n(p.flow_steps)} welcome message (text or 1 photo, up to 3 link buttons, {name})`
-        + (Number(p.ai_writes) ? `; ${n(p.ai_writes)} AI writes a month` : '') + `; ${n(p.seats)} seat${Number(p.seats) === 1 ? '' : 's'}`
+        + (Number(p.ai_writes) ? `; ${n(p.ai_writes)} AI writes a month` : '') + casLine(p, true) + `; ${n(p.seats)} seat${Number(p.seats) === 1 ? '' : 's'}`
         + (f.length ? `; includes: ${f.map((k) => FEATURE_TEXT[k] || k).join(', ')}` : '')
         + (no.length ? `; no ${no.join(', ')}` : '')
         + (p.branding ? '; every welcome ends with "⚡ Free welcome bot by Castvoo.com" (cannot be removed on this plan)' : '');
     }
     return `- ${p.name}: $${Number(p.price_month_cents) / 100}/month or $${Number(p.price_year_cents) / 100}/year; ${n(p.connections)} connections; ${n(p.subscribers)} bot subscribers (channel and group members are free)`
-      + `; ${n(p.join_requests)} join requests a month; ${n(p.flows)} Welcome Flows with ${n(p.flow_steps)} messages each; ${n(p.ai_writes)} AI writes a month; ${n(p.seats)} seat${Number(p.seats) === 1 ? '' : 's'}`
+      + `; ${n(p.join_requests)} join requests a month; ${n(p.flows)} Welcome Flows with ${n(p.flow_steps)} messages each; ${n(p.ai_writes)} AI writes a month` + casLine(p, false) + `; ${n(p.seats)} seat${Number(p.seats) === 1 ? '' : 's'}`
       + (added.length ? `; ${i > 0 ? 'adds' : 'includes'}: ${added.map((k) => FEATURE_TEXT[k] || k).join(', ')}` : '')
       + (p.branding ? '; welcomes end with "⚡ Free welcome bot by Castvoo.com"' : '');
   });
   return lines.join('\n')
+    + botsLines(plans)
     + `\nEach plan includes everything in the plan before it.`
     + (t.days ? `\nFree trial: ${t.days} days of ${(plans.find((p) => p.code === t.plan) || {}).name || t.plan}, no card needed, ${n(t.ai_writes)} AI writes and ${n(t.join_requests ?? -1)} join requests during the trial. If no plan is paid when it ends, the workspace moves to the Free plan (not paused).` : '')
-    + seatLine(billing);
+    + seatLine(billing) + casPackLine(cas);
+}
+/** Bots limits per plan (billing.BOT_PLANS, chosen by plan code or features): live bots, bot types, lead answers... */
+function botsLines(plans) {
+  let botPlanOf;
+  try { botPlanOf = require('./billing').botPlanOf; } catch { return ''; }
+  const n = (v) => (v == null || Number(v) < 0 ? 'unlimited' : Number(v).toLocaleString('en-US'));
+  const words = { welcome: 'Welcome', join_check: 'Join-check', lead_magnet: 'Free gift (lead magnet)', menu: 'Menu', broadcast: 'Broadcast to bot subscribers', lead_questions: 'Lead questions', referral: 'Invite friends (referral)' };
+  const rows = plans.map((p) => {
+    const b = botPlanOf(p);
+    return `- ${p.name} bots: ${n(b.max_bots)}${b.max_bots_fair_use ? ' (fair use ' + b.max_bots_fair_use + ')' : ''} live bots (Welcome + Chat bots switched on; drafts don't count); types: ${b.bot_types.map((t) => words[t] || t).join(', ')}; ${b.bot_steps === 1 ? '1 message per reply' : n(b.bot_steps) + ' messages per bot'}; ${n(b.menu_buttons)} menu buttons; `
+      + (b.lead_questions_per_form ? `${n(b.lead_questions_per_form)} lead questions per bot, ${n(b.lead_answers_per_month)} lead answers a month, lead CSV for the owner; ` : 'no lead questions; ')
+      + (b.referral_bots ? `${n(b.referral_bots)}${b.referral_bots_fair_use ? ' (fair use ' + b.referral_bots_fair_use + ')' : ''} live invite-friends bots; ` : 'no invite-friends bots; ')
+      + `${b.concurrent_sessions_per_seat} logged-in devices per person` + (b.branding ? '; each bot\'s first message ends with "⚡ Free bot by Castvoo.com"' : '');
+  });
+  return rows.length ? '\nBots (🤖 Bots page):\n' + rows.join('\n') + '\nThe trial has the Growth bot limits with 300 lead answers. Lead answers get 10% extra; after that the bot still says thanks and the answers are kept hidden until next month or an upgrade.' : '';
+}
+/** Cas credits (Admin → Cas AI → Cas Builder): one line, or nothing when not sold. */
+function casPackLine(c) {
+  if (!c) return '';
+  const price = Math.max(0, Number(c.credit_pack_price_cents) || 0), n = Math.max(0, Number(c.credit_pack_builds) || 0);
+  const fair = Number(c.fair_use_monthly) || 0;
+  return `\nCas Builder (Welcome Flows → New flow → Cas Builder): build a flow by chatting with Cas; editing an existing flow by chat never counts as a build.`
+    + (fair ? ` "Unlimited" builds are fair use (about ${fair.toLocaleString('en-US')} a month).` : '')
+    + (price && n ? ` When a plan's builds run out: keep building in the builder (free), upgrade, or buy Cas credits: ${n} builds for $${(price / 100).toLocaleString('en-US', { minimumFractionDigits: price % 100 ? 2 : 0 })} from the wallet (cash, not bonus credit; they don't expire).` : '');
+}
+/** Cas Builder builds on a plan (plans.cas_builds): new flows built by chatting with Cas; Free counts for the life of the workspace. */
+function casLine(p, free) {
+  const v = p.cas_builds == null ? 0 : Number(p.cas_builds);
+  if (!v) return '';
+  if (v < 0) return '; unlimited Cas Builder builds (fair use)';
+  if (free) return `; Cas Builder: ${v === 1 ? 'the first flow' : v.toLocaleString('en-US') + ' flows'} built by chatting with Cas (for the life of the workspace)`;
+  return `; ${v.toLocaleString('en-US')} Cas Builder builds a month`;
 }
 /** Extra team seats (Admin → Settings → Billing): one line for the live plan list, or nothing when not sold. */
 function seatLine(b) {
@@ -87,7 +120,7 @@ function seatLine(b) {
 async function plansText() {
   const plans = await settings.plans({ activeOnly: true });
   const t = await settings.get('trial');
-  return formatPlans(plans, t || {}, await settings.get('billing'));
+  return formatPlans(plans, t || {}, await settings.get('billing'), { ...require('./cas-builder').DEFAULTS, ...((await settings.get('cas_builder')) || {}) });
 }
 
 /** plansText() that never fails a support answer (a plan edited mid-way, a missing trial plan...). */
@@ -172,6 +205,18 @@ The first message is sent straight away (wait 0 minutes) and welcomes the person
 Reply with ONLY a JSON array, no other text, like:
 [{"delay_value":0,"delay_unit":"min","body":"..."},{"delay_value":1,"delay_unit":"day","body":"..."}]
 delay_unit is one of "sec", "min", "hour", "day" (use "sec" only when the goal asks for a message a few seconds after the one before).`,
+  flow: (b) => `Build a Castvoo Welcome Flow from this description: "${b.prompt}"
+A Welcome Flow is what the customer's bot sends to someone who asks to join their Telegram channel. Message 1 is the welcome, sent the moment they ask to join. Every later message says WHEN it comes (its "trigger"):
+- "after_previous": right after the message above.
+- "wait": after a pause ("seconds": how long, for example 3600 for 1 hour, 86400 for 1 day).
+- "on_start": the moment they tap Start in the bot (then set "start_button": true so the welcome shows a Tap Start button).
+- "on_button": when they tap a button of a message above ("button": that button's id). Give each choice its own answer message, one after the other.
+- "no_response": a reminder if they have not tapped Start or a button of the message above after "seconds".
+Buttons: "kind": "reply" (a choice they tap, no link) or "link" (opens a web page; "url" stays "" unless the description gives an https link). Each button has a short "id" (small letters and numbers, unique in the flow) and a "label" under 30 characters, often starting with an emoji.
+Telegram's rule: before they tap Start, the bot may message them only in the first 5 minutes. So anything later than 5 minutes should come after "on_start", or be a reminder that asks them to tap Start.
+Use at most ${b.max} messages. Each message under 500 characters, warm and short, greeting with {name} in the welcome. Use [ADD DETAIL] for any fact you don't have.
+Reply with ONLY one JSON object, no other text, exactly in this shape (no other fields):
+{"name":"short flow name","approve_mode":"after_welcome","start_button":true,"start_label":"👆 Tap Start","messages":[{"body":"...","buttons":[]},{"body":"...","buttons":[{"id":"vip","label":"⭐ VIP","kind":"reply"}],"trigger":{"type":"on_start"}},{"body":"...","trigger":{"type":"on_button","button":"vip"}}]}`,
 };
 
 /** Workspace stats Cas can see when answering "how did my sends go?" questions. */

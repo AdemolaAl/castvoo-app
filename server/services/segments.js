@@ -8,6 +8,9 @@
  *   joined_days joined in the last N days
  *   clicked_days clicked any tracked link in the last N days
  *   quiet_days  did NOT click anything in the last N days
+ *   flow_started tapped Start through a Welcome Flow (value = the flow's id; made by POST /api/flows/:id/audience
+ *               only, never typed by people, so it is not in FIELDS)
+ *   bot_started  started a Chat bot (value = the bot's id; made by POST /api/bots/:id/audience only, like flow_started)
  * All rules must match (AND).
  */
 
@@ -50,6 +53,8 @@ function toSql(rules, start) {
       case 'joined_days': where.push(`s.joined_at > now() - make_interval(days => $${i++})`); params.push(r.value); break;
       case 'clicked_days': where.push(`exists (select 1 from clicks k where k.subscriber_id = s.id and k.created_at > now() - make_interval(days => $${i++}))`); params.push(r.value); break;
       case 'quiet_days': where.push(`not exists (select 1 from clicks k where k.subscriber_id = s.id and k.created_at > now() - make_interval(days => $${i++}))`); params.push(r.value); break;
+      case 'flow_started': where.push(`exists (select 1 from join_requests j where j.subscriber_id = s.id and j.sequence_id = $${i++} and j.started_at is not null)`); params.push(Number(r.value) || 0); break;
+      case 'bot_started': where.push(`exists (select 1 from sequence_runs br where br.subscriber_id = s.id and br.sequence_id = $${i++})`); params.push(Number(r.value) || 0); break;
       default: break;
     }
   }
@@ -65,8 +70,13 @@ function describe(rules) {
     if (r.field === 'joined_days') return `Joined in the last ${r.value} days`;
     if (r.field === 'clicked_days') return `Clicked in the last ${r.value} days`;
     if (r.field === 'quiet_days') return `No clicks in ${r.value} days`;
+    if (r.field === 'flow_started') return `Tapped Start in ${r.name || 'a Welcome Flow'}`;
+    if (r.field === 'bot_started') return `Started ${r.name || 'a Chat bot'}`;
     return r.field;
   });
 }
 
-module.exports = { FIELDS, cleanRules, toSql, describe };
+/** An audience made by a Welcome Flow ("Tapped Start in <flow>"): works without the Audiences feature. */
+const flowOnly = (rules) => Array.isArray(rules) && rules.length > 0 && rules.every((r) => r && (r.field === 'flow_started' || r.field === 'bot_started'));
+
+module.exports = { FIELDS, cleanRules, toSql, describe, flowOnly };

@@ -58,11 +58,11 @@ describe('templates and the builder', () => {
   it('lists templates and the plan, and creates a draft from a template', async () => {
     const list = await s.c.get('/api/flows');
     assert.equal(list.status, 200, list.text);
-    assert.deepEqual(list.body.templates.map((t) => t.key), ['simple', 'vip', 'tap', 'followup', 'gift']);
+    assert.deepEqual(list.body.templates.map((t) => t.key), ['start_vip', 'reminder_gift', 'two_choices', 'followup', 'simple']);
     assert.equal(list.body.flows.length, 0);
     assert.equal(list.body.chats[0].id, s.chanId);
     assert.ok(list.body.meter.limit > 0);
-    for (const t of list.body.templates) for (const b of t.blocks) if (b.body) assert.doesNotMatch(b.body, /\d+%|guaranteed/i, 'no fake numbers in templates');
+    for (const t of list.body.templates) for (const b of t.steps) if (b.body) assert.doesNotMatch(b.body, /\d+%|guaranteed/i, 'no fake numbers in templates');
     const r = await s.c.post('/api/flows', { template: 'followup', chat_id: s.chanId, bot_id: s.bot.connId });
     assert.equal(r.status, 200, r.text);
     const f = (await s.c.get('/api/flows/' + r.body.id)).body.flow;
@@ -71,7 +71,7 @@ describe('templates and the builder', () => {
     assert.deepEqual(f.blocks.map((b) => b.type), ['message', 'wait', 'message', 'wait', 'message']);
     assert.deepEqual([f.blocks[1].value, f.blocks[1].unit, f.blocks[3].value, f.blocks[3].unit], [1, 'day', 2, 'day']);
     assert.equal(f.start_button, true);
-    const vip = await s.c.post('/api/flows', { template: 'vip', chat_id: s.chanId, bot_id: s.bot.connId });
+    const vip = await s.c.post('/api/flows', { template: 'start_vip', chat_id: s.chanId, bot_id: s.bot.connId });
     assert.equal(vip.status, 200, 'a template button without a link yet is left out: ' + vip.text);
   });
 

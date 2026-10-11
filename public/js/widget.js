@@ -3,20 +3,26 @@
  * widget.js: the floating support widget (bottom-right launcher + chat panel), on the website and in the dashboard.
  *
  * Logged in   → the SAME support thread as Help (GET/POST /api/support, image uploads to /api/support/attachments):
- *               the account-aware AI support team with tools, and the human team when needed.
- * Logged out  → the website pre-sales chat (POST /api/public/chat): product answers only, no account tools, no images.
+ *               the account-aware AI support team with tools, and the human team when needed. On the website too.
+ * Logged out  → the website chat (POST /api/public/chat): the SAME agents (one per browser, sticky), look, typing
+ *               indicator, split bubbles and timing (the server sends the delays), knowledge and model. Only
+ *               differences: no account tools, no images ("Log in to send screenshots") and a "Start free" button
+ *               when it helps. The conversation is kept for this browser tab (sessionStorage).
  *               Without the website chat: a short "log in or email us" card.
+ * There is no "Talk to a person" button: customers ask in their own words and the server hands over
+ * (services/support-ai.js wantsHuman), as it does for refunds, anger and repeated failures.
  *
  * Closed: GET /api/support/unread every 25 s (visible tab only) shows a badge when the AI or the team replied.
  * Opening the chat marks it seen (GET /api/support). Hidden on the Help page itself, during sign-up, while the
  * VooSquare widget is in use on the website, and on small screens while the keyboard is up for another field.
+ * Link cards: an agent's bubble can carry up to 3 cards (supLinkCards below, also used by the Help page).
  * Phones: the panel is a full-screen sheet; the page behind is locked without jumping to the top.
  * Desktop: a 380×600 panel. Esc closes, Tab stays inside the panel, focus returns to the launcher.
  */
 
 const SW = {
   el: null, open: false, view: null, mode: null,
-  d: null, site: { msgs: [], busy: false },
+  d: null, site: { msgs: [], busy: false, agent: null, cta: null, login: false },
   pend: [], unread: 0, busy: false, fastUntil: 0, lastKey: '', pollT: null, unreadT: null, greetT: null,
   scrollY: 0, locked: false, lastFocus: null,
 };
@@ -35,6 +41,22 @@ function swFaces(n, size) {
   if (!t.length) return '<span class="sw-cas" data-cas="mini"></span>';
   return t.map((p) => '<img src="' + esc(p.avatar) + '" alt="" width="' + size + '" height="' + size + '">').join('');
 }
+/* The website chat's agent: one of the live agents, kept for this browser (the same faces as inside). */
+function swSiteAgent() {
+  const list = (CFG.site_chat && CFG.site_chat.agents) || [];
+  const S = SW.site;
+  if (S.agent && list.some((p) => p.id === S.agent.id)) return S.agent;
+  const keep = Number(store.get('cv_sw_agent')) || 0;
+  S.agent = list.find((p) => p.id === keep) || (list.length ? list[Math.floor(Math.random() * list.length)] : (CFG.site_chat && CFG.site_chat.agent) || swTeam()[0] || { id: null, name: 'Castvoo', avatar: null });
+  if (S.agent && S.agent.id) store.set('cv_sw_agent', String(S.agent.id));
+  return S.agent;
+}
+function swSiteLoad() {
+  try { const v = JSON.parse(store.sget('cv_sw_site') || 'null'); if (v && Array.isArray(v.msgs)) { SW.site.msgs = v.msgs.slice(-40); SW.site.cta = v.cta || null; SW.site.login = !!v.login; } } catch (_) { /* start fresh */ }
+}
+function swSiteSave() {
+  try { store.sset('cv_sw_site', JSON.stringify({ msgs: SW.site.msgs.slice(-40), cta: SW.site.cta, login: SW.site.login })); } catch (_) { /* full or blocked */ }
+}
 const swAgentFace = (url, name) => (url ? '<img class="sw-av" src="' + esc(url) + '" alt="" width="30" height="30" loading="lazy">' : '<span class="sw-av team" aria-hidden="true">' + esc(String(name || 'C')[0]) + '</span>');
 
 /* ---------- mount / show / hide ---------- */
@@ -47,6 +69,7 @@ function swMount() {
     '<div class="sw-p" id="swP" role="dialog" aria-modal="true" aria-labelledby="swT" hidden></div>';
   document.body.appendChild(w);
   SW.el = w;
+  swSiteLoad();
   $('#swL').onclick = () => (SW.open ? swClose() : swOpen());
   w.addEventListener('keydown', swKeys);
   // Small screens: get out of the way while the keyboard is up for a field on the page (the composer, a form).
@@ -54,7 +77,29 @@ function swMount() {
   document.addEventListener('focusout', () => setTimeout(() => { const a = document.activeElement; if (!a || !(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable) || a.closest('#sw')) w.classList.remove('kb'); }, 60));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) swUnreadTick(); });
   if (window.visualViewport) { visualViewport.addEventListener('resize', swFit); visualViewport.addEventListener('scroll', swFit); }
+  swHeroWatch();
   return w;
+}
+
+/* Website: stay out of the way while the hero (headline, Start button, feature chips) is on screen; the launcher
+ * fades in once the visitor scrolls past it. Works in any scroller (window, body, iOS web views, the demo frame). */
+function swHeroVisible() {
+  const h = document.querySelector('#top .hc');
+  if (!h) return false;
+  const r = h.getBoundingClientRect(), vh = window.innerHeight || document.documentElement.clientHeight;
+  return r.height > 0 && r.bottom > 0 && r.top < vh;
+}
+function swHeroSet(v) { SW.heroIn = v; if (SW.el) SW.el.classList.toggle('away', SW.view === 'site' && v && !SW.open); }
+function swHeroWatch() {
+  const h = document.querySelector('#top .hc');
+  if (!h) return;
+  swHeroSet(swHeroVisible());
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver((es) => { swHeroSet(es[es.length - 1].isIntersecting); }).observe(h);
+  } else {
+    const f = () => swHeroSet(swHeroVisible());
+    addEventListener('scroll', f, { passive: true, capture: true }); addEventListener('resize', f);
+  }
 }
 
 /* Called by renderHelp(view) on every view change and when the config or login state arrives. */
@@ -67,6 +112,7 @@ function swSync(view) {
   w.hidden = off;
   w.classList.toggle('in-app', SW.view === 'app');
   w.classList.toggle('in-site', SW.view === 'site');
+  swHeroSet(SW.view === 'site' ? swHeroVisible() : false);
   const mode = swIn() && CFG.features.support_chat !== false ? 'acct' : CFG.site_chat ? 'site' : 'contact';
   if (mode !== SW.mode) { SW.mode = mode; SW.d = null; SW.lastKey = ''; if (SW.open) swRenderPanel(); }
   $('#swLF').innerHTML = swFaces(3, 30) + '<span class="sdot sw-on" aria-hidden="true"></span>';
@@ -80,11 +126,12 @@ function swGreetLater() {
   if (SW.greetT || SW.view !== 'site' || store.get('cv_sw_greet')) return;
   SW.greetT = setTimeout(() => {
     if (SW.view !== 'site' || SW.open || store.get('cv_sw_greet') || SW.el.hidden) return;
+    if (SW.el.classList.contains('away')) { SW.greetT = 0; swGreetLater(); return; }
     store.set('cv_sw_greet', '1');
-    const a = swTeam()[0];
+    const a = swIn() ? swTeam()[0] : (CFG.site_chat ? swSiteAgent() : swTeam()[0]);
     const name = a ? a.name : 'the Castvoo team';
     const g = $('#swG');
-    g.innerHTML = '<button type="button" class="sw-gx" aria-label="Dismiss">' + icon('x') + '</button><button type="button" class="sw-gb">' + (a ? '<img src="' + esc(a.avatar) + '" alt="" width="36" height="36">' : '') + '<span><b>Hi 👋 I\'m ' + esc(name) + (a ? ' from Castvoo' : '') + '.</b> Questions about welcome bots?</span></button>';
+    g.innerHTML = '<button type="button" class="sw-gx" aria-label="Dismiss">' + icon('x') + '</button><button type="button" class="sw-gb">' + (a && a.avatar ? '<img src="' + esc(a.avatar) + '" alt="" width="36" height="36">' : '') + '<span><b>Hi 👋 I\'m ' + esc(name) + (a ? ' from Castvoo' : '') + '.</b> Questions about welcome bots?</span></button>';
     g.hidden = false;
     $('.sw-gx', g).onclick = () => { g.hidden = true; };
     $('.sw-gb', g).onclick = () => { g.hidden = true; swOpen(); };
@@ -138,7 +185,7 @@ function swFit() {
 function swOpen() {
   swMount();
   if (SW.open) return;
-  SW.open = true;
+  SW.open = true; SW.el.classList.remove('away');
   SW.lastFocus = document.activeElement;
   $('#swG').hidden = true;
   store.set('cv_sw_greet', '1');
@@ -154,11 +201,13 @@ function swOpen() {
   if (SW.mode === 'acct') swRefresh(true);
   clearInterval(SW.pollT);
   let tick = 0;
-  SW.pollT = setInterval(() => { tick++; if (SW.mode === 'acct' && !document.hidden && (Date.now() < SW.fastUntil || tick % 6 === 0)) swRefresh(); }, 1500);
+  // Every 0.75 s while an answer is on its way (so bubbles show as soon as they are "typed", like the website chat),
+  // otherwise every 6 s.
+  SW.pollT = setInterval(() => { tick++; if (SW.mode === 'acct' && !document.hidden && (Date.now() < SW.fastUntil || tick % 8 === 0)) swRefresh(); }, 750);
 }
 function swClose(quiet) {
   if (!SW.open) return;
-  SW.open = false;
+  SW.open = false; setTimeout(() => { if (!SW.open) swHeroSet(swHeroVisible()); }, 260);
   clearInterval(SW.pollT);
   const p = $('#swP');
   p.classList.remove('in');
@@ -198,13 +247,17 @@ function swRenderPanel() {
       '<form class="sw-f" id="swF"><div class="sw-pics" id="swPics" hidden></div><div class="sw-row">' +
       (imgs ? '<label class="sw-att" tabindex="0" role="button" aria-label="Attach a photo or screenshot"><input type="file" id="swFile" accept="image/*" multiple hidden>' + icon('image') + '</label>'
         : SW.mode === 'site' ? '<button type="button" class="sw-att off" id="swNoImg" aria-label="Log in to send screenshots" title="Log in to send screenshots">' + icon('image') + '</button>' : '') +
-      '<textarea id="swQ" rows="1" maxlength="' + (SW.mode === 'acct' ? 4000 : 1000) + '" placeholder="' + (SW.mode === 'acct' ? 'Write a message…' : 'Ask about Castvoo…') + '" aria-label="Your message" enterkeyhint="send"></textarea>' +
+      '<textarea id="swQ" rows="1" maxlength="' + (SW.mode === 'acct' ? 4000 : 1000) + '" placeholder="Write a message…" aria-label="Your message" enterkeyhint="send"></textarea>' +
       '<button type="submit" class="sw-send" aria-label="Send">' + icon('send') + '</button></div><p class="sw-tip" id="swTip" hidden></p></form>') +
     (powered ? '<div class="sw-pw">' + poweredBy(powered) + '</div>' : '') +
     (imgs ? '<div class="sw-drop" id="swDrop" hidden><span>' + icon('image') + 'Drop your screenshot to attach it</span></div>' : '');
   paintCas(p);
   $('#swX').onclick = () => swClose();
-  $('#swM').onclick = (e) => { const b = e.target.closest('[data-lb]'); if (b) openLightbox(b.dataset.lb); if (e.target.closest('a[href^="#"]')) swClose(true); };
+  $('#swM').onclick = (e) => {
+    if (supLinkClick(e, () => swClose(true))) return;
+    const b = e.target.closest('[data-lb]'); if (b) openLightbox(b.dataset.lb);
+    if (e.target.closest('a[href^="#"]')) swClose(true);
+  };
   swActs();
   swDraw(true);
   const f = $('#swF');
@@ -220,18 +273,26 @@ function swRenderPanel() {
 }
 function swTip(h) { const t = $('#swTip'); if (!t) return; t.innerHTML = h; t.hidden = false; clearTimeout(swTip.t); swTip.t = setTimeout(() => { t.hidden = true; }, 6000); }
 
-/* Quick actions under the chat: starter questions on the website chat. */
+/*
+ * Under the chat: nothing inside (no "Talk to a person" button; customers just ask). On the website: "Start free"
+ * after an answer about prices, plans or getting started, and "Log in" after asking for a person. Logged out
+ * without the website chat: log in or email.
+ */
 function swActs() {
   const A = $('#swA'); if (!A) return;
   const s = CFG.support || {};
   let h = '';
-  if (SW.mode === 'site' && !SW.site.msgs.length) h += ['What does Castvoo do?', 'How much does it cost?', 'How do I pay from Nigeria?'].map((t) => '<button type="button" class="sw-chip" data-q>' + esc(t) + '</button>').join('');
+  if (SW.mode === 'site' && !SW.site.busy) {
+    if (SW.site.login) h += '<a class="sw-chip hp" href="#login">' + icon('users') + 'Log in to chat with the team</a>';
+    if (SW.site.cta) h += '<a class="sw-chip go" href="' + esc(SW.site.cta.href || '#signup') + '">' + icon('spark') + esc(SW.site.cta.label || 'Start free') + '</a>';
+  }
   if (SW.mode === 'contact') h = '<a class="btn b-blue sm" href="#login">Log in to chat</a><a class="btn b-ghost sm" href="mailto:' + esc(s.email) + '">' + icon('mail') + 'Email us</a>';
+  // The buttons take room from the messages: keep the newest message in view.
+  const L = $('#swM'), stick = L && L.scrollHeight - L.scrollTop - L.clientHeight < 90;
   A.innerHTML = h;
-  A.onclick = (e) => {
-    const q = e.target.closest('[data-q]'); if (q) { swSiteAsk(q.textContent); return; }
-    if (e.target.closest('a[href^="#"]')) swClose(true);
-  };
+  A.hidden = !h;
+  if (stick) L.scrollTop = L.scrollHeight;
+  A.onclick = (e) => { if (e.target.closest('a[href^="#"]')) swClose(true); };
 }
 
 /* ---------- messages ---------- */
@@ -244,7 +305,7 @@ function swDraw(force) {
   if (SW.mode === 'acct') {
     const d = SW.d;
     if (!d) { L.innerHTML = '<div class="sw-load"><span class="spin"></span></div>'; return; }
-    const key = d.messages.map((m) => m.id + ':' + (m.attachments || []).length).join(',') + '|' + (d.typing ? d.typing.name : '') + '|' + !!(d.thread && d.thread.with_human);
+    const key = d.messages.map((m) => m.id + ':' + (m.attachments || []).length + ':' + (m.links || []).length).join(',') + '|' + (d.typing ? d.typing.name : '') + '|' + !!(d.thread && d.thread.with_human);
     if (!force && key === SW.lastKey) return;
     SW.lastKey = key;
     const ms = d.messages;
@@ -257,18 +318,21 @@ function swDraw(force) {
       const fst = !same(ms[i - 1]);
       const lst = !same(ms[i + 1]) && !(d.typing && !mine && i === ms.length - 1 && d.typing.name === m.author_name);
       const pics = (m.attachments || []).length ? '<span class="cpics n' + Math.min(m.attachments.length, 3) + '">' + m.attachments.map((x) => '<button type="button" class="cpic" data-lb="' + esc(x.url) + '" aria-label="Open image"><img src="' + esc(x.url) + '" alt="Image"></button>').join('') + '</span>' : '';
-      h += swBubble({ mine, first: fst, last: lst, face: mine ? swMine(30) : swAgentFace(m.avatar, m.author_name), name: m.author_name || 'Castvoo team', staff: m.author_type === 'staff', html: pics + (m.body ? esc(m.body).replace(/\n/g, '<br>') : ''), time: lst ? (m.sending ? 'Sending…' : fmtDate(m.created_at)) : '' });
+      h += swBubble({ mine, first: fst, last: lst, face: mine ? swMine(30) : swAgentFace(m.avatar, m.author_name), name: m.author_name || 'Castvoo team', staff: m.author_type === 'staff', html: pics + (m.body ? esc(m.body).replace(/\n/g, '<br>') : '') + (mine ? '' : supLinkCards(m.links, 'w' + m.id)), time: lst ? (m.sending ? 'Sending…' : fmtDate(m.created_at)) : '' });
     });
     if (d.typing) h += swTyping(d.typing.avatar, d.typing.name);
   } else if (SW.mode === 'site') {
-    const ag = (CFG.site_chat && CFG.site_chat.agent) || a0 || { name: 'Castvoo', avatar: null };
+    // Drawn exactly like the logged-in chat: the agent's face on the last bubble of a group, name on the first, time.
+    const ag = swSiteAgent();
     const face = swAgentFace(ag.avatar, ag.name);
-    h += swBubble({ mine: false, first: true, last: !SW.site.msgs.length || SW.site.msgs[0].role === 'user', face, name: ag.name, html: 'Hi! 👋 I\'m ' + esc(ag.name) + '. Ask me anything about Castvoo: what it does, prices, payments or setup.' });
-    SW.site.msgs.forEach((m, i) => {
+    const ms = SW.site.msgs;
+    if (!ms.length) h += swBubble({ mine: false, first: true, last: true, face, name: ag.name, html: 'Hi! 👋 I\'m ' + esc(ag.name) + '. Ask me anything about Castvoo: what it does, prices, payments or setup.' });
+    ms.forEach((m, i) => {
       const mine = m.role === 'user';
-      const nx = SW.site.msgs[i + 1], pv = i ? SW.site.msgs[i - 1] : { role: 'assistant' };
-      const lst = !(nx && nx.role === m.role) && !(SW.site.busy && !mine && i === SW.site.msgs.length - 1);
-      h += swBubble({ mine, first: pv.role !== m.role, last: lst, face: mine ? '' : face, name: ag.name, html: m.html || esc(m.content).replace(/\n/g, '<br>') });
+      const nx = ms[i + 1], pv = ms[i - 1];
+      const fst = !(pv && pv.role === m.role);
+      const lst = !(nx && nx.role === m.role) && !(SW.site.busy && !mine && i === ms.length - 1);
+      h += swBubble({ mine, first: fst, last: lst, face: mine ? '' : face, name: ag.name, html: (m.html || esc(m.content).replace(/\n/g, '<br>')) + (mine ? '' : supLinkCards(m.links, 's' + i)), time: lst && m.at ? fmtDate(m.at) : '' });
     });
     if (SW.site.busy) h += swTyping(ag.avatar, ag.name);
   } else {
@@ -287,6 +351,47 @@ function swBubble(o) {
   const nm = !o.mine && o.first ? '<small class="sw-n">' + esc(o.name) + (o.staff ? ' <span class="steam-tag">Team</span>' : '') + '</small>' : '';
   return '<div class="sw-msg ' + (o.mine ? 'u' : 'a') + (o.first ? ' first' : '') + (o.last ? ' last' : '') + '">' + (o.mine && !o.face ? '' : ava) + '<div class="sw-b">' + nm + o.html + (o.time ? '<small class="sw-tm">' + esc(o.time) + '</small>' : '') + '</div></div>';
 }
+/*
+ * Link cards under an agent's bubble (server: services/support-links.js, every card checked against a whitelist).
+ * Used by this widget and the Help page. App pages navigate in place (logged out: log in first, then the page),
+ * video guides play inline, help articles open right in the chat, everything else opens in a new tab.
+ */
+const SLK_EXT = /^https:\/\/(affiliate\.)?(voosquare|joinvoo|replyvoo|glicto|affleego|gatevoo|castvoo|voosquareacademy)\.com\/?$/;
+function slkSafe(c) {
+  if (!c || !c.label) return false;
+  if (c.kind === 'article') return true;
+  const h = String(c.href || '');
+  return /^#app(\/|\?|$)/.test(h) ? (c.kind === 'app' || c.kind === 'guide') : /^\/(blog|legal)\/[a-z0-9-]+$/.test(h) ? (c.kind === 'blog' || c.kind === 'legal') : c.kind === 'external' && SLK_EXT.test(h);
+}
+function supLinkCards(links, mid) {
+  const list = (Array.isArray(links) ? links : []).filter(slkSafe).slice(0, 3);
+  if (!list.length) return '';
+  const ic = { app: 'arrow', guide: 'play', article: 'help', blog: 'pencil', legal: 'shield', external: 'ext' };
+  const lead = (c) => (c.kind === 'app' && /wallet/.test(c.href) ? 'wallet' : c.kind === 'app' && /flows/.test(c.href) ? 'bot' : c.kind === 'app' && /settings/.test(c.href) ? 'gear' : c.kind === 'app' && /earn/.test(c.href) ? 'gift' : c.kind === 'guide' ? 'play' : c.kind === 'article' ? 'help' : c.kind === 'external' ? 'globe' : c.kind === 'blog' ? 'pencil' : c.kind === 'legal' ? 'shield' : 'arrow');
+  const inner = (c) => '<span class="slk-i">' + icon(lead(c)) + '</span><span class="slk-t"><b>' + esc(c.label) + '</b>' + (c.sub ? '<small>' + esc(c.sub) + '</small>' : '') + '</span><span class="slk-a">' + icon(ic[c.kind] || 'arrow') + '</span>';
+  return '<div class="slk">' + list.map((c, i) => {
+    if (c.kind === 'article') { const id = 'slkA' + (mid || 'x') + '_' + i; return '<button type="button" class="slk-c k-article" data-slk-art="' + id + '" aria-expanded="false">' + inner(c) + '</button><div class="slk-art" id="' + id + '" hidden>' + esc(c.text || '').replace(/\n/g, '<br>') + '</div>'; }
+    if (c.kind === 'guide') return '<button type="button" class="slk-c k-guide" data-slk-guide="' + esc(c.guide || '') + '" data-href="' + esc(c.href) + '">' + inner(c) + '</button>';
+    const out = !/^#/.test(c.href);
+    return '<a class="slk-c k-' + esc(c.kind) + '" href="' + esc(c.href) + '"' + (out ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' + inner(c) + '</a>';
+  }).join('') + '</div>';
+}
+/* Clicks on cards (delegated). onApp runs before an in-app link navigates (the widget closes itself). */
+function supLinkClick(e, onApp) {
+  const art = e.target.closest('[data-slk-art]');
+  if (art) { const box = document.getElementById(art.dataset.slkArt); if (box) { box.hidden = !box.hidden; art.setAttribute('aria-expanded', String(!box.hidden)); art.classList.toggle('on', !box.hidden); } return true; }
+  const g = e.target.closest('[data-slk-guide]');
+  if (g) {
+    const id = g.dataset.slkGuide;
+    if (id && typeof openVideoGuide === 'function' && typeof VGUIDES !== 'undefined' && VGUIDES.some((x) => x.id === id)) openVideoGuide(id);
+    else { if (onApp) onApp(); location.hash = g.dataset.href || '#app/guides'; }
+    return true;
+  }
+  const a = e.target.closest('a.slk-c[href^="#"]');
+  if (a && onApp) onApp();
+  return !!a;
+}
+
 function swTyping(url, name) {
   return '<div class="sw-msg a typing first last">' + swAgentFace(url, name) + '<div class="sw-b"><span class="tg-typing in"><i></i><i></i><i></i></span></div><span class="sw-tl">' + esc(name) + ' is typing…</span></div>';
 }
@@ -330,30 +435,43 @@ async function swSend() {
     SW.pend = []; swDrawPend();
     swDraw(true);
     SW.fastUntil = Date.now() + 90000;
-    setTimeout(() => swRefresh(), 600);
+    setTimeout(() => swRefresh(), 400);
   } catch (ex) { apiErr(ex); }
   btnBusy(b, false);
   if (swFine()) q.focus();
 }
+/*
+ * Website chat: the agent "types" while the answer is written, then each bubble shows after the delay the server sent
+ * (the same typing delays as the logged-in chat; the time the answer took already counts towards the first one).
+ */
 async function swSiteAsk(text) {
   const t = String(text || '').trim();
   const S = SW.site;
   if (!t || S.busy) return;
   const history = S.msgs.filter((m) => !m.html).slice(-10).map((m) => ({ role: m.role, content: m.content }));
-  S.msgs.push({ role: 'user', content: t });
-  S.busy = true; swDraw(true); swActs();
+  S.msgs.push({ role: 'user', content: t, at: new Date().toISOString() });
+  S.cta = null; S.login = false;
+  S.busy = true; swDraw(true); swActs(); swSiteSave();
+  const t0 = Date.now();
+  const wait = (ms) => new Promise((ok) => setTimeout(ok, Math.max(0, ms)));
   try {
-    const r = await POST('/api/public/chat', { message: t, history });
-    S.busy = false;
-    for (const [i, b] of r.bubbles.entries()) {
-      if (i) { S.busy = true; swDraw(true); await new Promise((ok) => setTimeout(ok, Math.min(1800, 500 + b.length * 12))); S.busy = false; }
-      S.msgs.push({ role: 'assistant', content: b }); swDraw(true);
+    const ag = swSiteAgent();
+    const r = await POST('/api/public/chat', { message: t, history, persona_id: ag && ag.id ? ag.id : undefined });
+    if (r.persona && r.persona.id && (!ag || ag.id !== r.persona.id)) { S.agent = { ...r.persona }; store.set('cv_sw_agent', String(r.persona.id)); }
+    const delays = Array.isArray(r.delays) ? r.delays : [];
+    for (const [i, b] of (r.bubbles || []).entries()) {
+      await wait(i ? Number(delays[i]) || 0 : (Number(delays[0]) || 0) - (Date.now() - t0));
+      const last = i === r.bubbles.length - 1;
+      S.msgs.push({ role: 'assistant', content: b, at: new Date().toISOString(), ...(last && Array.isArray(r.links) && r.links.length ? { links: r.links } : {}) });
+      S.busy = i < r.bubbles.length - 1;
+      swDraw(true);
     }
+    S.cta = r.cta || null; S.login = !!r.login;
   } catch (ex) {
-    S.busy = false;
-    S.msgs.push({ role: 'assistant', content: (ex && ex.message) || 'Sorry, chat is busy. Email us and we\'ll help.' });
-    swDraw(true);
+    S.msgs.push({ role: 'assistant', content: (ex && ex.message) || 'Sorry, chat is busy. Email us and we\'ll help.', at: new Date().toISOString() });
   }
+  S.busy = false;
+  swDraw(true); swActs(); swSiteSave();
 }
 
 /* ---------- images (logged in) ---------- */

@@ -26,10 +26,10 @@ describe('account', () => {
     const support = await app.staff('support');
     const tid = (await app.db.one('select id from support_threads where user_id = $1', [c.user.id])).id;
     await support.post(`/api/admin/support/${tid}/reply`, { body: 'Secret staff note', internal: true });
-    const top = await c.post('/api/wallet/topup', { amount: 20, method: 'paystack_ng' });
+    const top = await c.post('/api/wallet/topup', { amount: 20, method: 'flw_ng' });
     payRef = top.body.reference;
-    app.fakes.paystack.txns.get(payRef).status = 'success';
-    await app.require('payments').verifyPaystack(payRef);
+    app.fakes.flw.txns.get(payRef).status = 'successful';
+    await app.require('payments').verifyFlutterwave(payRef);
     const m = await c.post('/api/media', FILES.jpg(), { headers: { 'content-type': 'image/jpeg' } });
     file = (await app.db.one('select path from media where id = $1', [m.body.media.id])).path;
   });

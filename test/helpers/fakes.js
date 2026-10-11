@@ -52,6 +52,7 @@ async function startFakes() {
     rate429: { n: 0, retryAfter: 1 },
     memberCount: 42,
     chatMember: null, // override for getChatMember result
+    chatMemberError: null, // e.g. 'Bad Request: user not found': getChatMember about a person (not the bot itself) fails
     joinError: null, // e.g. 'Bad Request: HIDE_REQUESTER_MISSING' for approve/decline
     uploads: [], // { method, field, filename, size, file_id }
     fail5xx: 0,
@@ -78,7 +79,8 @@ async function startFakes() {
    * per request. A reply is { text } or { tools: [{ name, input }], text? } (tool_use blocks, stop_reason tool_use),
    * or null to fall back to ai.text.
    */
-  const ai = { calls: [], failNext: 0, text: 'Hello from Cas 👋 Here is your message.', script: null };
+  // ai.delayMs: the fake model "thinks" this long before answering (to test messages that arrive meanwhile).
+  const ai = { calls: [], failNext: 0, text: 'Hello from Cas 👋 Here is your message.', script: null, delayMs: 0 };
   const paystack = { txns: new Map(), webhookSecret: null };
   const flw = { txns: new Map(), byId: new Map(), nextId: 5000 };
   const gatevoo = { invoices: new Map() };
@@ -156,6 +158,7 @@ async function startFakes() {
         return tgOk(res, { invite_link: 'https://t.me/+' + crypto.randomBytes(8).toString('base64url').replace(/[^A-Za-z0-9]/g, 'x'), creator: { id: bot.id }, creates_join_request: !!params.creates_join_request, name: params.name, is_primary: false, is_revoked: false });
       case 'setWebhook': tg.webhooks.set(token, { url: params.url, secret_token: params.secret_token, allowed_updates: params.allowed_updates }); return tgOk(res, true);
       case 'deleteWebhook': tg.webhooks.delete(token); return tgOk(res, true);
+      case 'sendChatAction': return tgOk(res, true); // a blocked chat (tg.block) answers 403 above, like a bot nobody started
       case 'setMyCommands': case 'answerCallbackQuery':
       case 'leaveChat': case 'pinChatMessage': case 'deleteMessage':
         return tgOk(res, true);
@@ -165,7 +168,9 @@ async function startFakes() {
         return tgOk(res, saved ? { url: saved.url, has_custom_certificate: false, pending_update_count: 0 } : { url: 'https://example/tg', pending_update_count: 0 });
       }
       case 'getChatMemberCount': return tgOk(res, tg.memberCount);
-      case 'getChatMember': return tgOk(res, tg.chatMember || { status: 'administrator', can_invite_users: true, user: { id: Number(params.user_id) } });
+      case 'getChatMember':
+        if (tg.chatMemberError && Number(params.user_id) !== Number(bot.id)) return tgErr(res, 400, tg.chatMemberError);
+        return tgOk(res, tg.chatMember || { status: 'administrator', can_invite_users: true, user: { id: Number(params.user_id) } });
       case 'sendMessage': {
         if (visibleHtmlLength(params.text) > 4096) return tgErr(res, 400, 'Bad Request: message is too long');
         if (!String(params.text || '').trim()) return tgErr(res, 400, 'Bad Request: message text is empty');
@@ -227,6 +232,7 @@ async function startFakes() {
         ai.calls.push({ ...b, system_blocks: b.system, system: Array.isArray(b.system) ? b.system.map((x) => x.text).join('\n\n') : b.system });
         if (!req.headers['x-api-key']) return send(res, 401, { error: { message: 'no key' } });
         if (ai.failNext > 0) { ai.failNext--; return send(res, 500, { error: { message: 'overloaded' } }); }
+        if (ai.delayMs > 0) await new Promise((r) => setTimeout(r, ai.delayMs));
         const scripted = typeof ai.script === 'function' ? ai.script(b) : Array.isArray(ai.script) && ai.script.length ? ai.script.shift() : null;
         if (scripted) {
           const content = [];

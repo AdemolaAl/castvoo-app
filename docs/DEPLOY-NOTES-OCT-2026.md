@@ -73,3 +73,20 @@ Everything before this release was tested against fake services. These must be d
 - A second reviewer for large manual payments is not built.
 - There is no admin editor for the support team hours (`support_ai.team_hours`); the defaults (8am to 10pm WAT) apply.
 - Join requests in progress during a deploy can be lost (the person can ask again).
+
+## Bots release (Oct 11, 2026) — deploy 7a0b824 or later
+
+- New migration: `026_bots.sql` (runs automatically on start). No new env vars.
+- Menu "Welcome Flows" is now "🤖 Bots". Old links still work; existing welcome flows show as Welcome bots.
+- New: Chat bots (start when someone opens t.me/<bot>?start=<code>), "Check they joined", "Ask a question" (leads + CSV), "Invite friends" (referrals). Paid membership is NOT in Castvoo (separate product later).
+- Plan limits (bots switched on at once): Free 2 · Starter 5 · Growth 15 · Scale unlimited (fair use 100). Details: docs/BOTS-PRICING.md.
+- Each person can be logged in on 2 devices at once (3 on Scale); the oldest is logged out and gets the new-login alert.
+- Plan bullets update automatically on start unless they were edited by hand in Admin — check Admin → Plans after deploy.
+- Run ONE app instance (duplicate-update guard is per process).
+- Before announcing, do one live Telegram test (see docs/SUPERVISOR-VERDICT-BOTS.md): a start link + plain /start, "I've joined" on a private channel as member and non-member (bot must be admin), one typed / phone / choice question, one invite link from a second Telegram account.
+- 3 new guide videos in public/videos (bots-with-cas, bots-yourself, bots-leads-invites); check.js fails if any video is missing.
+
+## Referral 5 to 15% (Oct 11, 2026)
+
+- New migration: `027_referral_5_15.sql` (runs automatically on start). Referral tiers become 5% / 10% / 15% (1 / 5 / 20 paying referrals); any saved rate or cap above 15% is set to 15% (monthly and yearly cap both 15%). Past earnings are not changed. Admin → Settings → Referral no longer accepts more than 15%.
+- The "referrals-help" guide video still SAYS "ten / twenty / thirty percent" in the voiceover (the caption file was updated). Re-record that video before announcing.

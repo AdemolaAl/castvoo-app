@@ -345,34 +345,67 @@ describe('money', () => {
     assert.deepEqual(ev2.map((e) => e.payload.type).sort(), ['plan_started', 'spend']);
   });
 
-  it('AUD-1: commission is on cash minus the processor fee, capped at 50% (35% yearly), from admin settings', async () => {
+  it('AUD-1: commission is on cash minus the processor fee, capped at 15% (monthly and yearly), from admin settings', async () => {
     const ref = await customer('capref');
     const u = await customer('capu', { ref: ref.c.user.ref_code });
     await app.db.query("insert into payments(workspace_id, user_id, provider, method_key, reference, amount_cents) values ($1,$2,'paystack','paystack_ng',$3,4900)", [u.id, u.c.user.id, 'fee1-' + u.id]);
     await app.require('payments').credit('fee1-' + u.id, { feeCents: 900 });
-    await app.setSetting('referral', { rates: [60, 60, 60], commission_cap_pct: 50 });
+    // A row saved by hand with old, too-high numbers is clamped to 15% on load.
+    await app.setSetting('referral', { rates: [60, 60, 60], commission_cap_pct: 50, yearly_cap_pct: 35 });
     try {
+      const loaded = await app.settings.get('referral');
+      assert.deepEqual([loaded.rates, loaded.commission_cap_pct, loaded.yearly_cap_pct], [[15, 15, 15], 15, 15], 'clamped to 15 on load');
       assert.equal((await u.c.post('/api/app/plan', { plan: 'growth', cycle: 'month', start_now: true })).status, 200);
       const e = await app.db.one("select * from referral_ledger where from_workspace_id = $1 and kind = 'earning'", [u.id]);
-      assert.deepEqual([Number(e.amount_cents), e.rate], [2000, 50], '50% of (4900 - 900)');
+      assert.deepEqual([Number(e.amount_cents), e.rate], [600, 15], '15% of (4900 - 900)');
       const tx = await app.db.one("select * from wallet_tx where workspace_id = $1 and kind = 'plan'", [u.id]);
       assert.equal(Number(tx.commission_base_cents), 4000);
+      const pub = await app.require('routes/public').publicConfig();
+      assert.deepEqual(pub.referral.rates, [15, 15, 15], 'the website never shows more than 15%');
 
       const u2 = await customer('capy', { ref: ref.c.user.ref_code });
       await app.db.query('update workspaces set wallet_cents = 49000 where id = $1', [u2.id]);
       assert.equal((await u2.c.post('/api/app/plan', { plan: 'growth', cycle: 'year', start_now: true })).status, 200);
       const e2 = await app.db.one("select * from referral_ledger where from_workspace_id = $1 and kind = 'earning'", [u2.id]);
-      assert.equal(e2.rate, 35, 'yearly cap');
-    } finally { await app.setSetting('referral', { rates: [10, 20, 30] }); }
-    // The admin cannot set a rate above the cap.
+      assert.equal(e2.rate, 15, 'yearly cap');
+    } finally { await app.setSetting('referral', { rates: [5, 10, 15], commission_cap_pct: 15, yearly_cap_pct: 15 }); }
+    // The admin cannot set a rate or a cap above 15%.
     const owner = await app.owner();
-    const bad = await owner.put('/api/admin/settings/referral', { value: { rate_1: 55, rate_2: 20, rate_3: 30, tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw: 300, cookie_days: 60 } });
-    assert.equal(bad.status, 400);
-    const ok = await owner.put('/api/admin/settings/referral', { value: { rate_1: 10, rate_2: 20, rate_3: 30, tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw: 300, cookie_days: 60, yearly_cap_pct: 30 } });
+    const base = { rate_1: 5, rate_2: 10, rate_3: 15, tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw: 300, cookie_days: 60 };
+    assert.equal((await owner.put('/api/admin/settings/referral', { value: { ...base, rate_1: 16 } })).status, 400, 'rate above 15');
+    assert.equal((await owner.put('/api/admin/settings/referral', { value: { ...base, rate_3: 20 } })).status, 400, 'old 20% tier');
+    assert.equal((await owner.put('/api/admin/settings/referral', { value: { ...base, commission_cap_pct: 50 } })).status, 400, 'cap above 15');
+    assert.equal((await owner.put('/api/admin/settings/referral', { value: { ...base, yearly_cap_pct: 35 } })).status, 400, 'yearly cap above 15');
+    const ok = await owner.put('/api/admin/settings/referral', { value: { ...base, yearly_cap_pct: 10 } });
     assert.equal(ok.status, 200, ok.text);
     const saved = await app.settings.get('referral');
-    assert.deepEqual([saved.commission_cap_pct, saved.yearly_cap_pct, saved.first_attribution, saved.net_of_fees], [50, 30, true, true]);
-    await app.setSetting('referral', { yearly_cap_pct: 35 });
+    assert.deepEqual([saved.rates, saved.commission_cap_pct, saved.yearly_cap_pct, saved.first_attribution, saved.net_of_fees], [[5, 10, 15], 15, 10, true, true]);
+    await app.setSetting('referral', { yearly_cap_pct: 15 });
+  });
+
+  it('migration 027: old 10/20/30% rates and 50/35% caps become 5/10/15% and 15%; other keys kept; safe to run twice', async () => {
+    const before = await app.db.one("select value from settings where key = 'referral'");
+    const sql = fs.readFileSync(path.join(__dirname, '../../server/migrations/027_referral_5_15.sql'), 'utf8');
+    const run = () => app.db.tx(async (c) => { for (const st of app.db.splitSql(sql)) await c.query(st); });
+    const put = (v) => app.db.query("update settings set value = $1 where key = 'referral'", [JSON.stringify(v)]);
+    const get = async () => (await app.db.one("select value from settings where key = 'referral'")).value;
+    try {
+      await put({ ...before.value, rates: [10, 20, 30], commission_cap_pct: 50, yearly_cap_pct: 35, settle_days: 21, cookie_days: 45 });
+      await run(); await run();
+      const v = await get();
+      assert.deepEqual([v.rates, v.commission_cap_pct, v.yearly_cap_pct, v.settle_days, v.cookie_days, v.tier2_min, v.tier3_min], [[5, 10, 15], 15, 15, 21, 45, 5, 20]);
+      // Custom rates: only values above 15 are clamped; caps that are already lower stay.
+      await put({ ...before.value, rates: [8, 12, 25], commission_cap_pct: 12, yearly_cap_pct: 40 });
+      await run();
+      const w = await get();
+      assert.deepEqual([w.rates, w.commission_cap_pct, w.yearly_cap_pct], [[8, 12, 15], 12, 12]);
+      // An older row without cap keys gets the 15% caps.
+      const { commission_cap_pct, yearly_cap_pct, ...noCaps } = before.value;
+      await put({ ...noCaps, rates: [10, 20, 30] });
+      await run();
+      const x = await get();
+      assert.deepEqual([x.rates, x.commission_cap_pct, x.yearly_cap_pct], [[5, 10, 15], 15, 15]);
+    } finally { await put(before.value); app.settings.bust(); }
   });
 
   it('SEC-2: a referred account signed up from the referrer\'s IP is held for review, not paid; Finance releases or cancels it', async () => {
@@ -392,7 +425,7 @@ describe('money', () => {
     assert.ok(held.some((x) => x.id === e.id));
     assert.equal((await fin.post(`/api/admin/referrals/held/${e.id}`, { action: 'release' })).status, 200);
     b = (await refC.get('/api/referrals')).body.balance;
-    assert.equal(b.earned, 4.9);
+    assert.equal(b.earned, 2.45);
 
     // Same mailbox (a Gmail alias) is caught too.
     assert.equal(app.require('services/billing').mailbox('Jo.Hn+cv@googlemail.com'), 'john@gmail.com');

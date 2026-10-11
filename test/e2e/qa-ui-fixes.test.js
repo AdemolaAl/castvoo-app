@@ -113,7 +113,7 @@ describe('AUD-12: knowledge about the video guides', () => {
     const kb = require('../../server/knowledge-defaults');
     const guides = kb.find((k) => k.key === 'video-guides');
     assert.ok(guides, 'video-guides article exists');
-    assert.match(guides.body, /9 short video/);
+    assert.match(guides.body, /13 short video/);
     const gs = kb.find((k) => k.key === 'getting-started');
     assert.doesNotMatch(gs.body, /Help page shows each step in a 40-second video/);
     const keys = kb.map((k) => k.key);
@@ -123,7 +123,7 @@ describe('AUD-12: knowledge about the video guides', () => {
     // Every guide in the player is named in the article.
     const src = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'app-guides.js'), 'utf8');
     const titles = [...src.matchAll(/\{ id: '[^']+', title: '([^']+)'/g)].map((m) => m[1]);
-    assert.equal(titles.length, 9);
+    assert.equal(titles.length, 13);
     for (const t of titles) assert.ok(guides.body.includes(t.replace(/&amp;/g, '&')), 'article names ' + t);
   });
 });
@@ -141,15 +141,11 @@ describe('builder helpers (public/js/app-flows.js)', () => {
     assert.match(ui.wfUnitOptions(1, 'hour'), />day</);
     assert.match(ui.wfUnitOptions(2, 'day'), /value="day" selected>days</);
   });
-  it('QA-20: two waits in a row become one, and Wait has no Duplicate button', () => {
-    const blocks = [{ type: 'message', body: 'a' }, { type: 'wait', value: 1, unit: 'day' }, { type: 'wait', value: 12, unit: 'hour' }, { type: 'message', body: 'b' }];
-    assert.equal(ui.wfMergeWaits(blocks), '36 hours');
-    assert.equal(JSON.stringify(blocks[1]), JSON.stringify({ type: "wait", value: 36, unit: "hour" }));
-    assert.equal(blocks.length, 3);
-    const html = ui.blocksHtml([{ type: 'message', body: 'a', buttons: [], variants: [] }, { type: 'wait', value: 1, unit: 'day' }, { type: 'message', body: 'b', buttons: [], variants: [] }], { editable: true });
-    const waitHtml = html.slice(html.indexOf('wf-blk wait'), html.indexOf('wf-blk msg', html.indexOf('wf-blk wait')));
-    assert.doesNotMatch(waitHtml, /data-dup=/);
-    assert.match(waitHtml, /selected>day</, '"Wait 1 day", not "1 days"');
+  it('QA-20: a wait belongs to the message after it ("After 1 day", not "1 days"), so there are no wait blocks to merge', () => {
+    const html = ui.blocksHtml([{ type: 'message', body: 'a', buttons: [], variants: [] }, { type: 'wait', value: 1, unit: 'day' }, { type: 'wait', value: 12, unit: 'hour' }, { type: 'message', body: 'b', buttons: [], variants: [] }], { editable: true });
+    assert.match(html, /<b>After 36 hours<\/b>/, 'two waits in a row are one wait');
+    assert.doesNotMatch(html, /wf-blk wait/);
+    assert.match(ui.blocksHtml([{ type: 'message', body: 'a' }, { type: 'wait', value: 1, unit: 'day' }, { type: 'message', body: 'b' }], { editable: true }), /After 1 day</);
   });
   it('QA-9: the upload progress box is not an upgrade badge; AI-W: Write it with Cas shows when Cas is on', () => {
     const blocks = [{ type: 'message', body: 'a', buttons: [], variants: [] }];
@@ -176,6 +172,6 @@ function loadFlowsUi() {
   ctx.window = ctx;
   vm.createContext(ctx);
   const src = ['core.js', 'app-flows.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n;\n');
-  vm.runInContext('var PAGES = {}; var APP = { state: null }; var CFG = { features: {} };\n' + src + '\n;this.__ui = { blocksHtml, wfPlaceholder, wfUnitOptions, wfMergeWaits };', ctx);
+  vm.runInContext('var PAGES = {}; var APP = { state: null }; var CFG = { features: {} };\n' + src + '\n;this.__ui = { blocksHtml, wfPlaceholder, wfUnitOptions };', ctx);
   return ctx.__ui;
 }

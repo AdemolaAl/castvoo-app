@@ -51,10 +51,19 @@ async function contentFor(cache, d) {
     const b = await db.one('select body, media_id, buttons, include_stop, status from broadcasts where id = $1', [d.broadcast_id]);
     if (b) v = { body: b.body, media_id: b.media_id, buttons: b.buttons || [], include_stop: b.include_stop, cancelled: b.status === 'cancelled' };
   } else if (d.step_id) {
-    const s = await db.one('select body, media_id from sequence_steps where id = $1', [d.step_id]);
+    const s = await db.one(`select s.id, s.body, s.media_id, s.position, s.sequence_id, s.step_type, s.config, q.trigger_type, q.start_button, q.approve_mode, q.start_label, b.username as bot_username,
+        (select min(position) from sequence_steps x where x.sequence_id = s.sequence_id) as first
+      from sequence_steps s join sequences q on q.id = s.sequence_id left join connections b on b.id = q.connection_id where s.id = $1`, [d.step_id]);
     if (s) {
-      const links = await db.many('select code, label, url, row from links where step_id = $1 order by position, created_at, code', [d.step_id]);
-      v = { body: s.body, media_id: s.media_id, buttons: links.map((l) => ({ label: l.label, url: l.url, code: l.code, row: l.row })), include_stop: true };
+      const links = await db.many('select code, label, url, row, kind from links where step_id = $1 order by position, created_at, code', [d.step_id]);
+      v = { body: s.body, media_id: s.media_id, buttons: links.map((l) => ({ label: l.label, url: l.url, code: l.code, row: l.row, kind: l.kind })), include_stop: true };
+      // Chat bots are a conversation: no "Stop these messages" button (/stop still works). Bot steps carry their kind.
+      if (s.trigger_type === 'bot_start') { v.include_stop = false; v.bot = true; }
+      if (s.step_type && s.step_type !== 'message') { v.kind = s.step_type; v.config = s.config || {}; v.step_id = s.id; v.sequence_id = s.sequence_id; }
+      // A Welcome Flow's welcome sent from here ("Start another flow"): its Tap Start button opens the bot (cvf_<flow>).
+      if (s.trigger_type === 'join_request' && s.position === s.first && (s.start_button || s.approve_mode === 'tap') && s.bot_username) {
+        v.startButton = { label: s.start_label || require('../services/flows').DEFAULT_START, url: `https://t.me/${s.bot_username}?start=cvf_${s.sequence_id}` };
+      }
     }
   }
   cache.set(k, v);
@@ -103,7 +112,14 @@ async function deliverOne(token, key, d, cache) {
   const isPrivate = !!d.subscriber_id;
   try {
     if (d.action === 'send') {
-      const m = await send.sendOne(content, { token, botKey: key, chatId: d.chat_id, subscriberId: isPrivate ? d.subscriber_id : null, includeStop: isPrivate && content.include_stop, firstName: isPrivate ? d.sub_name : null });
+      let msg = content, parts = {};
+      if (content.kind || (d.extra && (d.extra.brand || d.extra.reminder))) {
+        // A bot step (check, question, invite, reminder) or the Free plan's line: services/bots.js deliveryParts.
+        const conn = await db.one('select id, username from connections where id = $1', [Number(String(key).split(':')[1]) || 0]);
+        parts = await require('../services/bots').deliveryParts(content, d, conn || {});
+        msg = parts.msg;
+      }
+      const m = await send.sendOne(msg, { token, botKey: key, chatId: d.chat_id, subscriberId: isPrivate ? d.subscriber_id : null, includeStop: isPrivate && content.include_stop && !parts.replyMarkup, firstName: isPrivate ? d.sub_name : null, startButton: content.startButton || null, footerHtml: parts.footerHtml || '', extraRows: parts.extraRows || null, replyMarkup: parts.replyMarkup || null });
       return finish(d, { status: 'sent', message_id: m.message_id });
     }
     if (d.action === 'edit') {

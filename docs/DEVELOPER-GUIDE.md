@@ -84,6 +84,13 @@ same process, in loops that never overlap.
   quick delivery is done (`deliveries.then_approve` → `flows.quickStepDone` → `releaseHeld`), or `approve_at` passes.
 - Bots can't message people who never pressed Start: after that window, later Welcome Flow steps wait (`sequence_runs.status = 'waiting'`)
   until `/start` (the welcome's "Tap to start" button sends `?start=j_<code>`), and stop after 7 days.
+- Flow triggers (migration 023): each step has `trigger_type` (after_previous | wait | on_start | on_button | no_response),
+  `trigger_button` (a `links.button_id`) and `action_start_flow_id`. `links.kind` is link | reply; Reply buttons are callbacks
+  `cvb:<link code>` (`send.keyboard`, `bot-updates.onReplyButton`). The engine is `services/flow-runtime.js` (`processRun`,
+  `processTimer`, `onStarted`, `onTap`); `flow_step_runs` (unique run_id + step_id) holds reminders and button answers, so a
+  double tap sends once. Graph rules ("the message above", choices, what a reminder waits for) live in `flows.flowGraph()` and
+  are mirrored in `public/js/app-flows.js wfGraph()` (the interactive preview `simRun()` uses them). Cas builds a flow with
+  `POST /api/ai/flow` (strict JSON, `flows.cleanAiFlow`). Broadcast tie-in: `POST /api/flows/:id/audience` (segment rule `flow_started`).
 - Waits are seconds (`sequence_steps.delay_seconds`; `delay_minutes` is kept in step by a trigger for older code).
   The drips job polls every 10 s; steps due within 60 s are fired on time by `workers/soon.js` (call `soon.at(dueAt)`
   wherever you set a near due time). Row claims (`for update skip locked`) keep it safe on several servers.
@@ -168,10 +175,14 @@ Files: `services/support-ai.js` (queue, persona, prompt, handoff, sandbox, websi
 ## The floating support widget
 `public/js/widget.js`, mounted from `renderHelp(view)` (site.js) on every view change. Logged in it uses the same
 routes as Help (`GET/POST /api/support`, `/api/support/attachments`); logged out it uses `POST /api/public/chat`
-(no account tools, no images). While closed it polls `GET /api/support/unread` (every 25 s, visible tab only; it never
+with `persona_id` (the same agents, sticky per browser in `localStorage.cv_sw_agent`; the server answers with
+`bubbles` and `delays`, the same typing delays as the logged-in chat; no account tools, no images; the conversation is
+kept in `sessionStorage.cv_sw_site`). There is no "Talk to a person" button: `support-ai.js wantsHuman()` spots the
+request in the customer's own words, and `support.userMessage` hands the thread over at once
+(`customerAskedForHuman`). While closed it polls `GET /api/support/unread` (every 25 s, visible tab only; it never
 marks anything seen). `GET /api/support` sets `support_threads.user_seen_at`. Faces come from `CFG.support_team`
 (public config: the first 4 active agents when the AI support team is on). Hidden on `#app/help`, during sign-up and
-while the VooSquare widget is used on the website. Phones: full-screen sheet sized to `visualViewport`, body locked with
+while the VooSquare widget is used on the website (only with `VOO_SITE_WIDGET=on`, only logged out). Phones: full-screen sheet sized to `visualViewport`, body locked with
 `position:fixed` + restored `scrollY` (no jump). Root class is `.swg` (`.sw` and `.app` are taken).
 
 ## Customer avatars and nicknames
@@ -209,7 +220,7 @@ to `OPTIONS` and draw it in the matching part function; old saved avatars keep w
 
 ## Guide videos (public/videos)
 
-The Guides page plays the 9 videos listed in `VGUIDES` (public/js/app-guides.js). Each guide needs `<id>.mp4`,
+The Guides page plays the 13 videos listed in `VGUIDES` (public/js/app-guides.js). Each guide needs `<id>.mp4`,
 `<id>.vtt` (captions) and `<id>.jpg` (poster). They are part of the app: deploy them with the code (one zip, or git).
 A start-up warning ("guide videos missing") and `npm run check` (section 11) catch a deploy without them.
 

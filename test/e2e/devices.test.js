@@ -129,6 +129,9 @@ describe('Active devices', () => {
   it('"Log out all other devices" ends every other session and keeps this one', async () => {
     const email = mail('others');
     const a = await login(email, UA.iphone, IP.ng);
+    // 3 devices at once is a Scale plan thing (2 per seat on the other plans; bots.test.js tests the cap).
+    await app.db.query("update workspaces set plan_code = 'scale', plan_status = 'active', trial_ends_at = null, period_end = now() + interval '20 days' where owner_user_id = $1", [a.user.id]);
+    app.settings.bust();
     const b = await login(email, UA.windows, IP.ng);
     const c = await login(email, UA.android, IP.ng);
     const r = await a.post('/api/me/sessions/revoke-others');

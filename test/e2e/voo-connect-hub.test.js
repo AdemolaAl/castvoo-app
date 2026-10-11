@@ -7,7 +7,7 @@
  *   wallet top-up (wallet_topup, no commission) → plan from the wallet (spend + plan_started) → RevShare commission →
  *   refund (no clawback) → renewal (spend + plan_renewed) → chargeback (clawback of the commissions that money paid)
  *   → VooSquare's dashboard card from our summary URL → support message both ways → log out everywhere.
- * Outside services (Telegram, Paystack, email) stay fake; nothing real is called.
+ * Outside services (Telegram, Flutterwave, email) stay fake; nothing real is called.
  *
  * Where VooSquare is: VOOSQUARE_DIR, else ../voosquare-app or ../../voosquare-app next to this repo, else the
  * copies at /tmp/claude-0/cv/hub-src (a fresh copy of the current hub) or /tmp/claude-0/snap2/app. Without it the test is skipped (and says so).
@@ -171,12 +171,12 @@ describe('Castvoo ↔ real VooSquare (Voo Connect end to end)', { skip }, () => 
     const at = q1('SELECT t.*, f.code FROM aff_attributions t JOIN aff_affiliates f ON f.id=t.affiliate_id WHERE t.customer_user_id=(SELECT id FROM users WHERE voo_id=?)', member.voo_id);
     assert.ok(at && at.code === aff.code && at.sub1 === 'fb_ng', 'VooSquare attributed the sign-up to the affiliate: ' + JSON.stringify(at));
 
-    // 4. Money (mock Paystack): top-up $120, Growth plan from the wallet.
+    // 4. Money (mock Flutterwave): top-up $120, Growth plan from the wallet.
     const X = { 'x-cv': '1' };
     await buyer.post(`${CV}/api/me`, { body: { country: 'NG' }, headers: X });
-    const t = await buyer.post(`${CV}/api/wallet/topup`, { body: { amount: 120, method: 'paystack_ng' }, headers: X });
+    const t = await buyer.post(`${CV}/api/wallet/topup`, { body: { amount: 120, method: 'flw_ng' }, headers: X });
     assert.equal(t.status, 200, JSON.stringify(t.data));
-    cv.fakes.paystack.txns.get(t.data.reference).status = 'success';
+    cv.fakes.flw.txns.get(t.data.reference).status = 'successful';
     assert.equal((await buyer.post(`${CV}/api/wallet/check`, { body: { reference: t.data.reference }, headers: X })).data.status, 'paid');
     const plan = await buyer.post(`${CV}/api/app/plan`, { body: { plan: 'growth', cycle: 'month', start_now: true }, headers: X });
     assert.equal(plan.status, 200, JSON.stringify(plan.data));
@@ -215,9 +215,8 @@ describe('Castvoo ↔ real VooSquare (Voo Connect end to end)', { skip }, () => 
     await until(() => evRow(`cv_renew_${tx2.id}`));
     assert.equal(evRow(`cv_pay_${tx2.id}`).type, 'spend');
     await until(() => coms().filter((c) => c.type === 'revshare').length === 2);
-    const body = JSON.stringify({ event: 'charge.dispute.create', data: { id: 9001, transaction: { reference: pay.reference } } });
-    const hook = await fetch(`${CV}/pay/paystack`, { method: 'POST', body, headers: { 'content-type': 'application/json', 'x-paystack-signature': crypto.createHmac('sha512', 'sk_test_paystack').update(body).digest('hex') } });
-    assert.equal(hook.status, 200);
+    const hook = await owner.post(`/api/admin/payments/${pay.reference}/chargeback`, { reason: 'Bank dispute 9001' });
+    assert.equal(hook.status, 200, hook.text);
     await cv.voosquare.flush();
     await until(() => coms().filter((c) => c.type === 'clawback').length === 2);
     const claws = coms().filter((c) => c.type === 'clawback');

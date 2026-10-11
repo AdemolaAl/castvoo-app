@@ -144,19 +144,22 @@ describe('validation and labels', () => {
     assert.match(ui.wfUnitOptions(1, 'sec'), /value="sec" selected>second</);
     assert.match(ui.wfUnitOptions(2, 'sec'), /value="sec" selected>seconds</);
     assert.equal(ui.wfWait(1, 'sec'), '1 second');
+    // Waits are a message's "When should the next message come?" now: ⏱ After a wait (seconds, minutes, hours, days).
     const blocks = [msg('Hi', { buttons: [], variants: [] }), wait(30), msg('Quick', { buttons: [], variants: [] }), wait(10, 'min'), msg('Later', { buttons: [], variants: [] })];
     const html = ui.blocksHtml(blocks, { editable: true });
     assert.equal((html.match(/Reaches everyone · first 5 min/g) || []).length, 1);
     assert.equal((html.match(/Reaches people who tapped Start/g) || []).length, 1);
-    assert.match(html, /data-wnow="1">⚡ Send right away/);
-    assert.match(html, /max="999"/);
-    const two = [msg('a'), wait(30), wait(30), msg('b')];
-    assert.equal(ui.wfMergeWaits(two), '1 minute');
-    const rule = ui.wfRuleHtml({ approve_mode: 'after_welcome', blocks });
-    assert.match(rule, /messages in the first 5 minutes reach everyone who asked to join\. Later messages reach people who tapped <b>Start<\/b>/);
+    assert.match(html, /<b>After 30 seconds<\/b>/);
+    assert.match(html, /<b>After 10 minutes<\/b>/);
+    assert.match(html, /Sends 30 seconds after the welcome/);
+    const E = ui.wfFromBlocks(blocks, { approve_mode: 'after_welcome' });
+    assert.match(ui.wfConnHtml(E, 1, { editable: true, open: 1 }), /max="999"/, 'the wait input, 1 to 999');
+    assert.match(ui.wfConnHtml(E, 1, { editable: true, open: 1 }), /⚡<\/span><b>Right away<\/b>/, '"Right away" is one tap');
+    const rule = ui.wfRuleHtml(E);
+    assert.match(rule, /messages in the first 5 minutes reach everyone who asked to join\. After that, your bot can message the people who tapped <b>Start<\/b>/);
     assert.match(rule, /lets them in right after your last message in the first 5 minutes/);
-    assert.match(ui.wfRuleHtml({ approve_mode: 'manual', blocks }), /If you let someone in before those messages go out/);
-    assert.doesNotMatch(ui.wfRuleHtml({ approve_mode: 'after_welcome', blocks: [msg('a'), wait(1, 'day'), msg('b')] }), /right after your last message/);
+    assert.match(ui.wfRuleHtml({ ...E, approve_mode: 'manual' }), /If you let someone in before those messages go out/);
+    assert.doesNotMatch(ui.wfRuleHtml(ui.wfFromBlocks([msg('a'), wait(1, 'day'), msg('b')])), /right after your last message/);
     // Cas and the support agents know it too (keyed knowledge defaults, synced on start).
     const kb = async (key) => (await app.db.one('select body from knowledge where key = $1', [key])).body;
     assert.match(await kb('five-minute-rule'), /Messages in the first 5 minutes reach everyone who asked to join/);
@@ -339,6 +342,6 @@ function loadFlowsUi() {
   ctx.window = ctx;
   vm.createContext(ctx);
   const src = ['core.js', 'app-flows.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n;\n');
-  vm.runInContext('var PAGES = {}; var APP = { state: null }; var CFG = { features: {} };\n' + src + '\n;this.__ui = { blocksHtml, wfUnitOptions, wfMergeWaits, wfWait, wfRuleHtml };', ctx);
+  vm.runInContext('var PAGES = {}; var APP = { state: null }; var CFG = { features: {} };\n' + src + '\n;this.__ui = { blocksHtml, wfUnitOptions, wfWait, wfRuleHtml, wfFromBlocks, wfConnHtml };', ctx);
   return ctx.__ui;
 }

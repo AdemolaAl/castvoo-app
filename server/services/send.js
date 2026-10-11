@@ -12,24 +12,42 @@ const { sign } = require('../lib/util');
 const uploading = new Map();
 const STOP_BUTTON ={ text: '🔕 Stop these messages', callback_data: 'cv_stop' };
 
+/** callback_data of a Reply button (Welcome Flows): "cvb:" + its link code (7 characters), far under Telegram's 64 bytes. */
+const REPLY_PREFIX = 'cvb:';
+const replyData = (code) => REPLY_PREFIX + code;
+
 /**
  * Make the inline keyboard: tracked links, optional "Tap to start" button first, optional stop button last.
  * Buttons with the same `row` number (Welcome Flows) sit side by side, 2 at most; others get a row each.
+ * A Reply button (kind 'reply') has no URL: tapping it sends the bot a callback (bot-updates.js onCallback).
+ * buttonFor(b) (flow tests): makes each button itself ({ text, url } or { text, callback_data }); null leaves it out.
  */
-function keyboard(buttons, { subscriberId, includeStop, startButton }) {
+function keyboard(buttons, { subscriberId, includeStop, startButton, buttonFor, extraRows }) {
   const rows = [];
   if (startButton && startButton.label && startButton.url) rows.push([{ text: String(startButton.label).slice(0, 64), url: startButton.url }]);
   let lastRow = null;
   for (const b of buttons || []) {
     if (!b || !b.label) continue;
-    let url = b.url;
-    if (b.code) url = `${config.appUrl}/l/${b.code}` + (subscriberId ? `?s=${subscriberId}.${sign(`click:${b.code}:${subscriberId}`, 10)}` : '');
-    const btn = { text: String(b.label).slice(0, 64), url };
+    let btn;
+    // A flow test (services/flow-test.js) gives its own buttons: they must never count as real taps.
+    if (buttonFor) {
+      btn = buttonFor(b);
+      if (!btn) continue;
+    } else if (b.kind === 'reply') {
+      if (!b.code) continue;
+      btn = { text: String(b.label).slice(0, 64), callback_data: replyData(b.code) };
+    } else {
+      let url = b.url;
+      if (b.code) url = `${config.appUrl}/l/${b.code}` + (subscriberId ? `?s=${subscriberId}.${sign(`click:${b.code}:${subscriberId}`, 10)}` : '');
+      btn = { text: String(b.label).slice(0, 64), url };
+    }
     const row = b.row === undefined || b.row === null ? null : Number(b.row);
     if (row !== null && row === lastRow && rows.length && rows[rows.length - 1].length < 2) rows[rows.length - 1].push(btn);
     else rows.push([btn]);
     lastRow = row;
   }
+  // Bots (services/bots.js deliveryParts): ready-made rows such as "I've joined ✅" or the choices of a question.
+  for (const r of extraRows || []) if (Array.isArray(r) && r.length) rows.push(r);
   if (includeStop) rows.push([STOP_BUTTON]);
   return rows.length ? { inline_keyboard: rows } : undefined;
 }
@@ -48,13 +66,14 @@ function fileIdFrom(result, kind) {
 }
 
 /**
- * msg: { body, media_id, buttons }  opts: { token, botKey, chatId, subscriberId, includeStop, firstName, footerHtml, startButton }
+ * msg: { body, media_id, buttons }  opts: { token, botKey, chatId, subscriberId, includeStop, firstName, footerHtml, startButton, extraRows, replyMarkup }
  * {name} in the text becomes opts.firstName (or "there" when there is none, e.g. channel posts).
  * footerHtml is added after the text as it is (the Free plan's "Free welcome bot by Castvoo.com" line).
  * Returns Telegram's Message object. Throws TelegramError.
  */
 async function sendOne(msg, opts) {
-  const reply_markup = keyboard(msg.buttons, opts);
+  // opts.replyMarkup: a whole keyboard of its own (a question's "share my phone number" button).
+  const reply_markup = opts.replyMarkup || keyboard(msg.buttons, opts);
   const html = tg.personalize(tg.toHtml(msg.body), opts.firstName) + (opts.footerHtml || '');
   if (msg.media_id) {
     const media = await db.one('select * from media where id = $1', [msg.media_id]);
@@ -88,4 +107,4 @@ async function sendOne(msg, opts) {
   return tg.call(opts.token, 'sendMessage', params);
 }
 
-module.exports = { sendOne, keyboard, STOP_BUTTON };
+module.exports = { sendOne, keyboard, STOP_BUTTON, REPLY_PREFIX, replyData };

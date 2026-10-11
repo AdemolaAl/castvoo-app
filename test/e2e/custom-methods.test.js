@@ -72,7 +72,7 @@ describe('custom payment methods: admin', () => {
     await bad({ min: 100, max: 50 }, 'max below min');
     await bad({ proof_ref: 'sometimes' }, 'bad proof setting');
     await bad({ key: 'Has Spaces' }, 'bad key');
-    await bad({ key: 'paystack_ng' }, 'key taken by a built-in method');
+    await bad({ key: 'flw_ng' }, 'key taken by a built-in method');
     await bad({ key: 'usdt' }, 'reserved key');
     assert.match(await bad({ countries: [] }, 'no country again'), /at least one country/);
   });
@@ -94,8 +94,8 @@ describe('custom payment methods: admin', () => {
 
   it('built-in methods can be switched off but not deleted; a country lists only built-in methods', async () => {
     const owner = await app.owner();
-    assert.equal((await owner.del('/api/admin/methods/paystack_ng')).status, 400);
-    assert.ok(await app.db.one("select 1 from payment_methods where key = 'paystack_ng'"));
+    assert.equal((await owner.del('/api/admin/methods/flw_ng')).status, 400);
+    assert.ok(await app.db.one("select 1 from payment_methods where key = 'flw_ng'"));
     const off = await owner.put('/api/admin/methods/flw_cm', { label: 'Flutterwave', detail: 'Card, MTN and Orange mobile money', active: false });
     assert.equal(off.status, 200, off.text);
     const cm = await payer('CM');

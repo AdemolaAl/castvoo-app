@@ -13,6 +13,18 @@ const { SETTINGS } = require('../seed');
 const { forbidden, httpError } = require('../lib/util');
 
 let cache = null, cacheAt = 0;
+
+/** Castvoo referral commission is 5 to 15%: no tier rate or cap is ever above this, whatever the saved row says. */
+const REFERRAL_MAX_PCT = 15;
+function clampReferral(r) {
+  if (!r || typeof r !== 'object') return r;
+  const c = (x, d) => { const n = Number(x ?? d); return Number.isFinite(n) ? Math.max(0, Math.min(REFERRAL_MAX_PCT, n)) : d; };
+  const out = { ...r };
+  if (Array.isArray(r.rates)) out.rates = r.rates.map((x) => c(x, 0));
+  if (r.commission_cap_pct !== undefined) out.commission_cap_pct = c(r.commission_cap_pct, REFERRAL_MAX_PCT);
+  if (r.yearly_cap_pct !== undefined) out.yearly_cap_pct = Math.min(c(r.yearly_cap_pct, REFERRAL_MAX_PCT), out.commission_cap_pct ?? REFERRAL_MAX_PCT);
+  return out;
+}
 const TTL = 15000;
 
 async function load() {
@@ -28,6 +40,7 @@ async function load() {
   ]);
   const s = { ...SETTINGS };
   for (const r of settings) s[r.key] = r.value;
+  s.referral = clampReferral(s.referral);
   const f = { ...DEFAULTS };
   for (const r of flags) f[r.key] = r.enabled;
   cache = {
@@ -84,8 +97,9 @@ async function methodsFor(countryCode) {
   for (const key of country.methods || []) {
     const m = all.methods.find((x) => x.key === key && x.active);
     if (!m) continue;
-    if (m.provider === 'paystack' && f.paystack && integ.paystack) out.push({ ...m, currency: country.currency, usd_rate: Number(country.usd_rate) });
-    if (m.provider === 'flutterwave' && f.flutterwave && integ.flutterwave) out.push({ ...m, currency: key === 'flw_card' ? 'USD' : country.currency, usd_rate: key === 'flw_card' ? 1 : Number(country.usd_rate) });
+    // Paystack is no longer offered (migration 022), even if a row is switched on again or the key is still set.
+    if (m.provider === 'paystack') continue;
+    if (m.provider === 'flutterwave' && integ.flutterwave) out.push({ ...m, currency: key === 'flw_card' ? 'USD' : country.currency, usd_rate: key === 'flw_card' ? 1 : Number(country.usd_rate) });
     if (m.provider === 'crypto' && f.crypto) {
       if (await gatevooOn()) out.push({ ...m, key: 'gatevoo', label: 'USDT or Bitcoin', detail: 'Secure crypto checkout by Gatevoo', currency: 'USD', usd_rate: 1, gatevoo: true });
       else {
@@ -138,4 +152,4 @@ async function publicVars() {
   };
 }
 
-module.exports = { load, bust, peek, get, features, feature, requireFeature, plans, plan, methodsFor, activeOffers, topupBonus, publicVars, gatevooOn };
+module.exports = { load, bust, peek, get, features, feature, requireFeature, plans, plan, methodsFor, activeOffers, topupBonus, publicVars, gatevooOn, clampReferral, REFERRAL_MAX_PCT };

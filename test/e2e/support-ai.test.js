@@ -138,11 +138,15 @@ describe('tools: scope and redaction', () => {
     assert.match(req, /token_works/);
   });
 
-  it('repair_webhook re-runs the normal setWebhook for the customer\'s own bot', async () => {
+  it('repair_webhook re-runs the normal setWebhook for the customer\'s own bot (after the customer says yes)', async () => {
     const before = app.fakes.tgCalls('setWebhook', botA.token).length;
     await app.db.query("update connections set status = 'error', last_error = 'x' where id = $1", [botA.connId]);
-    ai.script = [{ tools: [{ name: 'repair_webhook', input: { connection_id: botA.connId } }] }, { text: 'Fixed it.' }];
+    // Confirm before acting (support-agent.test.js covers it in depth): the first call only asks.
+    ai.script = [{ tools: [{ name: 'repair_webhook', input: { connection_id: botA.connId } }] }, { text: 'Shall I point it back at Castvoo?' }];
     await say(a, 'my bot stopped hearing people');
+    assert.equal(app.fakes.tgCalls('setWebhook', botA.token).length, before, 'nothing changes before the customer agrees');
+    ai.script = [{ tools: [{ name: 'repair_webhook', input: { connection_id: botA.connId } }] }, { text: 'Fixed it.' }];
+    await say(a, 'yes please');
     const calls = app.fakes.tgCalls('setWebhook', botA.token);
     assert.equal(calls.length, before + 1);
     assert.match(calls[calls.length - 1].params.url, new RegExp(`/tg/b/${botA.connId}$`));
@@ -155,17 +159,17 @@ describe('payments', () => {
   before(async () => { c = await app.loginByEmail('payer@example.com', { name: 'Tunde P', country: 'NG' }); });
 
   it('recheck_payment credits only when the provider says paid, and only once', async () => {
-    const t = await c.post('/api/wallet/topup', { amount: 25, method: 'paystack_ng' });
+    const t = await c.post('/api/wallet/topup', { amount: 25, method: 'flw_ng' });
     assert.equal(t.status, 200, t.text);
     ref = t.body.reference;
-    ai.script = [{ tools: [{ name: 'recheck_payment', input: { reference: ref } }] }, { text: 'Paystack has not confirmed it yet.' }];
+    ai.script = [{ tools: [{ name: 'recheck_payment', input: { reference: ref } }] }, { text: 'Flutterwave has not confirmed it yet.' }];
     let id = await say(c, `I paid but my wallet is empty. Ref ${ref}`);
     let log = await app.db.one("select output from support_ai_tool_log where thread_id = $1 and tool = 'recheck_payment' order by id desc limit 1", [id]);
     assert.equal(log.output.credited, false);
     assert.equal(Number((await wallet(c)).wallet_cents), 0);
 
-    app.fakes.paystack.txns.get(ref).status = 'success';
-    ai.script = [{ tools: [{ name: 'recheck_payment', input: { reference: ref } }] }, { text: 'Done, Paystack confirmed it.' }];
+    app.fakes.flw.txns.get(ref).status = 'successful';
+    ai.script = [{ tools: [{ name: 'recheck_payment', input: { reference: ref } }] }, { text: 'Done, Flutterwave confirmed it.' }];
     id = await say(c, 'Can you check again?');
     log = await app.db.one("select output from support_ai_tool_log where thread_id = $1 and tool = 'recheck_payment' order by id desc limit 1", [id]);
     assert.equal(log.output.credited, true);
@@ -181,8 +185,8 @@ describe('payments', () => {
 
   it("a payment reference from another workspace is not found", async () => {
     const other = await app.loginByEmail('payer2@example.com', { country: 'NG' });
-    const t = await other.post('/api/wallet/topup', { amount: 30, method: 'paystack_ng' });
-    app.fakes.paystack.txns.get(t.body.reference).status = 'success';
+    const t = await other.post('/api/wallet/topup', { amount: 30, method: 'flw_ng' });
+    app.fakes.flw.txns.get(t.body.reference).status = 'successful';
     ai.script = [{ tools: [{ name: 'recheck_payment', input: { reference: t.body.reference } }] }, { text: 'I could not find it.' }];
     const id = await say(c, 'check ' + t.body.reference);
     const log = await app.db.one("select output from support_ai_tool_log where thread_id = $1 and tool = 'recheck_payment' order by id desc limit 1", [id]);
@@ -514,8 +518,8 @@ describe('admin: Support AI settings, personas and sandbox', () => {
   });
 
   it('sandbox: chats as a customer workspace with read-only tools', async () => {
-    const t = await cust.post('/api/wallet/topup', { amount: 40, method: 'paystack_ng' });
-    app.fakes.paystack.txns.get(t.body.reference).status = 'success';
+    const t = await cust.post('/api/wallet/topup', { amount: 40, method: 'flw_ng' });
+    app.fakes.flw.txns.get(t.body.reference).status = 'successful';
     const ws = await app.ws(cust);
     ai.script = [{ tools: [{ name: 'get_wallet', input: {} }, { name: 'recheck_payment', input: { reference: t.body.reference } }] }, { text: 'Your wallet is at $0.00.\n\nThe payment is still being checked.' }];
     const r = await support.post('/api/admin/support-ai/sandbox', { workspace_id: ws.id, message: 'Where is my money?' });

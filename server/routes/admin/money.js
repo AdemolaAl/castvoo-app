@@ -142,7 +142,7 @@ module.exports = (r) => {
     return { ok: true };
   }, { staff: 'withdrawals.review' });
 
-  /** Ask Paystack / Flutterwave / Gatevoo again whether a payment went through. */
+  /** Ask Flutterwave / Gatevoo (or Paystack, for old Paystack payments) again whether a payment went through. */
   r.post('/api/admin/payments/:ref/recheck', async (ctx) => {
     const ok = await payments.verify(ctx.params.ref).catch((e) => { throw badRequest('Check failed: ' + e.message); });
     const p = await db.one('select status, reason from payments where reference = $1', [ctx.params.ref]);

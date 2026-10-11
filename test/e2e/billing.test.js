@@ -40,7 +40,7 @@ describe('trial', () => {
     assert.match(mails[0].text, /\$49\.00/);
   });
 
-  it('trial ends with money in the wallet: plan starts, receipt, referrer earns 10% once', async () => {
+  it('trial ends with money in the wallet: plan starts, receipt, referrer earns 5% once', async () => {
     const referrer = await customer({ prefix: 'ref' });
     const u = await customer({ wallet: 10000, ref: referrer.c.user.ref_code });
     await app.db.query('update workspaces set ai_used = 40 where id = $1', [u.id]);
@@ -61,14 +61,14 @@ describe('trial', () => {
     assert.match(receipt[0].text, /\$49\.00/);
     const led = await app.db.many("select * from referral_ledger where user_id = $1 and kind = 'earning'", [referrer.c.user.id]);
     assert.equal(led.length, 1);
-    assert.equal(Number(led[0].amount_cents), 490);
-    assert.equal(led[0].rate, 10);
+    assert.equal(Number(led[0].amount_cents), 245);
+    assert.equal(led[0].rate, 5);
     assert.ok(Math.abs(daysFromNow(led[0].settles_at) - 30) < 0.01, 'settles after 30 days');
-    assert.ok(app.fakes.lastEmail(referrer.email, /You earned \$4\.90/));
+    assert.ok(app.fakes.lastEmail(referrer.email, /You earned \$2\.45/));
   });
 
-  it('commission rate grows with paying referrals: 20% from 5, 30% from 20', async () => {
-    for (const [existing, rate] of [[3, 10], [5, 20], [20, 30]]) {
+  it('commission rate grows with paying referrals: 5%, 10% from 5, 15% from 20 (never more)', async () => {
+    for (const [existing, rate] of [[3, 5], [5, 10], [20, 15]]) {
       const referrer = await customer({ prefix: 'tier' });
       const rid = referrer.c.user.id;
       for (let i = 0; i < existing; i++) {
@@ -200,7 +200,7 @@ describe('renewals', () => {
     assert.ok(Math.abs(charged - 2500) <= 1, 'half of $50 difference, got ' + charged);
     assert.ok(Math.abs(daysFromNow(w.period_end) - 15) < 0.01, 'period end unchanged');
     const led = await app.db.one('select amount_cents from referral_ledger where user_id = $1', [referrer.c.user.id]);
-    assert.equal(Number(led.amount_cents), Math.floor(charged * 0.1));
+    assert.equal(Number(led.amount_cents), Math.floor(charged * 0.05));
     // Not enough money for the upgrade.
     const poor = await customer({ wallet: 100 });
     await makeActive(poor.id, { daysLeft: 15 });
@@ -238,7 +238,7 @@ describe('renewals', () => {
     const tx = (await planTx(u.id))[0];
     assert.deepEqual([Number(tx.amount_cents), Number(tx.cash_cents), Number(tx.bonus_part_cents)], [-4900, -2900, -2000]);
     const led = await app.db.one('select amount_cents from referral_ledger where user_id = $1', [referrer.c.user.id]);
-    assert.equal(Number(led.amount_cents), 290);
+    assert.equal(Number(led.amount_cents), 145);
   });
 
   it('only the workspace owner changes the plan', async () => {

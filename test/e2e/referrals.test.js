@@ -30,8 +30,8 @@ describe('referrals', () => {
     const page = await r.c.get('/api/referrals');
     assert.equal(page.status, 200);
     assert.equal(page.body.link, `${app.url}/r/${r.c.user.ref_code}`);
-    assert.equal(page.body.rate, 10);
-    assert.deepEqual(page.body.tiers.map((t) => t.rate), [10, 20, 30]);
+    assert.equal(page.body.rate, 5);
+    assert.deepEqual(page.body.tiers.map((t) => t.rate), [5, 10, 15]);
     assert.equal(page.body.signups, 1);
     assert.equal(page.body.people[0].status, 'Trial');
     assert.equal(page.body.min_withdraw, 300);

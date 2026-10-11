@@ -1,0 +1,221 @@
+/*
+ * aurora.css: the dashboard's "Aurora" look. Loaded after castvoo.css.
+ * Dashboard only. Every rule is scoped to #v-app (the logged-in shell and pages, hidden on the public website) or to
+ * html.cv-aur (set by js/app-aurora.js while the dashboard shows) for the parts that live outside #v-app: sheets in
+ * #modalHost, Cas Builder in #cbHost and the "first bot live" moment. Class names start with au- so nothing collides with
+ * the website.
+ *
+ * Colours carry meaning: blue = main actions & people, green = bots & growth, cyan = messages & Telegram,
+ * violet = Cas AI, amber = wallet, orange = clicks.
+ * Motion: transform and opacity only (the 2px top-bar line slides its background); the moving light is one
+ * pseudo-element; everything stops for reduced motion, while the tab is hidden (html.au-paused) and, for the Home
+ * welcome card, while it is off screen (.au-off).
+ *
+ * Safari / iOS (15.4+): color-mix() (16.2+) only inside @supports, never as a plain fallback pair, because a
+ * declaration holding var() is accepted at parse time and an unsupported function inside it then drops the whole
+ * background (white icon on nothing). No overflow:clip (16+), nothing wider than its box, solid colours under every
+ * gradient, and plain-coloured numbers on iOS instead of background-clip:text.
+ */
+
+html.cv-aur,#v-app{
+  --au-blue:#2F6BFF;--au-violet:#7C5CFF;--au-vio-t:#5A3BD9;--au-cyan:#0EA5E9;--au-cyan-t:#03689C;
+  --au-green:#12B886;--au-green-t:#087F5B;--au-amber:#F59F00;--au-amber-t:#965A00;--au-orange:#F76707;--au-orange-t:#B8430A;
+  --au-btn:linear-gradient(135deg,#2F6BFF 0%,#4D5CF8 55%,#6A4BF0 100%);
+  --au-glass:rgba(255,255,255,.84);
+  --au-sh:inset 0 1px 0 rgba(255,255,255,.95),0 0 0 1px rgba(104,112,196,.12),0 22px 44px -30px rgba(70,50,190,.36);
+  --au-sh-h:inset 0 1px 0 #fff,0 0 0 1px rgba(124,92,255,.2),0 30px 50px -30px rgba(70,50,190,.5);
+}
+#v-app{--bg:#F2F4FC}
+
+/* ---------- Shell ---------- */
+#v-app .main{background:
+  radial-gradient(900px 480px at 6% -4%,rgba(124,92,255,.15),transparent 62%),
+  radial-gradient(800px 440px at 96% 0,rgba(14,165,233,.13),transparent 62%),var(--bg)}
+#v-app .side{background:rgba(255,255,255,.92)}
+@media (max-width:980px){#v-app .side{background:#fff}} /* the phone drawer sits over the page: opaque, so nothing shows through */
+#v-app .si.on{background:#fff;color:var(--ink);box-shadow:0 0 0 1.5px rgba(124,92,255,.22),0 10px 22px -14px rgba(90,70,240,.55)}
+#v-app .si.on .ti{background:var(--c);color:#fff;box-shadow:0 6px 14px -6px var(--c)}
+@supports (background:linear-gradient(color-mix(in srgb,red 60%,#fff),red)){
+  #v-app .si.on .ti{background:linear-gradient(135deg,color-mix(in srgb,var(--c) 60%,#fff),var(--c))}}
+#v-app .si[data-v="ai"] .ti,#v-app .dock [data-v="ai"] .mic{position:relative;overflow:hidden}
+#v-app .si[data-v="ai"] .ti{background:linear-gradient(135deg,#A68BFF,#7C5CFF);box-shadow:0 6px 14px -7px #7C5CFF}
+#v-app .si[data-v="ai"] .tag{background:linear-gradient(135deg,#6A4BF0,#2F6BFF);color:#fff}
+#v-app .si[data-v="flows"] .tag{background:#E3F9F0;color:var(--au-green-t)}
+#v-app .cnb{background:linear-gradient(125deg,#2F6BFF,#4D5CF8 55%,#6A4BF0);box-shadow:0 14px 28px -14px rgba(90,70,240,.85)}
+#v-app .wcard{background:linear-gradient(150deg,#2F4BFF,#4B35D6 62%,#36209E)}
+#v-app .wcard .wc-ic{background:linear-gradient(135deg,#FFC53D,#F59F00)}
+#v-app .wcard .btn{background:#fff;color:#3B2BB8}
+
+/* the line stays inside the bar (no 200%-wide layer, no overflow:clip, which Safari 15 ignores) and slides its background */
+#v-app .topb::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;pointer-events:none;opacity:.75;
+  background:linear-gradient(90deg,#2F6BFF,#7C5CFF 16.66%,#0EA5E9 33.33%,#2F6BFF 50%,#7C5CFF 66.66%,#0EA5E9 83.33%,#2F6BFF) 0 0/200% 100% repeat-x;
+  animation:au-line 8s linear infinite}
+@keyframes au-line{to{background-position:100% 0}}
+@media (min-width:981px){#v-app .topb{background:rgba(246,247,255,.8)}}
+#v-app .wpill{border-color:rgba(124,92,255,.22)}
+#v-app .wpill .pl{background:var(--au-btn)}
+
+#v-app .dock{background:rgba(255,255,255,.97);border-color:rgba(124,92,255,.16)}
+#v-app .dock button.on{background:var(--au-btn);box-shadow:0 10px 22px -10px rgba(90,70,240,.9)}
+#v-app .dock .plus2{background:var(--au-btn)!important;box-shadow:0 14px 30px -8px rgba(90,70,240,.85)}
+
+/* ---------- Buttons, toggles, tabs, progress (dashboard, sheets, Cas Builder) ---------- */
+#v-app .b-blue,.cv-aur #modalHost .b-blue,.cv-aur #cbHost .b-blue{background:var(--au-btn);box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 16px 32px -16px rgba(90,70,240,.85)}
+#v-app .tgl.on,.cv-aur #modalHost .tgl.on,.cv-aur #cbHost .tgl.on{background:var(--au-btn)}
+#v-app .seg2 button.on,.cv-aur #modalHost .seg2 button.on{box-shadow:0 0 0 1px rgba(124,92,255,.16),0 6px 14px -8px rgba(90,70,240,.5)}
+#v-app .prog2:not(.hot) i,.cv-aur #modalHost .prog2:not(.hot) i{background:linear-gradient(90deg,#2F6BFF,#7C5CFF 60%,#0EA5E9)}
+#v-app .p-blue{background:#ECEEFF;color:#3F3DD0}
+#v-app .p-tg{background:#E1F4FD;color:var(--au-cyan-t)}
+#v-app .p-ok{background:#E3F9F0;color:var(--au-green-t)}
+/* white buttons on blue cards keep their white (the Bots empty-state hero) */
+#v-app .wf-hl .b-blue{background:#fff;color:var(--blue-dd);box-shadow:0 18px 36px -16px rgba(0,0,0,.5)}
+
+/* ---------- Glass cards ---------- */
+#v-app .pg .box:not(.hello):not(.balc):not(.vgh):not(.refh),#v-app .wf-card,#v-app .vgc,#v-app .vgl,#v-app .cnc,#v-app .avnudge{
+  background:var(--au-glass);border-color:rgba(255,255,255,.95);box-shadow:var(--au-sh)}
+#v-app .pg .box .box{box-shadow:none;border-color:var(--line)}
+#v-app .tbl.rsp tr{background:rgba(255,255,255,.7)}
+#v-app .feed::after{background:linear-gradient(rgba(255,255,255,0),rgba(255,255,255,.95))}
+@media (hover:hover){
+  #v-app [data-page="overview"] .dg>.box,#v-app .avnudge{transition:transform .35s var(--ease),box-shadow .35s}
+  #v-app [data-page="overview"] .dg>.box:hover,#v-app .wf-card:hover,#v-app .vgc:hover,#v-app .vgl:hover,#v-app .cnc:hover{transform:translateY(-3px);box-shadow:var(--au-sh-h)}
+}
+
+/* gradient icon tiles */
+#v-app .kpi .ki{background:var(--k,#2F6BFF)!important;color:#fff!important;box-shadow:0 8px 16px -8px var(--k,#2F6BFF)}
+@supports (background:linear-gradient(color-mix(in srgb,red 62%,#fff),red)){
+  #v-app .kpi .ki{background:linear-gradient(135deg,color-mix(in srgb,var(--k,#2F6BFF) 62%,#fff),var(--k,#2F6BFF))!important}}
+#v-app .kpi .ki svg{color:#fff}
+#v-app .kpi b{color:var(--ink)}
+@supports ((-webkit-background-clip:text) or (background-clip:text)) and (not (-webkit-touch-callout:none)){
+  #v-app .kpi b{background:linear-gradient(135deg,var(--ink) 35%,#3F3DD0);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}}
+#v-app .kpi .d:not(.mu){color:var(--au-green-t)}
+#v-app .bh h3>svg{color:var(--au-cyan)}
+#v-app .wf-ci{background:#E1F4FD}
+#v-app .wf-card.bot .wf-ci{background:#E3F9F0}
+#v-app .wf-card.live{box-shadow:var(--au-sh),0 0 0 3px rgba(18,184,134,.1)}
+#v-app .cnc .ki2[style*="F1ECFF"]{background:#E3F9F0!important}
+#v-app .cnc .ki2[style*="EAF0FF"]{background:#E1F4FD!important}
+#v-app .cnadd{background:linear-gradient(135deg,#F0ECFF,#E7F1FF);border-color:#CBBEFF;color:#4B2FC4}
+#v-app .cnadd .p,#v-app .vgl-p{background:var(--au-btn)}
+#v-app .vgl.seen .vgl-p{background:var(--au-green)}
+#v-app .hlpc{background:linear-gradient(135deg,rgba(240,236,255,.9),rgba(225,244,253,.9));border-color:#DCD6FF}
+
+/* rings, charts, sparklines */
+#v-app .ring svg{filter:drop-shadow(0 6px 12px rgba(124,92,255,.3))}
+#v-app #ckR,#v-app #ovSend .ring .rv2{stroke:url(#auRing)}
+#v-app .ring circle:not(.rv2){stroke:#ECEAFB}
+#v-app .chartw .ln:not([stroke-dasharray="5 5"]){stroke:url(#auLine)}
+#v-app .chartw path[fill^="url"]{fill:url(#auArea)}
+#v-app .chartw circle{stroke:#7C5CFF}
+#v-app .kpi svg.sp .ln{stroke:url(#auLine)}
+#v-app .kpi svg.sp path:not(.ln),#v-app .kpi svg.sp circle{fill:#7C5CFF}
+#v-app .kpi svg.sp .ln{stroke-dasharray:400;animation:au-draw 1.4s var(--ease) .25s both}
+@keyframes au-draw{from{stroke-dashoffset:400}to{stroke-dashoffset:0}}
+#v-app tr .pill .dl{background:var(--au-cyan)!important}
+
+/* staggered fade-in on Home */
+#v-app [data-page="overview"] .feed .fi{animation:au-in .5s var(--ease) both}
+#v-app [data-page="overview"] .feed .fi:nth-child(2){animation-delay:.07s}
+#v-app [data-page="overview"] .feed .fi:nth-child(3){animation-delay:.14s}
+#v-app [data-page="overview"] .feed .fi:nth-child(4){animation-delay:.21s}
+#v-app [data-page="overview"] .feed .fi:nth-child(n+5){animation-delay:.28s}
+@keyframes au-in{from{opacity:0;transform:translateY(10px)}}
+
+/* ---------- Welcome cards: aurora light (Home, Ask Cas), and the same colours still on Wallet and Guides ---------- */
+#v-app .hello,#v-app .balc,#v-app .box.vgh{background:#1E2BA0;isolation:isolate}
+#v-app .hello .mesh,#v-app .balc .mesh{display:none}
+#v-app .hello::before,#v-app .balc::before,#v-app .box.vgh::before{content:"";position:absolute;inset:-35%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(30% 34% at 30% 38%,#4A78FF 0,rgba(74,120,255,0) 70%),
+    radial-gradient(28% 32% at 70% 30%,#8B5CF6 0,rgba(139,92,246,0) 70%),
+    radial-gradient(30% 34% at 64% 72%,rgba(34,211,238,.75) 0,rgba(34,211,238,0) 70%),
+    linear-gradient(135deg,#2440C8,#2A1F8F)}
+#v-app .balc::before,#v-app .box.vgh::before{background:
+    linear-gradient(90deg,rgba(14,18,80,.42) 20%,rgba(14,18,80,.1) 50%,rgba(14,18,80,0) 64%),
+    radial-gradient(30% 34% at 30% 38%,#4A78FF 0,rgba(74,120,255,0) 70%),
+    radial-gradient(28% 32% at 70% 30%,#8B5CF6 0,rgba(139,92,246,0) 70%),
+    radial-gradient(30% 34% at 66% 74%,rgba(34,211,238,.5) 0,rgba(34,211,238,0) 70%),
+    linear-gradient(135deg,#2440C8,#2A1F8F)}
+@media (max-width:600px){#v-app .balc::before,#v-app .box.vgh::before{background:
+    linear-gradient(rgba(14,18,80,.3),rgba(14,18,80,.3)),
+    radial-gradient(30% 34% at 30% 38%,#4A78FF 0,rgba(74,120,255,0) 70%),
+    radial-gradient(28% 32% at 70% 30%,#8B5CF6 0,rgba(139,92,246,0) 70%),
+    linear-gradient(135deg,#2440C8,#2A1F8F)}}
+#v-app .hello .who small{color:rgba(255,255,255,.9)}
+#v-app .hello::before{animation:au-aur 24s ease-in-out infinite alternate;will-change:transform}
+@keyframes au-aur{0%{transform:translate3d(-4%,-3%,0) rotate(0)}50%{transform:translate3d(4%,2%,0) rotate(7deg)}100%{transform:translate3d(-2%,4%,0) rotate(-5deg)}}
+#v-app .hello.au-off::before{animation-play-state:paused}
+#v-app .hello::after,#v-app .balc::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(90deg,rgba(14,18,80,.46),rgba(14,18,80,.12) 58%,rgba(14,18,80,0))}
+#v-app .box.vgh .vgring b{background:#2A2C9E}
+#v-app .qchips button{position:relative;overflow:hidden;border-color:rgba(190,170,255,.55);background:linear-gradient(135deg,rgba(124,92,255,.38),rgba(14,165,233,.2))}
+#v-app .qchips button::before{content:"✦";margin-right:6px}
+#v-app .qchips button::after,#v-app .si[data-v="ai"] .ti::after,#v-app .dock [data-v="ai"] .mic::after{content:"";position:absolute;top:0;bottom:0;left:0;width:45%;pointer-events:none;
+  background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));transform:translateX(-120%) skewX(-20deg);animation:au-shine 3.4s ease-in-out infinite}
+#v-app .qchips button:nth-child(2)::after{animation-delay:.6s}
+@keyframes au-shine{60%,100%{transform:translateX(330%) skewX(-20deg)}}
+/* the main action in the welcome card: white with a blue-violet edge (2px edge replaces 2px of padding, same size) */
+#v-app .hello .acts .b-w{border:2px solid transparent;padding:10px 16px;color:#3B2BB8;
+  background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#5B8CFF,#A68BFF,#5CCBFF) border-box;box-shadow:0 10px 26px -10px rgba(124,92,255,.85)}
+#v-app .hello .acts .b-w svg{color:#7C5CFF}
+
+/* "Build your first flow with Cas": a Cas card, so violet */
+#v-app .cbhome{background:linear-gradient(125deg,#2F4BFF,#5B3FE0 60%,#4B2FC4);box-shadow:0 26px 60px -32px rgba(90,70,240,.95)}
+#v-app .cbhome::after{background:radial-gradient(circle,rgba(166,139,255,.5),transparent 70%)}
+#v-app .cbhome .b-w{color:#3B2BB8}
+/* Ask Cas: question chips are Cas items */
+#v-app [data-page="ai"] .chips button{border-color:#DCD3FF;background:#F6F3FF;color:#4B2FC4}
+
+/* floating meaning tiles (decorative) */
+#v-app .au-fl{position:absolute;right:210px;top:42%;width:130px;height:130px;transform:translateY(-50%);pointer-events:none;z-index:0}
+#v-app .au-ft{position:absolute;width:42px;height:42px;border-radius:14px;display:grid;place-items:center;color:#fff;animation:au-bob 5s ease-in-out infinite;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),0 10px 26px -8px var(--k)}
+#v-app .au-ft svg{width:20px;height:20px}
+#v-app .au-ft0{left:0;top:8px}
+#v-app .au-ft1{left:52px;top:-6px;animation-delay:-1.2s}
+#v-app .au-ft2{left:20px;top:72px;width:36px;height:36px;border-radius:12px;animation-delay:-2.4s}
+#v-app .au-ft3{left:80px;top:60px;width:36px;height:36px;border-radius:12px;animation-delay:-3.6s}
+#v-app .au-ft2 svg,#v-app .au-ft3 svg{width:17px;height:17px}
+#v-app .au-bot{--k:#12B886;background:linear-gradient(135deg,#38D9A9,#12B886)}
+#v-app .au-send{--k:#0EA5E9;background:linear-gradient(135deg,#5CCBFF,#0EA5E9)}
+#v-app .au-cas{--k:#7C5CFF;background:linear-gradient(135deg,#A68BFF,#7C5CFF)}
+#v-app .au-wal{--k:#F59F00;background:linear-gradient(135deg,#FFC53D,#F59F00)}
+@keyframes au-bob{50%{transform:translateY(-7px)}}
+@media (max-width:1100px) and (min-width:981px){#v-app .au-fl{display:none}}
+@media (max-width:980px){#v-app .au-fl{right:auto;left:20px;top:auto;bottom:14px;transform:none;width:150px;height:104px}
+  #v-app .au-ft0{left:0;top:22px}#v-app .au-ft1{left:52px;top:0}#v-app .au-ft2{left:8px;top:72px}#v-app .au-ft3{left:62px;top:56px}}
+@media (max-width:359px){#v-app .au-fl{display:none}}
+
+/* ---------- Loading shimmer (the app's skeleton) ---------- */
+#v-app .skel,.cv-aur #modalHost .skel,.cv-aur #cbHost .skel{animation:none;background:#ECEFF9;position:relative;overflow:hidden}
+#v-app .skel::after,.cv-aur #modalHost .skel::after,.cv-aur #cbHost .skel::after{content:"";position:absolute;top:0;bottom:0;left:0;width:50%;pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.8) 45%,rgba(166,139,255,.18) 62%,rgba(255,255,255,0));
+  transform:translateX(-110%);animation:au-sk 1.35s ease-in-out infinite}
+@keyframes au-sk{to{transform:translateX(220%)}}
+
+/* ---------- "Your first bot is live" ---------- */
+.cv-aur .au-party{position:fixed;left:50%;top:calc(76px + env(safe-area-inset-top,0px));z-index:200;pointer-events:none;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px)}
+.cv-aur .au-pt{display:flex;align-items:center;gap:12px;padding:10px 18px 10px 10px;border-radius:999px;background:#fff;color:var(--ink);font-size:14px;line-height:1.3;
+  box-shadow:0 0 0 1px rgba(124,92,255,.22),0 18px 40px -14px rgba(90,70,240,.55);animation:au-pop .5s var(--ease) both}
+.cv-aur .au-pt b{display:block;font-weight:800}
+.cv-aur .au-pt small{display:block;color:var(--mut);font-size:12.5px;font-weight:600}
+.cv-aur .au-pe{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:19px;background:linear-gradient(135deg,#E3F9F0,#F0ECFF);flex:none}
+.cv-aur .au-party.out .au-pt{animation:au-out .4s ease both}
+.cv-aur .au-party i{position:absolute;left:50%;top:50%;width:8px;height:12px;border-radius:2px;opacity:0;animation:au-conf 1.3s cubic-bezier(.15,.7,.3,1) forwards}
+.cv-aur .au-party i.dot{width:7px;height:7px;border-radius:50%}
+@keyframes au-pop{from{opacity:0;transform:translateY(-10px) scale(.92)}}
+@keyframes au-out{to{opacity:0;transform:translateY(-8px) scale(.96)}}
+@keyframes au-conf{0%{opacity:1;transform:translate(-50%,-50%) rotate(0)}100%{opacity:0;transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) rotate(var(--r))}}
+#v-app .si.au-bump .ti{animation:au-bumpk .7s var(--ease)}
+@keyframes au-bumpk{40%{transform:scale(1.22) rotate(-8deg)}}
+
+/* ---------- Stop motion when it cannot be seen, or when asked ---------- */
+.au-paused #v-app *,.au-paused #v-app *::before,.au-paused #v-app *::after{animation-play-state:paused!important}
+@media (prefers-reduced-motion:reduce){
+  #v-app .hello::before,#v-app .topb::after,#v-app .au-ft,#v-app .qchips button::after,#v-app .si[data-v="ai"] .ti::after,#v-app .dock [data-v="ai"] .mic::after,
+  #v-app .skel::after,.cv-aur #modalHost .skel::after,.cv-aur #cbHost .skel::after,#v-app .kpi svg.sp .ln,#v-app [data-page="overview"] .feed .fi,#v-app .si.au-bump .ti{animation:none}
+  #v-app .skel::after,.cv-aur #modalHost .skel::after,.cv-aur #cbHost .skel::after{display:none}
+  .cv-aur .au-pt,.cv-aur .au-party.out .au-pt{animation:none}
+  .cv-aur .au-party i{display:none}
+  #v-app [data-page="overview"] .dg>.box:hover,#v-app .wf-card:hover,#v-app .vgc:hover,#v-app .vgl:hover,#v-app .cnc:hover{transform:none}
+}

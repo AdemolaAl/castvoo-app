@@ -25,14 +25,14 @@ const emph = (s) => esc(s).replace(/\*([^*]+)\*/g, '<em class="gtext">$1</em>');
 /* ---------- Language switcher (marketing texts only) ---------- */
 const LANGS = { en: ['🇬🇧', 'English'], fr: ['🇫🇷', 'Français'], pt: ['🇵🇹', 'Português'], es: ['🇪🇸', 'Español'], ru: ['🇷🇺', 'Русский'] };
 const SITE_T = {
-  fr: { nf: 'Fonctionnalités', nh: 'Guide', na: 'IA', np: 'Tarifs', nb: 'Blog', nq: 'FAQ', nl: 'Connexion', ns: 'Essai gratuit', hc: 'Accueil · Diffusions · Relances', hw: 'Voir comment ça marche', h2c: 'Voir la mise en route en 40 s', t1: 'Sans carte bancaire', t2: 'Offre gratuite pour 1 canal', t3: 'Prêt en 5 minutes environ',
-    h1: 'Accueillez. Diffusez. Relancez. <em class="gtext">Tout en pilote automatique.</em>', hs: 'Accueillez chaque personne qui demande à rejoindre, envoyez des diffusions à tous vos abonnés et créez des relances programmées avec boutons et liens dans un éditeur simple. Cas, l\'assistant IA, écrit les messages.', cta: 'Essai gratuit de 7 jours', f1: 'Bot d\'accueil', f2: 'Diffusions', f3: 'Relances programmées', f4: 'Éditeur de flux', f5: 'Rédacteur IA' },
-  pt: { nf: 'Recursos', nh: 'Guia', na: 'IA', np: 'Preços', nb: 'Blog', nq: 'FAQ', nl: 'Entrar', ns: 'Começar grátis', hc: 'Boas-vindas · Transmissões · Follow-ups', hw: 'Ver como funciona', h2c: 'Ver a configuração em 40 s', t1: 'Sem cartão', t2: 'Plano grátis para 1 canal', t3: 'Pronto em cerca de 5 minutos',
-    h1: 'Dê boas-vindas. Transmita. Faça follow-up. <em class="gtext">Tudo no automático.</em>', hs: 'Dê boas-vindas a todos que pedem para entrar, envie transmissões para todos os seus inscritos e crie follow-ups programados com botões e links num editor simples. Cas, o assistente de IA, escreve as mensagens.', cta: 'Teste grátis de 7 dias', f1: 'Bot de boas-vindas', f2: 'Transmissões', f3: 'Follow-ups', f4: 'Editor de fluxos', f5: 'Redator IA' },
-  es: { nf: 'Funciones', nh: 'Guía', na: 'IA', np: 'Precios', nb: 'Blog', nq: 'FAQ', nl: 'Entrar', ns: 'Empezar gratis', hc: 'Bienvenida · Difusiones · Seguimientos', hw: 'Ver cómo funciona', h2c: 'Ver la configuración en 40 s', t1: 'Sin tarjeta', t2: 'Plan gratis para 1 canal', t3: 'Listo en unos 5 minutos',
-    h1: 'Saluda. Difunde. Haz seguimiento. <em class="gtext">Todo en automático.</em>', hs: 'Da la bienvenida a quien pide unirse, envía difusiones a todos tus suscriptores y crea seguimientos programados con botones y enlaces en un editor sencillo. Cas, el asistente de IA, escribe los mensajes.', cta: 'Prueba gratis de 7 días', f1: 'Bot de bienvenida', f2: 'Difusiones', f3: 'Seguimientos', f4: 'Editor de flujos', f5: 'Redactor IA' },
-  ru: { nf: 'Возможности', nh: 'Инструкция', na: 'ИИ', np: 'Цены', nb: 'Блог', nq: 'FAQ', nl: 'Войти', ns: 'Начать бесплатно', hc: 'Приветствие · Рассылки · Цепочки', hw: 'Как это работает', h2c: 'Настройка за 40 секунд', t1: 'Без карты', t2: 'Бесплатный план для 1 канала', t3: 'Запуск примерно за 5 минут',
-    h1: 'Приветствуйте. Рассылайте. Напоминайте. <em class="gtext">Всё на автопилоте.</em>', hs: 'Приветствуйте каждого, кто подал заявку, отправляйте рассылки всем подписчикам и собирайте цепочки сообщений по расписанию с кнопками и ссылками в простом конструкторе. Cas, ИИ-помощник, пишет тексты.', cta: '7 дней бесплатно', f1: 'Бот-приветствие', f2: 'Рассылки', f3: 'Цепочки', f4: 'Конструктор', f5: 'ИИ-копирайтер' },
+  fr: { tk1: 'Vérification d\'abonnement', tk2: 'Formulaires de prospects', tk3: 'Bots de parrainage', tk4: 'Cas IA', tk5: 'Support 24/7', nf: 'Fonctionnalités', nh: 'Guide', na: 'IA', np: 'Tarifs', nb: 'Blog', nq: 'FAQ', nl: 'Connexion', ns: 'Essai gratuit', hc: 'Créateur de bots · IA Cas · Support 24/7', hw: 'Voir comment ça marche', h2c: 'Voir la mise en route en 40 s', t1: 'Sans carte bancaire', t2: 'Offre gratuite avec 2 bots', t3: 'Prêt en 5 minutes environ',
+    h1: 'Diffusez, automatisez et créez des bots sur Telegram. <em class="gtext">Tout en pilote automatique.</em>', hs: 'Accueillez chaque nouveau membre, envoyez un message à tous vos abonnés, et laissez les relances et les bots travailler pour vous, même pendant votre sommeil.', hf1: 'Demandes acceptées automatiquement', hf2: 'Diffusions', hf3: 'Relances automatiques', hf4: 'Créateur de bots', hf5: 'Cas IA les crée pour vous', cta: 'Essai gratuit de 7 jours', f1: 'Bot d\'accueil', f2: 'Diffusions', f3: 'Relances programmées', f4: 'Éditeur de flux', f5: 'Rédacteur IA' },
+  pt: { tk1: 'Verificação de entrada', tk2: 'Formulários de leads', tk3: 'Bots de indicação', tk4: 'Cas IA', tk5: 'Suporte 24/7', nf: 'Recursos', nh: 'Guia', na: 'IA', np: 'Preços', nb: 'Blog', nq: 'FAQ', nl: 'Entrar', ns: 'Começar grátis', hc: 'Criador de bots · IA Cas · Suporte 24/7', hw: 'Ver como funciona', h2c: 'Ver a configuração em 40 s', t1: 'Sem cartão', t2: 'Plano grátis com 2 bots', t3: 'Pronto em cerca de 5 minutos',
+    h1: 'Transmita, automatize e crie bots no Telegram. <em class="gtext">Tudo no automático.</em>', hs: 'Dê boas-vindas a quem entra, envie uma mensagem para todos os inscritos e deixe os follow-ups e bots trabalharem por você, até enquanto dorme.', hf1: 'Aceita pedidos de entrada sozinho', hf2: 'Transmissões', hf3: 'Follow-ups automáticos', hf4: 'Criador de bots', hf5: 'A IA Cas cria por você', cta: 'Teste grátis de 7 dias', f1: 'Bot de boas-vindas', f2: 'Transmissões', f3: 'Follow-ups', f4: 'Editor de fluxos', f5: 'Redator IA' },
+  es: { tk1: 'Verificación de canal', tk2: 'Formularios de leads', tk3: 'Bots de referidos', tk4: 'Cas IA', tk5: 'Soporte 24/7', nf: 'Funciones', nh: 'Guía', na: 'IA', np: 'Precios', nb: 'Blog', nq: 'FAQ', nl: 'Entrar', ns: 'Empezar gratis', hc: 'Creador de bots · IA Cas · Soporte 24/7', hw: 'Ver cómo funciona', h2c: 'Ver la configuración en 40 s', t1: 'Sin tarjeta', t2: 'Plan gratis con 2 bots', t3: 'Listo en unos 5 minutos',
+    h1: 'Difunde, automatiza y crea bots en Telegram. <em class="gtext">Todo en automático.</em>', hs: 'Da la bienvenida a quien se une, envía un mensaje a todos tus suscriptores y deja que los seguimientos y los bots trabajen por ti, incluso mientras duermes.', hf1: 'Acepta solicitudes solo', hf2: 'Difusiones', hf3: 'Seguimientos automáticos', hf4: 'Creador de bots', hf5: 'Cas IA los crea por ti', cta: 'Prueba gratis de 7 días', f1: 'Bot de bienvenida', f2: 'Difusiones', f3: 'Seguimientos', f4: 'Editor de flujos', f5: 'Redactor IA' },
+  ru: { tk1: 'Проверка подписки', tk2: 'Формы заявок', tk3: 'Реферальные боты', tk4: 'Cas ИИ', tk5: 'Поддержка 24/7', nf: 'Возможности', nh: 'Инструкция', na: 'ИИ', np: 'Цены', nb: 'Блог', nq: 'FAQ', nl: 'Войти', ns: 'Начать бесплатно', hc: 'Конструктор ботов · ИИ Cas · Поддержка 24/7', hw: 'Как это работает', h2c: 'Настройка за 40 секунд', t1: 'Без карты', t2: 'Бесплатный план с 2 ботами', t3: 'Запуск примерно за 5 минут',
+    h1: 'Рассылки, автоматизация и боты в Telegram. <em class="gtext">Всё на автопилоте.</em>', hs: 'Приветствуйте каждого нового участника, отправляйте одно сообщение всем подписчикам, а напоминания и боты пусть работают за вас — даже пока вы спите.', hf1: 'Автоприём заявок', hf2: 'Рассылки', hf3: 'Автонапоминания', hf4: 'Конструктор ботов', hf5: 'Cas ИИ соберёт за вас', cta: '7 дней бесплатно', f1: 'Бот-приветствие', f2: 'Рассылки', f3: 'Цепочки', f4: 'Конструктор', f5: 'ИИ-копирайтер' },
 };
 const SITE_EN = {};
 let siteLang = 'en';
@@ -57,6 +57,7 @@ function applyLang() {
   $$('[data-k]').forEach((e) => { if (d[e.dataset.k] != null) e.innerHTML = d[e.dataset.k]; });
   document.documentElement.lang = siteLang;
   siteHero();
+  if ($('.hst-n')) heroCardsPaint();
   renderLsw();
 }
 function renderLsw() {
@@ -80,21 +81,36 @@ function siteHero() {
 }
 
 let billYear = false;
-function planFacts(p) {
+/* Bots per plan (public config plans[].bots from services/billing.js BOT_PLANS): how many, and the bot types each plan adds. */
+const BOT_TYPE_NAMES = { welcome: 'welcome', join_check: 'join-check', lead_magnet: 'free gift', menu: 'menu', broadcast: 'broadcast to bot subscribers', lead_questions: 'lead questions', referral: 'invite-a-friend referral bots' };
+function botFact(p, prev) {
+  const b = p.bots;
+  if (!b || !Array.isArray(b.types)) return '';
+  const n = b.max < 0 ? 'Unlimited active bots (fair use)' : plural(b.max, 'active bot');
+  const names = (ts) => { const l = ts.map((t) => BOT_TYPE_NAMES[t] || t.replace(/_/g, ' ')); return l.length > 1 ? l.slice(0, -1).join(', ') + ' and ' + l[l.length - 1] : l[0] || ''; };
+  if (!prev || !prev.bots) return n + ': ' + names(b.types);
+  const added = b.types.filter((t) => !prev.bots.types.includes(t));
+  return n + (added.length ? ', adds ' + names(added) : ', every bot type');
+}
+function planFacts(p, prev) {
   const lim = (v, one, many) => (v < 0 ? 'Unlimited ' + many : plural(v, one, many));
   if (!p.price_month && !p.price_year) {
     return [
       plural(p.connections, 'channel or group', 'channels or groups') + ' + your welcome bot',
+      botFact(p, null),
       fmt(p.join_requests ?? 500) + ' join requests a month',
       '1 welcome message, auto-approve',
-    ];
+      p.cas_builds ? 'Your first bot built with Cas' : '',
+    ].filter(Boolean);
   }
   return [
-    plural(p.connections, 'bot, channel or group', 'bots, channels or groups'),
+    botFact(p, prev),
+    plural(p.connections, 'Telegram bot, channel or group', 'Telegram bots, channels or groups') + ' connected',
     (p.join_requests < 0 ? 'Unlimited' : fmt(p.join_requests ?? 0)) + ' join requests a month',
-    p.flows != null ? lim(p.flows, 'Welcome Flow', 'Welcome Flows') + (p.flow_steps != null ? ', ' + (p.flow_steps < 0 ? 'unlimited' : fmt(p.flow_steps)) + ' steps each' : '') : '',
+    p.flows != null ? lim(p.flows, 'welcome bot', 'welcome bots') + (p.flow_steps != null ? ', ' + (p.flow_steps < 0 ? 'unlimited' : fmt(p.flow_steps)) + ' messages each' : '') : '',
     fmt(p.subscribers) + ' bot subscribers (channel members free)',
     fmt(p.ai_writes) + ' AI writes a month',
+    p.cas_builds < 0 ? 'Unlimited bots built with Cas' : p.cas_builds ? plural(p.cas_builds, 'bot') + ' built with Cas a month' : '',
     plural(p.seats, 'team seat'),
   ].filter(Boolean);
 }
@@ -104,12 +120,12 @@ function sitePlans() {
   const hot = plans.find((p) => p.popular) ? null : (plans[1] || plans[0] || {}).code;
   const loggedIn = !!(ME && ME.user);
   box.className = 'plans n' + Math.min(plans.length, 4);
-  box.innerHTML = plans.map((p) => {
+  box.innerHTML = plans.map((p, pi) => {
     const isHot = p.popular || p.code === hot;
     const free = !p.price_month && !p.price_year;
     const price = billYear ? p.price_year : p.price_month;
     const perMonth = billYear && p.price_year ? usd(Math.round(p.price_year / 12 * 100) / 100) : '';
-    const facts = planFacts(p);
+    const facts = planFacts(p, plans[pi - 1]);
     const extra = (p.bullets || []).filter((b) => !/^\d/.test(String(b).trim()) && !/AI writes|team seat|join requests|welcome message|welcome bot|auto-approve|Welcome Flows/i.test(b));
     if (free) extra.push('Ends with "Free welcome bot by Castvoo.com"');
     return '<div class="plan' + (isHot ? ' hot' : '') + (free ? ' free' : '') + '">' + (isHot ? '<span class="pill badge">Most popular</span>' : '') +
@@ -126,8 +142,9 @@ function sitePlans() {
   const trialPlan = (plans.find((p) => p.code === CFG.trial.plan) || {}).name || 'Growth';
   const bon = (CFG.topup_bonuses || []).filter((b) => b.bonus > 0);
   $('#prNotes').innerHTML =
-    '<div class="prn"><span class="prni">' + icon('check') + '</span><span><b>Every paid plan:</b> Welcome Flows with follow-ups, unlimited broadcasts, tracked clicks and Cas the AI helper. No setup fees.</span></div>' +
+    '<div class="prn"><span class="prni">' + icon('check') + '</span><span><b>Every paid plan:</b> more bots and bot types, follow-ups, unlimited broadcasts, tracked clicks and Cas the AI helper. No setup fees.</span></div>' +
     (CFG.billing && Number(CFG.billing.seat_price) > 0 ? '<div class="prn"><span class="prni">' + icon('plus') + '</span><span><b>Extra team seats ' + usd(CFG.billing.seat_price) + '/month on any paid plan.</b> Add them in Settings → Team, paid from your wallet with your plan. Lower the number any time.</span></div>' : '') +
+    '<div class="prn"><span class="prni">' + icon('spark') + '</span><span><b>Cas Builder on every plan.</b> Tell Cas what you want and Cas builds your bot with you in a chat. Free includes your first build; ' + plans.filter((p) => Number(p.cas_builds) && (p.price_month || p.price_year)).map((p) => esc(p.name) + ' ' + (Number(p.cas_builds) < 0 ? 'unlimited (fair use)' : fmt(p.cas_builds) + ' a month')).join(', ') + '. Changing a bot by chat is always free' + (CFG.cas_builder && CFG.cas_builder.pack ? ', and extra builds are ' + plural(CFG.cas_builder.pack.builds, 'build') + ' for ' + usd(CFG.cas_builder.pack.price) + ' from your wallet' : '') + '.</span></div>' +
     '<div class="prn"><span class="prni">' + icon('gift') + '</span><span><b>' + fmt(CFG.trial.days) + '-day free trial of ' + esc(trialPlan) + '.</b> No card needed. Pick a plan any time, or stay on Free when the trial ends: your welcome keeps running.</span></div>' +
     '<div class="prn"><span class="prni">' + icon('users') + '</span><span><b>1 setup helper included on every plan, Free too.</b> Invite your media buyer or a friend to set up your account with their own login. No password sharing, no seat used, and you remove them any time.</span></div>' +
     '<div class="prn"><span class="prni">' + icon('chat') + '</span><span><b>24/7 customer support on every plan.</b> AI support agents answer in your dashboard in seconds, day and night, and our human team steps in whenever you need a person. The Free plan includes a few instant AI chats a month.</span></div>' +
@@ -148,10 +165,10 @@ function siteFaq() {
 
 function siteReferral() {
   const r = CFG.referral || {};
-  const rates = r.rates || [10, 20, 30];
+  const rates = r.rates || [5, 10, 15];
   const sec = $('#refer');
   sec.hidden = CFG.features.referrals === false;
-  $('#refText').textContent = 'Earn ' + rates[0] + ' to ' + rates[rates.length - 1] + '% of every plan payment made by people you invite, every month, for as long as they pay. Use it on your plan, or withdraw from ' + usd(r.min_withdraw || 300) + ' in USDT or Bitcoin.';
+  $('#refText').textContent = 'Earn up to ' + Math.max(...rates) + '% of every plan payment made by people you invite, every month, for as long as they pay. Use it on your plan, or withdraw from ' + usd(r.min_withdraw || 300) + ' in USDT or Bitcoin.';
   const t2 = r.tier2_min || 5, t3 = r.tier3_min || 20;
   const rows = [[(t2 > 2 ? '1 to ' + (t2 - 1) : '1') + ' paying referral' + (t2 > 2 ? 's' : ''), 'Bronze partner', rates[0]], [t2 + ' to ' + (t3 - 1) + ' paying referrals', 'Silver partner', rates[1]], [t3 + ' or more paying referrals', 'Gold partner', rates[2]]];
   $('#refTiers').innerHTML = rows.map((x) => '<div class="tier"><div><span>' + esc(x[0]) + '</span><small>' + x[1] + '</small></div><b>' + x[2] + '%</b></div>').join('');
@@ -231,9 +248,9 @@ function vooLinks() {
   $$('[data-voo-app]').forEach((a) => { a.hidden = !v; if (v) a.href = v.app_url; });
 }
 /*
- * On the public website the VooSquare support widget (one inbox for every Zedapex tool) replaces our help bubble.
- * Inside the dashboard, Help is our own support chat, which is copied into the same VooSquare inbox.
- * Returns true when the widget is in use.
+ * Only when VOO_SITE_WIDGET=on (off by default): the VooSquare support widget replaces our help bubble on the public
+ * website for LOGGED-OUT visitors. Logged in, and inside the dashboard, it is always our own support chat (copied
+ * into the VooSquare inbox). Returns true when the widget is in use.
  */
 function vooWidget(show) {
   const v = CFG.voo;
@@ -248,7 +265,7 @@ function vooWidget(show) {
     sc.setAttribute('data-color', '#2F6BFF');
     if (ME && ME.user) { if (ME.user.email) sc.setAttribute('data-email', ME.user.email); if (ME.user.name) sc.setAttribute('data-name', ME.user.name); }
     const fail = () => { if (window.__cvVsWidget === 'failed') return; window.__cvVsWidget = 'failed'; renderHelp(VIEW); };
-    const tag = () => { let found = false; for (const el of document.body.children) if (!before.has(el) && el.tagName === 'DIV' && el.shadowRoot && !el.id) { el.setAttribute('data-vs-widget', ''); el.hidden = VIEW !== 'site'; found = true; } return found; };
+    const tag = () => { let found = false; for (const el of document.body.children) if (!before.has(el) && el.tagName === 'DIV' && el.shadowRoot && !el.id) { el.setAttribute('data-vs-widget', ''); el.hidden = VIEW !== 'site' || !!(ME && ME.user); found = true; } return found; };
     // The widget may draw a moment after its script runs. If nothing appears, show our own bubble.
     sc.onload = () => { if (!tag()) setTimeout(() => { if (!tag()) fail(); }, 4000); };
     sc.onerror = fail;
@@ -264,56 +281,53 @@ function vooWidget(show) {
  */
 function renderHelp(view) {
   const h = $('#helpHost'); if (h) h.innerHTML = '';
-  const voo = vooWidget(view === 'site');
-  swSync(view === 'site' && voo ? null : view);
+  // Logged in: always our widget with the person's real support conversation, on the website too.
+  const useVoo = view === 'site' && !(ME && ME.user);
+  const voo = vooWidget(useVoo);
+  swSync(useVoo && voo ? null : view);
 }
 
 /* ---------- Example animations ---------- */
-/* Hero phone: join request -> welcome -> "Tap to start" -> let in, then a broadcast and a Day 2 follow-up.
-   The three floating cards and the dark bubble follow the same timeline. Clearly labelled "Example". */
-const HJ = [['tunde', 'Tunde', 'meta_ad14'], ['wanjiku', 'Wanjiku', 'tiktok_ad5'], ['thandi', 'Thandi', 'meta_ad9'], ['kwame', 'Kwame', 'ads_gh2']];
-let hji = 0, hjT = [];
-function heroJoin() {
-  hjT.forEach(clearTimeout); hjT = [];
-  const scr = $('#heroScr'); if (!scr) return;
-  const [face, name, src] = HJ[hji++ % HJ.length];
-  const card = (id, html) => { const el = $('#' + id); el.innerHTML = mav(face) + '<div>' + html + '</div>'; el.classList.add('on'); };
-  const say = (t) => { $('#heroSay').textContent = t; };
-  ['pc1', 'pc2', 'pc3'].forEach((id) => $('#' + id).classList.remove('on'));
-  scr.innerHTML = '<div class="tg-top"><span class="bk">‹</span><div class="tt"><b>Brand Updates</b><small>bot</small></div><span class="tg-ava lg"><svg viewBox="0 0 40 40"><use href="#logo"/></svg></span></div>' +
-    '<div class="tg-bg" id="hpBg"></div><div class="tg-start" id="hpStart">START</div>';
-  const bg = $('#hpBg', scr);
-  const add = (html, cls) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; bg.appendChild(d); return d; };
-  const steps = [
-    [250, () => { add('👤 <b>' + esc(name) + '</b> asked to join Brand Updates', 'tg-sys'); card('pc1', '<b>' + esc(name) + ' asked to join</b><small>Join request · from ' + src + '</small>'); say('New join request 🔔'); }],
-    [900, () => { add('<i></i><i></i><i></i>', 'tg-typing'); }],
-    [1700, () => {
-      const ty = $('.tg-typing', bg); if (ty) ty.remove();
-      add('Hi ' + esc(name) + ' 👋 Welcome to <b>Brand Updates</b>! Tap below and I\'ll send you today\'s free tips.<span class="ti">09:41</span>', 'tm in');
-      add('▶ Tap to start', 'tkb');
-      card('pc2', '<b>Welcome sent</b><small>In 1 second · by your bot</small>'); say('Welcome sent in 1s ⚡');
-    }],
-    [3100, () => { const k = $('.tkb', bg); if (!k) return; k.classList.add('tap'); const t = document.createElement('i'); t.className = 'touch'; k.appendChild(t); }],
-    [3600, () => { const k = $('.tkb', bg); if (k) k.classList.remove('tap'); const st = $('#hpStart', scr); if (st) st.outerHTML = '<div class="tg-in"><span class="pc0">📎</span><span class="fld">Message</span><span class="sb">➤</span></div>'; add('/start<span class="ti">09:41 ✓✓</span>', 'tm out'); }],
-    [4300, () => { add('✓ <b>' + esc(name) + '</b> was let in', 'tg-sys ok'); card('pc3', '<b>' + esc(name) + ' is now a subscriber</b><small>Tapped Start · ready for broadcasts</small>'); say('Let in · now a subscriber ✅'); }],
-    // Then the rest of the story: a broadcast to everyone, and a timed follow-up.
-    [5900, () => {
-      add('<div class="img sm shn"><div>📣 TODAY\'S TIPS<small>Broadcast</small></div></div><b>Today\'s tips are live</b> 📣 Three quick wins inside.<span class="ti">10:00</span>', 'tm in');
-      add('Read today\'s tips ↗', 'tkb');
-      card('pc2', '<b>Broadcast sent</b><small>To all 1,240 subscribers · example</small>'); say('Broadcast sent 📣');
-    }],
-    [7900, () => {
-      add('Day 2 · 09:00', 'tg-sys day');
-      add('Quick win for day 2 💡 The one tip members save most.<span class="ti">09:00</span>', 'tm in');
-      add('See the tip ↗', 'tkb');
-      card('pc3', '<b>Day 2 follow-up sent</b><small>Auto follow-up · on time</small>'); say('Day 2 follow-up ✅');
-    }],
-  ];
-  if (RM) { steps.forEach((x) => x[1]()); const k = $('.tkb', bg); if (k) k.classList.remove('tap'); bg.querySelectorAll('.touch').forEach((t) => t.remove()); return; }
-  steps.forEach(([ms, fn]) => hjT.push(setTimeout(fn, ms)));
-  // Only replay while the website is on screen (not behind the dashboard): wait until it is.
-  const again = () => { if (siteOn()) heroJoin(); else hjT.push(setTimeout(again, 2000)); };
-  hjT.push(setTimeout(again, 11500));
+/* Hero photo stage: three example notifications around the person pop in one after another, then one changes every
+   3 seconds. Slot i shows HN[i] or HN[i + 3]. {n} counts up. Labelled "Example"; reduced motion = the first three, still. */
+const HN = {
+  en: [['g', '🎉', 'New subscriber', 'Amaka joined VIP Signals'], ['c', '📣', 'Broadcast delivered', 'To {n} people', 2418], ['g', '✅', 'Join-check bot is live', 'Checks every new member'], ['v', '💬', 'Cas built your bot', 'Ready to switch on'], ['b', '👆', 'Button tapped', '“Get the free guide”'], ['c', '⏱', 'Day 3 follow-up sent', 'On time, by itself']],
+  fr: [['g', '🎉', 'Nouvel abonné', 'Amaka a rejoint VIP Signals'], ['c', '📣', 'Diffusion envoyée', 'À {n} personnes', 2418], ['g', '✅', 'Bot de vérification actif', 'Vérifie chaque nouveau membre'], ['v', '💬', 'Cas a créé votre bot', 'Prêt à activer'], ['b', '👆', 'Bouton touché', '« Recevoir le guide gratuit »'], ['c', '⏱', 'Relance du jour 3 envoyée', 'À l\'heure, toute seule']],
+  pt: [['g', '🎉', 'Novo inscrito', 'Amaka entrou no VIP Signals'], ['c', '📣', 'Transmissão entregue', 'Para {n} pessoas', 2418], ['g', '✅', 'Bot de verificação ativo', 'Verifica cada novo membro'], ['v', '💬', 'Cas criou seu bot', 'Pronto para ativar'], ['b', '👆', 'Botão tocado', '“Quero o guia grátis”'], ['c', '⏱', 'Follow-up do dia 3 enviado', 'Na hora certa, sozinho']],
+  es: [['g', '🎉', 'Nuevo suscriptor', 'Amaka se unió a VIP Signals'], ['c', '📣', 'Difusión entregada', 'A {n} personas', 2418], ['g', '✅', 'Bot de verificación activo', 'Revisa a cada nuevo miembro'], ['v', '💬', 'Cas creó tu bot', 'Listo para activar'], ['b', '👆', 'Botón pulsado', '«Recibir la guía gratis»'], ['c', '⏱', 'Seguimiento del día 3 enviado', 'A tiempo, solo']],
+  ru: [['g', '🎉', 'Новый подписчик', 'Амака вступила в VIP Signals'], ['c', '📣', 'Рассылка доставлена', '{n} людям', 2418], ['g', '✅', 'Бот проверки подписки', 'Проверяет каждого участника'], ['v', '💬', 'Cas собрал ваш бот', 'Готов к запуску'], ['b', '👆', 'Нажата кнопка', '«Получить бесплатный гайд»'], ['c', '⏱', 'Напоминание 3-го дня', 'Отправлено вовремя, само']],
+};
+const hnAt = [0, 1, 2];
+function hnPaint(el, it, count) {
+  const n = (v) => Math.round(v).toLocaleString(siteLang === 'en' ? 'en-US' : siteLang);
+  el.innerHTML = '<span class="hst-ic ' + it[0] + '">' + it[1] + '</span><span class="hst-tx"><b>' + esc(it[2]) + '</b><small>' + esc(it[3]).replace('{n}', '<span class="tnum">' + n(it[4] || 0) + '</span>') + '</small></span>';
+  const num = $('.tnum', el);
+  if (num && count) countTo(num, it[4], 1100, n);
+}
+function heroCardsPaint() {
+  const list = HN[siteLang] || HN.en;
+  $$('.hst-n').forEach((c, i) => hnPaint(c, list[hnAt[i]]));
+}
+function heroCards() {
+  const st = $('#hst'); if (!st) return;
+  const cards = $$('.hst-n', st);
+  heroCardsPaint();
+  if (RM) return;
+  st.classList.add('js');
+  cards.forEach((c, i) => setTimeout(() => c.classList.add('on'), 450 + i * 700));
+  let k = 0;
+  setInterval(() => {
+    if (!siteOn() || st.closest('.hl-off')) return;
+    const i = k++ % 3, c = cards[i];
+    c.classList.remove('on');
+    setTimeout(() => { hnAt[i] = (hnAt[i] + 3) % 6; hnPaint(c, (HN[siteLang] || HN.en)[hnAt[i]], true); c.classList.add('on'); }, 480);
+  }, 3000);
+}
+/* Pause a block's CSS animations while it is off screen (css: .hl-off). */
+function siteLive() {
+  if (!('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle('hl-off', !e.isIntersecting)), { rootMargin: '80px 0px' });
+  $$('#top, #v-site .htk, #bots, #pricing, #v-site .hl-cl').forEach((el) => io.observe(el));
 }
 const NC = [['tunde', 'Welcome sent to Tunde', '02:14 · <b>delivered</b>'], ['wanjiku', 'Day 3 follow-up sent', '03:00 · <b>delivered</b>'], ['kwame', 'Kwame tapped "See the collection"', '03:12 · <b>tracked click</b>'], ['thandi', 'Thandi started your bot', '04:40 · <b>welcome sent</b>'], ['zainab', 'Zainab asked to join', '05:52 · <b>welcome sent in 1s</b>']];
 let nci = 0;
@@ -365,6 +379,29 @@ function siteReveal() {
   }), { rootMargin: '0px 0px -6% 0px' });
   $$('#v-site .rv').forEach((el) => { if (el.getBoundingClientRect().top > innerHeight) { el.classList.add('rv-w'); io.observe(el); } });
 }
+/* "Bots you can build": the example chat plays one message at a time while it is on screen (css: .byb-chat.play).
+   Reduced motion or no IntersectionObserver: the whole chat simply shows. */
+function siteBots() {
+  const box = $('#bybChat');
+  if (!box || RM || !('IntersectionObserver' in window)) return;
+  const ms = $$('.byb-m', box);
+  const typ = document.createElement('div');
+  typ.className = 'byb-typ'; typ.hidden = true; typ.innerHTML = '<i></i><i></i><i></i>';
+  box.appendChild(typ);
+  box.classList.add('play');
+  let i = 0, seen = false, typing = false;
+  const step = () => {
+    if (!seen || !siteOn()) return setTimeout(step, 700);
+    if (i >= ms.length) { ms.forEach((m) => m.classList.remove('on')); i = 0; return setTimeout(step, 700); }
+    const m = ms[i];
+    if (!typing && !m.classList.contains('me') && !m.classList.contains('sys')) { typing = true; typ.hidden = false; box.appendChild(typ); return setTimeout(step, 800); }
+    typing = false; typ.hidden = true;
+    m.classList.add('on'); i++;
+    return setTimeout(step, i >= ms.length ? 4200 : 1100);
+  };
+  new IntersectionObserver(([e]) => { seen = e.isIntersecting; }).observe(box);
+  step();
+}
 /* Phones: the sticky "Log in / Start" bar appears once the hero button has scrolled out of view. */
 function siteStickyBar() {
   const bar = $('#mbar'), cta = $('#heroCta');
@@ -412,8 +449,9 @@ function siteInit() {
 
   siteReveal();
   siteStickyBar();
+  siteBots();
   // Example animations (they pause when the site is hidden)
-  heroJoin(); nightTick();
+  heroCards(); siteLive(); nightTick();
   setInterval(() => { if (siteOn()) nightTick(); }, 4000);
   $('#bcList').innerHTML = [['tunde', 'Tunde'], ['wanjiku', 'Wanjiku'], ['kwame', 'Kwame'], ['thandi', 'Thandi']].map((x) => '<div class="bc-row">' + mav(x[0]) + x[1] + '<span class="ck">✓✓</span></div>').join('');
   let bi = 0; const bcRows = $$('#bcList .bc-row');
@@ -423,7 +461,7 @@ function siteInit() {
   sgTick(); setInterval(() => { if (siteOn()) sgTick(); }, 2200);
   $('#clks').innerHTML = ['Mon', 'Tue', 'Wed'].map((c, i) => '<div class="clk"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2.5"/><line class="hh" x1="24" y1="24" x2="24" y2="13" stroke="#fff" stroke-width="3" stroke-linecap="round" style="animation-delay:-' + (i * 12) + 's"/><line class="hm" x1="24" y1="24" x2="24" y2="8" stroke="#CFE0FF" stroke-width="2" stroke-linecap="round" style="animation-delay:-' + (i * 2) + 's"/><circle cx="24" cy="24" r="2.5" fill="#fff"/></svg>' + c + '<small>09:00</small></div>').join('');
   bAiTick(); setInterval(() => { if (siteOn()) bAiTick(); }, 8000);
-  $('#teamStack').innerHTML = mav('ejiro', 36) + mav('zainab', 36) + mav('emeka', 36) + mav('wanjiku', 36) + '<span class="more">+6</span>';
+  $('#teamStack').innerHTML = mav('dayo', 36) + mav('zainab', 36) + mav('emeka', 36) + mav('wanjiku', 36) + '<span class="more">+6</span>';
   aiShow(0); setInterval(() => { if (!siteOn()) return; aiAuto = (aiAuto + 1) % AIX.length; aiShow(aiAuto); }, 9500);
   siteGuide = guide($('#siteGuide'));
 }

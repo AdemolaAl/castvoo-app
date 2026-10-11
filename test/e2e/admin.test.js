@@ -91,6 +91,7 @@ const ROUTES = [
   ['PUT', '/api/admin/knowledge/999999', 'knowledge.edit', { title: 'Title', body: 'Body text' }],
   ['DELETE', '/api/admin/knowledge/999999', 'knowledge.edit'],
   ['POST', '/api/admin/ai/test', 'knowledge.edit', {}],
+  ['GET', '/api/admin/cas-builder', 'overview.view'],
   ['GET', '/api/admin/ai/provider', 'overview.view'],
   ['PUT', '/api/admin/ai/provider', 'ai.edit', {}],
   ['GET', '/api/admin/blog/posts', 'overview.view'],
@@ -242,11 +243,11 @@ describe('admin screens', () => {
     assert.equal(r.status, 200, r.text);
     assert.deepEqual((await app.client().get('/api/public/methods?country=NG')).body.methods.map((m) => m.key), ['gatevoo']);
     assert.equal((await finance.put('/api/admin/countries/NG', { name: 'Nigeria', currency: 'NGN', usd_rate: -1, methods: [] })).status, 400);
-    await finance.put('/api/admin/countries/NG', { name: 'Nigeria', currency: 'NGN', usd_rate: 1600, methods: ['paystack_ng', 'crypto'], featured: true });
-    await finance.put('/api/admin/methods/paystack_ng', { label: 'Paystack', detail: 'Card', active: false });
+    await finance.put('/api/admin/countries/NG', { name: 'Nigeria', currency: 'NGN', usd_rate: 1600, methods: ['flw_ng', 'crypto'], featured: true });
+    await finance.put('/api/admin/methods/flw_ng', { label: 'Flutterwave', detail: 'Card', active: false });
     assert.deepEqual((await app.client().get('/api/public/methods?country=NG')).body.methods.map((m) => m.key), ['gatevoo']);
-    await finance.put('/api/admin/methods/paystack_ng', { label: 'Paystack', detail: 'Card, bank transfer', active: true });
-    assert.deepEqual((await app.client().get('/api/public/methods?country=NG')).body.methods.map((m) => m.key), ['paystack_ng', 'gatevoo']);
+    await finance.put('/api/admin/methods/flw_ng', { label: 'Flutterwave', detail: 'Card, bank transfer, USSD', active: true });
+    assert.deepEqual((await app.client().get('/api/public/methods?country=NG')).body.methods.map((m) => m.key), ['flw_ng', 'gatevoo']);
     // A new country.
     await finance.put('/api/admin/countries/QA', { name: 'Qatar', currency: 'USD', usd_rate: 1, methods: ['flw_card'] });
     assert.ok((await app.client().get('/api/public/config')).body.countries.some((c) => c.code === 'QA'));
@@ -269,8 +270,8 @@ describe('admin screens', () => {
     const { owner, finance, marketing } = staff;
     assert.equal((await owner.put('/api/admin/settings/crypto', { value: { usdt_address: 'T123' } })).status, 400);
     assert.equal((await owner.put('/api/admin/settings/crypto', { value: { btc_address: 'notbitcoin' } })).status, 400);
-    assert.equal((await owner.put('/api/admin/settings/referral', { value: { rate_1: 10, rate_2: 20, rate_3: 30, tier2_min: 5, tier3_min: 5, settle_days: 30, min_withdraw: 300, cookie_days: 60 } })).status, 400);
-    assert.equal((await owner.put('/api/admin/settings/referral', { value: { rate_1: 10, rate_2: 20, rate_3: 99, tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw: 300, cookie_days: 60 } })).status, 400);
+    assert.equal((await owner.put('/api/admin/settings/referral', { value: { rate_1: 5, rate_2: 10, rate_3: 15, tier2_min: 5, tier3_min: 5, settle_days: 30, min_withdraw: 300, cookie_days: 60 } })).status, 400);
+    assert.equal((await owner.put('/api/admin/settings/referral', { value: { rate_1: 5, rate_2: 10, rate_3: 99, tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw: 300, cookie_days: 60 } })).status, 400);
     assert.equal((await owner.put('/api/admin/settings/trial', { value: { days: 7, plan: 'pro', ai_writes: 100 } })).status, 400, 'inactive plan');
     assert.equal((await owner.put('/api/admin/settings/nope', { value: {} })).status, 404);
     const okB = await finance.put('/api/admin/settings/billing', { value: { refund_days: 14, data_retention_days: 60, min_topup: 5, max_topup: 5000, renew_reminder_days: 3 } });

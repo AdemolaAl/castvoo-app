@@ -61,7 +61,7 @@ sub-processor. Before you switch Cas to OpenRouter, add OpenRouter (and the mode
 ## 3. Domain
 Service → **Settings → Networking → Custom Domain** → `castvoo.com` (and `www.castvoo.com` if you like).
 Add the CNAME record Railway shows at your DNS provider. HTTPS is automatic.
-`APP_URL` must be exactly this address (Telegram, Paystack, Flutterwave and Gatevoo send webhooks to it).
+`APP_URL` must be exactly this address (Telegram, Flutterwave and Gatevoo send webhooks to it; Paystack too, for old payments).
 
 ## 4. First start
 - Deploy logs show `Castvoo is running` and which integrations are connected.
@@ -130,7 +130,7 @@ When you outgrow one service:
 | Login codes don't arrive | `RESEND_API_KEY`, and the sending domain verified in Resend. Admin → Settings → Test email |
 | Channels won't connect | `CASTVOO_BOT_TOKEN`; Admin → Settings & connections → **Castvoo bot** card shows the webhook and Telegram's last error |
 | Castvoo bot doesn't answer Start | See [Castvoo bot not answering](#castvoo-bot-not-answering) below |
-| Payments stay "pending" | The webhook URL in Paystack/Flutterwave/Gatevoo; Admin → Payments → Recheck |
+| Payments stay "pending" | The webhook URL in Flutterwave/Gatevoo; Admin → Payments → Recheck |
 | Messages queue up | Admin → System → queue per bot; a bot whose token was revoked shows in "Broken connections" |
 
 ### Castvoo bot not answering

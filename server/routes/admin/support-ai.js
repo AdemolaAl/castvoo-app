@@ -29,7 +29,7 @@ function cleanSettings(b, cur) {
     ['daily_cap_per_user', 'AI replies per customer per day', 1, 1000], ['daily_cap_total', 'AI replies per day in total', 1, 200000], ['msgs_per_min', 'Messages per minute', 2, 60],
     ['free_conversations_per_month', 'Free plan AI chats per month', 0, 1000], ['max_tool_rounds', 'Tool rounds', 1, 10], ['site_chat_daily_cap', 'Website chat answers per day', 0, 100000], ['site_chat_per_ip_day', 'Website chat answers per visitor per day', 1, 1000],
     ['concurrency', 'Conversations answered at once (per server)', 1, 16], ['turn_max_ms', 'Longest time for one answer (ms)', 10000, 300000],
-    ['site_chat_known_after_s', 'Website chat: seconds on the site before a visitor counts as known', 0, 86400], ['resolution_goal_pct', 'AI resolution goal (%)', 1, 100]];
+    ['site_chat_known_after_s', 'Website chat, close to the daily cap: seconds on the site before a visitor is still answered', 0, 86400], ['resolution_goal_pct', 'AI resolution goal (%)', 1, 100]];
   for (const [k, name, min, max] of nums) { const v = n(b[k], name, min, max); if (v !== undefined && v !== null) out[k] = v; }
   if (b.site_chat_soft_pct !== undefined) {
     const v = Number(b.site_chat_soft_pct);

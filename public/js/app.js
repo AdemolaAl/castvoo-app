@@ -106,6 +106,7 @@ async function renderPage(name, q, opts) {
   $('#pgTitle').textContent = p.title; $('#pgSub').textContent = p.sub || '';
   document.title = p.title + ' · Castvoo';
   const pg = $('#pg');
+  pg.dataset.page = name;
   pg.innerHTML = '<div class="pgt"><h2>' + esc(p.title) + '</h2><span class="muted">' + esc(p.sub || '') + '</span></div><div class="pgb"></div>';
   const el = $('.pgb', pg);
   closeDrawer();
@@ -126,7 +127,7 @@ async function renderPage(name, q, opts) {
 /* "Watch the guide" links at the top of pages that have a video guide (app-guides.js). Not inside the flow builder. */
 function guideLinksOn(name, el) {
   if (typeof guideLinksFor !== 'function' || name === 'guides' || $('.vgls', el)) return;
-  if (name === 'flows' && (APP.q.id || APP.q.tpl)) return;
+  if (name === 'flows' && (APP.q.id || APP.q.tpl || APP.q.bot)) return;
   const html = guideLinksFor(name);
   if (html) el.insertAdjacentHTML('afterbegin', html);
 }
@@ -145,7 +146,7 @@ function shellUI() {
   $('#topAva').innerHTML = myAva(40, 'top');
   $('#navHelp').hidden = !(s.support_unread > 0);
   $('#dockDot').hidden = !(s.support_unread > 0);
-  const ref = CFG.referral && CFG.referral.rates ? CFG.referral.rates[0] + '%+' : '';
+  const ref = CFG.referral && CFG.referral.rates ? 'Up to ' + Math.max(...CFG.referral.rates) + '%' : '';
   $('#navEarn').textContent = ref; $('#navEarn').hidden = !ref;
   appBanners();
   applyFeatures(document);
@@ -213,9 +214,9 @@ function switchWorkspace() {
 
 /* Create sheet (the big + on phones) */
 function openCreate() {
-  const O = [['go:flows', '👋', '#EAF0FF', '#2F6BFF', 'New welcome flow', 'Greet and let in everyone who asks to join your channel.'], ['go:broadcast', '📨', '#FFF1E6', '#F76707', 'Send a message', 'Write once, send to a channel, group or the people who started your bot.'], ['connect:channel', '📣', '#EAF0FF', '#2F6BFF', 'Add a channel', 'Post to everyone who follows your channel.'], ['connect:group', '👥', '#E2F6EE', '#0E9F6E', 'Add a group', 'Send messages into a group chat.'], ['connect:bot', '🤖', '#F1ECFF', '#7048E8', 'Add a bot', 'Message people one-to-one and run follow-ups.'], ['go:drips', '🔁', '#E6FCF5', '#0CA678', 'New auto follow-up', 'Messages that send themselves after someone joins.']];
+  const O = [['go:flows', '🤖', '#EAF0FF', '#2F6BFF', 'New bot', 'Welcome people who ask to join, or answer people who tap Start in your bot.'], ['go:broadcast', '📨', '#FFF1E6', '#F76707', 'Send a message', 'Write once, send to a channel, group or the people who started your bot.'], ['connect:channel', '📣', '#EAF0FF', '#2F6BFF', 'Add a channel', 'Post to everyone who follows your channel.'], ['connect:group', '👥', '#E2F6EE', '#0E9F6E', 'Add a group', 'Send messages into a group chat.'], ['connect:bot', '🤖', '#F1ECFF', '#7048E8', 'Add a bot', 'Message people one-to-one and run follow-ups.'], ['go:drips', '🔁', '#E6FCF5', '#0CA678', 'New auto follow-up', 'Messages that send themselves after someone joins.']];
   const h = sheet('What do you want to do?', '<span class="spk">' + icon('plus') + '</span>', '<div class="ckl">' + O.map((o) => '<button type="button" class="ckc" style="--c:' + o[3] + '" data-act="' + o[0] + '"><span class="ci" style="background:' + o[2] + '">' + o[1] + '</span><span class="ct"><b>' + o[4] + '</b><small>' + o[5] + '</small></span><svg class="chv"><use href="#i-chev"/></svg></button>').join('') + '</div>');
-  $('.ckl', h).onclick = (e) => { const b = e.target.closest('[data-act]'); if (!b) return; const [t, v] = b.dataset.act.split(':'); if (t === 'go') { closeModal(); appGo(v, v === 'drips' || v === 'flows' ? { new: '1' } : null); } else openConnect(v); };
+  $('.ckl', h).onclick = (e) => { const b = e.target.closest('[data-act]'); if (!b) return; const [t, v] = b.dataset.act.split(':'); if (t === 'go') { closeModal(); appGo(v, v === 'drips' ? { new: '1' } : v === 'flows' ? { newbot: '1' } : null); } else openConnect(v); };
 }
 
 /* ---------- Shared UI pieces ---------- */

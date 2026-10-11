@@ -41,7 +41,8 @@ async function makeLinks(c, wsId, buttons, { broadcastId = null, stepId = null }
     let code;
     for (let i = 0; i < 5; i++) {
       code = randomCode(7);
-      const r = await c.query('insert into links(code, workspace_id, broadcast_id, step_id, label, url, position, row) values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing', [code, wsId, broadcastId, stepId, b.label, b.url, (b.position ?? pos), b.row ?? null]);
+      const r = await c.query(`insert into links(code, workspace_id, broadcast_id, step_id, label, url, position, row, kind, button_id)
+        values ($1,$2,$3,$4,$5,$6,$7,$8, $9, coalesce($10, $1)) on conflict do nothing`, [code, wsId, broadcastId, stepId, b.label, b.url || '', (b.position ?? pos), b.row ?? null, b.kind || 'link', b.button_id || null]);
       if (r.rowCount) break;
     }
     out.push({ ...b, code });

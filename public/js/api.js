@@ -31,7 +31,7 @@ let CFG = {
   countries: [],
   login: { email: true, telegram: false, voosquare: false },
   bot_username: null, bot_id: null, gatevoo: false, gatevoo_url: null,
-  referral: { rates: [10, 20, 30], tier2_min: 5, tier3_min: 20, min_withdraw: 300, settle_days: 30 },
+  referral: { rates: [5, 10, 15], tier2_min: 5, tier3_min: 20, min_withdraw: 300, settle_days: 30 },
   billing: { min_topup: 10, max_topup: 5000, refund_days: 14 },
   topup_bonuses: [], banners: [],
   support: { reply_time: 'We usually reply within a few hours.', email: 'support@castvoo.com', telegram: null },

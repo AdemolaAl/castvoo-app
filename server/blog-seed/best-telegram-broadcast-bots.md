@@ -94,7 +94,7 @@ Here is the honest reason we rank it first. Most broadcast tools started as chat
 - **Cas,** an AI writer that drafts and translates messages and follow-up sequences.
 - **24/7 support:** AI support agents answer in the dashboard chat, usually within seconds, with the human team as back-up.
 
-**Pricing (as of October 2026):** Free ($0: 1 channel or group, 500 join requests a month, 1 welcome message). Starter $19, Growth $49, Scale $99 a month. 7-day Growth trial, no card. Pay by card, local methods in several African countries (Paystack, Flutterwave, M-Pesa, mobile money), USDT or Bitcoin.
+**Pricing (as of October 2026):** Free ($0: 1 channel or group, 500 join requests a month, 1 welcome message). Starter $19, Growth $49, Scale $99 a month. 7-day Growth trial, no card. Pay by card, local methods in several African countries (Flutterwave: bank transfer, USSD, M-Pesa, mobile money), USDT or Bitcoin.
 
 **Pros:**
 - Join-request welcome, auto-approve and follow-ups in one simple builder.

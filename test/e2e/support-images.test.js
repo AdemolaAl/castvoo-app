@@ -310,10 +310,10 @@ describe('the AI sees images', () => {
 describe('receipt screenshots', () => {
   it('for an automatic payment the AI rechecks with the provider; the screenshot alone credits nothing', async () => {
     const c = await app.loginByEmail('receipt-auto@example.com', { country: 'NG' });
-    const t = await c.post('/api/wallet/topup', { amount: 25, method: 'paystack_ng' });
+    const t = await c.post('/api/wallet/topup', { amount: 25, method: 'flw_ng' });
     const ref = t.body.reference;
     const att = (await up(c, png())).body.attachment;
-    ai.script = [{ tools: [{ name: 'get_payments', input: {} }, { name: 'recheck_payment', input: { reference: ref } }] }, { text: 'Paystack has not confirmed it yet. I will keep an eye on it.' }];
+    ai.script = [{ tools: [{ name: 'get_payments', input: {} }, { name: 'recheck_payment', input: { reference: ref } }] }, { text: 'Flutterwave has not confirmed it yet. I will keep an eye on it.' }];
     const tid = await send(c, 'I paid, here is the receipt', [att.id]);
     const first = ai.calls[ai.calls.length - 2];
     assert.ok(JSON.stringify(first.messages).includes('"type":"image"'), 'the model saw the receipt');
@@ -321,8 +321,8 @@ describe('receipt screenshots', () => {
     assert.equal(log.output.credited, false);
     assert.equal(Number((await app.ws(c)).wallet_cents), 0);
     assert.equal((await app.db.one('select proof_path from payments where reference = $1', [ref])).proof_path, null, 'automatic payments get no proof');
-    // When Paystack confirms, the same flow credits once.
-    app.fakes.paystack.txns.get(ref).status = 'success';
+    // When Flutterwave confirms, the same flow credits once.
+    app.fakes.flw.txns.get(ref).status = 'successful';
     ai.script = [{ tools: [{ name: 'recheck_payment', input: { reference: ref } }] }, { text: 'Confirmed.' }];
     await send(c, 'check again please');
     assert.equal(Number((await app.ws(c)).wallet_cents), 2500);

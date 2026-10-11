@@ -305,6 +305,8 @@ PAGES.broadcast = {
     if (CFG.features.broadcasts === false) { el.innerHTML = emptyBox({ cas: 'think', title: 'Sending is switched off for a moment', text: 'The Castvoo team has paused broadcasts. Please check back soon.' }); return; }
     if (!conns.some((c) => String(c.id) === String(COMP.conn))) COMP.conn = (conns.find((c) => String(c.id) === q.conn) || conns[0] || s.connections[0]).id;
     if (q.conn && conns.some((c) => String(c.id) === q.conn)) COMP.conn = +q.conn;
+    // Welcome Flows → "Broadcast to these people": the audience "Tapped Start in <flow>" is picked already.
+    if (q.seg && /^\d+$/.test(String(q.seg))) COMP.seg = String(q.seg);
     const approval = s.workspace.role === 'drafter' || (s.workspace.require_approval && s.workspace.role !== 'owner');
     const conn = () => s.connections.find((c) => c.id === COMP.conn);
     let segs = null, est = null, estT = 0;

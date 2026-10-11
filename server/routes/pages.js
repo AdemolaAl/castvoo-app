@@ -62,7 +62,14 @@ module.exports = (r) => {
     }
     // Switched off by the team (phishing or abuse): no redirect (SEC-7).
     if (link.disabled_at) return ctx.html(410, shell('Link switched off', '<h1>This link was switched off</h1><p>The Castvoo team switched this link off because it may not be safe. If you were sent here by someone you know, ask them for a new link.</p>'));
-    db.query('insert into clicks(code, workspace_id, subscriber_id) values ($1,$2,$3)', [link.code, link.workspace_id, sid]).catch(() => {});
+    if (link.kind === 'reply') throw notFound('That link');
+    if (sid && link.step_id) {
+      // A Welcome Flow button: the click is saved first, then the flow sends what comes "when they tap" it.
+      await db.query('insert into clicks(code, workspace_id, subscriber_id) values ($1,$2,$3)', [link.code, link.workspace_id, sid]).catch(() => {});
+      const sub = await db.one('select s.*, c.workspace_id from subscribers s join connections c on c.id = s.connection_id where s.id = $1', [sid]);
+      const conn = sub ? await db.one('select * from connections where id = $1', [sub.connection_id]) : null;
+      if (conn && String(conn.workspace_id) === String(link.workspace_id)) await require('../services/flow-runtime').onTap(conn, sub, link).catch(() => {});
+    } else db.query('insert into clicks(code, workspace_id, subscriber_id) values ($1,$2,$3)', [link.code, link.workspace_id, sid]).catch(() => {});
     if (sid) db.query('update subscribers set last_seen_at = now() where id = $1', [sid]).catch(() => {});
     // Links from new accounts that have never paid, to sites outside Telegram and Castvoo, get a "you are leaving
     // Castvoo" page first, so castvoo.com links can't be used as a free, trusted-looking bounce to phishing (SEC-7).
@@ -72,6 +79,13 @@ module.exports = (r) => {
       return ctx.html(200, shell('Leaving Castvoo', `<h1>You are leaving Castvoo</h1><p>This link was added by a Castvoo customer and goes to <b>${escHtml(host || link.url)}</b>. Castvoo did not write or check that page.</p><p>Never type your Castvoo login code or password on another site.</p><p><a href="${escHtml(link.url)}" rel="nofollow noopener noreferrer">Continue to ${escHtml(host || 'the link')}</a></p><p><a href="/">Back to Castvoo</a></p>`));
     }
     ctx.redirect(link.url);
+  });
+
+  /** A Link button in a flow test (services/flow-test.js): counts as the tester's tap, then the real address. Never a real click. */
+  r.get('/lt/:code/:btn', async (ctx) => {
+    const url = await require('../services/flow-test').onLink(String(ctx.params.code), String(ctx.params.btn));
+    if (!url) throw notFound('That test link');
+    ctx.redirect(url);
   });
 
   r.get('/email/unsubscribe', async (ctx) => {

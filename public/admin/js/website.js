@@ -232,7 +232,8 @@
   CV.page('ai', {
     intro: 'How Cas writes for customers. Changes apply to the next answer Cas gives.',
     async render() {
-      const [s, ov0, pv] = await Promise.all([get('/api/admin/settings'), get('/api/admin/overview').catch(() => null), get('/api/admin/ai/provider')]);
+      const [s, ov0, pv, cb0] = await Promise.all([get('/api/admin/settings'), get('/api/admin/overview').catch(() => null), get('/api/admin/ai/provider'), get('/api/admin/cas-builder').catch(() => null)]);
+      const CBS = cb0 ? cb0.cas_builder : null;
       const ov = ov0 || { ai: { writes_24h: null, input_24h: null, output_24h: null, cost_24h: null } };
       const P = pv.ai;
       const n = (v) => (v == null ? '—' : num(v));
@@ -275,6 +276,26 @@
           </div>
           ${ed ? html`<div class="row end"><button class="btn" type="submit">${icon('check')} Save provider</button></div>` : ''}
         </form>
+        ${CBS ? html`<form class="card" id="cbf"><div class="ch"><h3>${icon('chat')} Cas Builder</h3>${ed ? '' : html`<span class="bd">${icon('lock')} Only Owner and Admin can change this</span>`}
+            <p>Customers build a Welcome Flow by chatting with Cas. Taps are free; the AI only writes message text and reads typed instructions. Each new flow counts as one build (plans: Admin → Pricing).</p></div>
+          <div class="kpis">
+            <div class="kpi"><div class="kh"><small>Builds today</small><span class="ki" style="--c:#2F6BFF">${icon('chat')}</span></div><b>${num(CBS.builds_today)}</b><span class="sub">${num(CBS.builds_7d)} in the last 7 days · ${num(CBS.edits_7d)} chats about existing flows</span></div>
+            <div class="kpi"><div class="kh"><small>Cost per build (7 days)</small><span class="ki" style="--c:#0E9F6E">${icon('card')}</span></div><b>$${Number(CBS.avg_cost_7d || 0).toFixed(3)}</b><span class="sub">$${Number(CBS.cost_7d || 0).toFixed(2)} in 7 days, edits included</span></div>
+            <div class="kpi"><div class="kh"><small>Spent today</small><span class="ki" style="--c:${CBS.resting ? '#E5484D' : '#A855F7'}">${icon('spark')}</span></div><b>$${Number(CBS.spent_today || 0).toFixed(2)}</b><span class="sub">${CBS.cap ? 'of the $' + Number(CBS.cap).toFixed(2) + ' daily cap' + (CBS.resting ? ' · resting until tomorrow' : '') : 'No daily cap'}</span></div>
+            <div class="kpi"><div class="kh"><small>Built with credits, 30 days</small><span class="ki" style="--c:#F59E0B">${icon('gift')}</span></div><b>${num(CBS.credit_builds_30d)}</b></div>
+          </div>
+          <div class="fr two">
+            <div class="f"><label>Writing model</label><input name="model_write" value="${CBS.settings.model_write}" placeholder="claude-sonnet-4-5"${dis}><span class="hint">Writes the message text. A smart model. Empty = the provider's default.</span></div>
+            <div class="f"><label>Fast model</label><input name="model_fast" value="${CBS.settings.model_fast}" placeholder="claude-haiku-4-5-20251001"${dis}><span class="hint">Reads typed instructions and turns them into changes. A Haiku-class model.</span></div>
+          </div>
+          <div class="fr four">
+            <div class="f"><label>Daily spend cap (USD)</label><input name="daily_cap_usd" type="number" min="0" step="0.5" value="${CBS.settings.daily_cap_usd}"${dis}><span class="hint">When today's (UTC) cost reaches it, Cas rests until tomorrow and offers the builder. 0 = no cap.</span></div>
+            <div class="f"><label>Fair use a month</label><input name="fair_use_monthly" type="number" min="0" value="${CBS.settings.fair_use_monthly}"${dis}><span class="hint">The soft cap on "unlimited" plans.</span></div>
+            <div class="f"><label>Builds in a Cas credits pack</label><input name="credit_pack_builds" type="number" min="0" value="${CBS.settings.credit_pack_builds}"${dis}></div>
+            <div class="f"><label>Credits pack price (USD)</label><input name="credit_pack_price" type="number" min="0" step="0.01" value="${Number(CBS.settings.credit_pack_price_cents) / 100}"${dis}><span class="hint">Paid from the wallet (cash). 0 = not sold.</span></div>
+          </div>
+          ${ed ? html`<div class="row end"><button class="btn" type="submit">${icon('check')} Save Cas Builder</button></div>` : ''}
+        </form>` : ''}
         ${can('knowledge.edit') ? tryCas() : ''}`;
       return {
         html: page,
@@ -296,6 +317,12 @@
             if (pf.key.value.trim()) body.key = pf.key.value.trim();
             const r = await act($('button[type=submit]', pf), () => putj('/api/admin/ai/provider', body));
             if (r) { toast(r.key_cleared ? 'Saved. The provider changed, so paste its API key again.' : 'Provider saved.'); CV.reload(); }
+          });
+          const cf = $('#cbf', el);
+          if (cf) cf.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const value = { model_write: cf.model_write.value.trim(), model_fast: cf.model_fast.value.trim(), daily_cap_usd: Number(cf.daily_cap_usd.value), fair_use_monthly: Number(cf.fair_use_monthly.value), credit_pack_builds: Number(cf.credit_pack_builds.value), credit_pack_price: cf.credit_pack_price.value };
+            await act($('button[type=submit]', cf), () => putj('/api/admin/settings/cas_builder', { value }), 'Cas Builder saved.');
           });
           mountTryCas(el);
         },

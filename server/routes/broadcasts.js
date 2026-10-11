@@ -85,10 +85,13 @@ module.exports = (r) => {
     let segmentId = null;
     if (b.segment_id) {
       if (conn.kind !== 'bot') throw badRequest('Audiences only work for bots. A channel or group post goes to everyone in it.');
-      await settings.requireFeature('segments');
-      await billing.requirePlanFeature(ws, 'audiences');
-      const s = await db.one('select id from segments where id = $1 and workspace_id = $2', [Number(b.segment_id), ws.id]);
+      const s = await db.one('select id, rules from segments where id = $1 and workspace_id = $2', [Number(b.segment_id), ws.id]);
       if (!s) throw badRequest('That audience was not found.');
+      // "Tapped Start in <flow>" (Welcome Flows → Broadcast to these people) works on every plan that broadcasts.
+      if (!require('../services/segments').flowOnly(s.rules)) {
+        await settings.requireFeature('segments');
+        await billing.requirePlanFeature(ws, 'audiences');
+      }
       segmentId = s.id;
     }
     const mode = oneOf(b.send_mode || 'now', 'When', ['now', 'at', 'local9']);

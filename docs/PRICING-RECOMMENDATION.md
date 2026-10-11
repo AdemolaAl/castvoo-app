@@ -2,11 +2,13 @@
 
 **Short version:** keep $19 / $49 / $99. Add the Free plan with the owner's limits. Make **join requests per month** the main meter for Welcome Flows. Cut the AI write allowances (the current ones lose money if people use them all). Allow only one commission per payment. Show fixed, rounded Naira and other local prices.
 
+> **Update (11 Oct 2026):** the owner set the Castvoo referral program to **5 to 15%** (5% / 10% / 15% at 1 / 5 / 20 paying referrals), with a hard cap of 15% on every payment, monthly and yearly. The 10/20/30% rates and 50% / 35% caps below are the earlier numbers; the margin maths below only gets safer.
+
 Based on: `docs/PRODUCT-FACTS.md`, `server/seed.js`, `server/services/billing.js`, `llm.js`, `referrals.js`, `bot-updates.js`, `README.md`. No code was changed.
 
 ## 1. What the code does today (facts that affect pricing)
 - Plans: Starter $19 (1 connection, 5k subs, 300 AI, 1 seat), Growth $49 (5, 25k, 2,000, 3), Scale $99 (20, 100k, 5,000, 10). Yearly = 10x monthly.
-- Trial: 7 days of Growth, 100 AI writes, no card. Referral 10/20/30% of the **cash** part of each plan payment (bonus credit pays no commission), settles after 30 days.
+- Trial: 7 days of Growth, 100 AI writes, no card. Referral 10/20/30% (now 5/10/15%, see the update above) of the **cash** part of each plan payment (bonus credit pays no commission), settles after 30 days.
 - The join-request welcome runs through **the customer's own connected bot** (`onJoinRequest` uses `conn` = the bot). A channel can also be its own connection. So "1 connection" on Starter cannot run bot + channel. Fix this below.
 - People who send a join request are saved as `status='joinreq'`, so they do **not** count as bot subscribers. Join requests need their own meter.
 - AI: the seed default is Claude Haiku 4.5. The README default on OpenRouter is Sonnet 4.5, about 1 to 2 cents per write. The model below assumes Sonnet, the expensive case.
@@ -37,7 +39,7 @@ What the competitor prices show:
 | AI support chat | **3 cents** per conversation (worst case) | Free 2/mo, Starter 5, Growth 10, Scale 20. Fair-use cap: Free 5/mo, paid 100/mo |
 | Hosting (Railway) | Free $0.05 · Starter $0.50 · Growth $1.50 · Scale $4.00 per workspace per month | $10/GB RAM, $20/vCPU, $0.15/GB volume, $0.05/GB egress ([Railway](https://docs.railway.com/pricing/plans)). Base stack (app + worker + Postgres 2 GB + 50 GB volume + Resend) is about $120/mo, shared by load (join requests, media, sends) |
 | Payment fees + FX | **4.5% of price** (blended, conservative) | Paystack NG 1.5% + ₦100 (waived under ₦2,500, capped at ₦2,000), intl 3.9%, GH 1.95%, ZA 2.9% + R1, KE 2.9% ([Paystack](https://support2.paystack.com/hc/en-us/articles/360009881920-What-are-Paystack-s-transaction-charges)). Flutterwave NG 2.0%, intl 4.8%, plus 7.5% VAT on fees ([Flutterwave](https://flutterwave.com/ng/pricing)). Crypto about 0.5%. The likely mix comes to about 2.5%; the rest covers VAT, FX drift and chargebacks |
-| Commission | 0% / 25% / 50% of price | Castvoo referral 10 to 30%. VooSquare RevShare 20 to 35% typical, 50% at high volume |
+| Commission | 0% / 25% / 50% of price | Castvoo referral 5 to 15% (was 10 to 30%). VooSquare RevShare 20 to 35% typical, 50% at high volume |
 
 ## 4. Final plans
 | | **Free** | **Starter** | **Growth** ⭐ | **Scale** |
@@ -113,7 +115,7 @@ Yearly (price ÷ 12, 25% commission): Starter 59%, Growth 55%, Scale 51%. Every 
 - With the old AI allowances, Growth used in full would cost $30 of AI on a $49 plan, which is negative after a 50% commission. That is why the allowances were cut.
 
 Guardrails that keep the 50% case safe:
-- **One commission per payment.** Castvoo referral **or** VooSquare affiliate, never both. Use the first attribution. Hard cap 50%.
+- **One commission per payment.** Castvoo referral **or** VooSquare affiliate, never both. Use the first attribution. Hard cap 50% (Castvoo referral now capped at 15%).
 - Pay commission on **cash minus the processor fee**, not on the gross price. Bonus credit already pays no commission.
 - Allow 50% only for affiliates with 50 or more active paying customers, and on monthly plans only. Cap yearly payments at 35%.
 - Route rewrites and translations to Haiku (about 0.5 cents). Use Sonnet only for writing sequences. This cuts AI cost by about 40%.

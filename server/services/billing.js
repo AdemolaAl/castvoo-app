@@ -16,7 +16,8 @@
  *   attribution wins (users.referred_at vs users.voo_linked_at with a voo_ref). When the Castvoo referral pays, the
  *   commissionable `spend` event is not sent to VooSquare (plan_started / plan_renewed still are: they carry no commission).
  * - Commission base = the cash part minus the processor fee of the top-ups that money came from (when the provider
- *   reported it), capped at referral.commission_cap_pct (50%) and at referral.yearly_cap_pct (35%) on yearly payments.
+ *   reported it), capped at referral.commission_cap_pct (15%) and at referral.yearly_cap_pct (15%) on yearly payments.
+ *   Tiers are 5% (1 to 4 paying referrals), 10% (from 5), 15% (from 20); nothing is ever above 15% (HARD_CAP_PCT).
  * - Earnings that look like a self-referral (SEC-2) are held for Finance to review instead of settling.
  */
 
@@ -52,6 +53,50 @@ async function effectivePlan(ws) {
   return plan;
 }
 
+/*
+ * Bots (docs/BOTS.md, docs/BOTS-PRICING.md): plan limits as data. -1 = unlimited; *_fair_use = a soft number for abuse
+ * alerts, never enforced. Bot types: what a plan may build (the steps decide: an "Ask a question" step needs
+ * lead_questions, an invite step needs referral, a check step needs join_check). Over a count limit the server answers a
+ * friendly 402; meters (bot subscribers, lead answers) get LIMIT_GRACE_PCT extra first.
+ * A custom plan made in the admin panel gets the limits of the built-in plan it looks like (see botPlanOf).
+ */
+const BOT_TYPES = ['welcome', 'join_check', 'lead_magnet', 'menu', 'broadcast', 'lead_questions', 'referral'];
+const BOT_GRACE_PCT = 10;
+const BOT_PLANS = {
+  free: { max_bots: 2, bot_types: ['welcome', 'join_check', 'lead_magnet', 'menu'], max_bot_subscribers: 100, bot_steps: 1, menu_buttons: 4,
+    lead_answers_per_month: 0, lead_questions_per_form: 0, lead_export: 'none', referral_bots: 0, branding: true, concurrent_sessions_per_seat: 2 },
+  starter: { max_bots: 5, bot_types: ['welcome', 'join_check', 'lead_magnet', 'menu', 'broadcast', 'lead_questions'], max_bot_subscribers: 5000, bot_steps: 5, menu_buttons: 8,
+    lead_answers_per_month: 1000, lead_questions_per_form: 5, lead_export: 'csv', referral_bots: 0, branding: false, concurrent_sessions_per_seat: 2 },
+  growth: { max_bots: 15, bot_types: BOT_TYPES.slice(), max_bot_subscribers: 25000, bot_steps: 20, menu_buttons: 12,
+    lead_answers_per_month: 10000, lead_questions_per_form: 15, lead_export: 'csv', referral_bots: 2, branding: false, concurrent_sessions_per_seat: 2 },
+  scale: { max_bots: -1, max_bots_fair_use: 100, bot_types: BOT_TYPES.slice(), max_bot_subscribers: 100000, bot_steps: -1, menu_buttons: -1,
+    lead_answers_per_month: 100000, lead_questions_per_form: -1, lead_export: 'csv', referral_bots: -1, referral_bots_fair_use: 20, branding: false, concurrent_sessions_per_seat: 3 },
+};
+const BOT_TRIAL = { lead_answers_per_month: 300 };
+const BOT_PLAN_ORDER = ['free', 'starter', 'growth', 'scale'];
+const BOT_TYPE_WORDS = {
+  welcome: 'Welcome bots are', join_check: 'Join-check bots are', lead_magnet: 'Lead magnet bots are', menu: 'Menu bots are', broadcast: 'Broadcasts to bot subscribers are',
+  lead_questions: 'Lead questions ("Ask a question") are', referral: 'Referral bots ("Invite friends") are',
+};
+/** The built-in bot limits for a plan (a custom admin plan: the built-in plan whose features it has). */
+function botPlanOf(plan) {
+  if (plan && BOT_PLANS[plan.code]) return BOT_PLANS[plan.code];
+  const f = (plan && plan.features) || [];
+  if (f.includes('ab_welcome_4')) return BOT_PLANS.scale;
+  if (f.includes('condition_clicked')) return BOT_PLANS.growth;
+  if (f.includes('broadcasts')) return BOT_PLANS.starter;
+  return BOT_PLANS.free;
+}
+function botLimitsFor(plan, inTrial) {
+  const b = { ...botPlanOf(plan) };
+  b.bot_types = b.bot_types.slice();
+  if (inTrial) b.lead_answers_per_month = b.lead_answers_per_month === UNLIMITED ? BOT_TRIAL.lead_answers_per_month : Math.min(b.lead_answers_per_month, BOT_TRIAL.lead_answers_per_month);
+  b.grace_pct = BOT_GRACE_PCT;
+  return b;
+}
+/** limit + 10% grace (unlimited stays unlimited). */
+const withGrace = (limit) => (limit === UNLIMITED ? UNLIMITED : Math.floor(limit * (1 + BOT_GRACE_PCT / 100)));
+
 /** The limits that apply to a workspace right now. */
 async function limits(ws) {
   const plan = await effectivePlan(ws);
@@ -79,6 +124,7 @@ async function limits(ws) {
     features,
     ab_variants: ab,
     legacy: isLegacy(ws),
+    bots: botLimitsFor(plan, inTrial),
   };
 }
 
@@ -100,7 +146,7 @@ async function planFor(key) {
 const FEATURE_WORDS = {
   broadcasts: 'Broadcasts are', drips: 'Auto follow-ups are', ai: 'Cas, the AI helper, is', audiences: 'Audiences are', start_links: 'Start links are',
   welcome_flows: 'Follow-up steps in a Welcome Flow are', tap_to_start: 'The "Tap to start" button is', ab_welcome_2: 'A/B welcomes are', ab_welcome_4: 'A/B welcomes with 3 or 4 versions are',
-  condition_clicked: 'Click conditions are', flow_funnel_stats: 'Flow funnel stats are', basic_stats: 'Stats are', csv_export: 'CSV export is', schedule: 'Scheduling is',
+  condition_clicked: 'Click conditions are', start_another_flow: '"Start another flow" is', flow_funnel_stats: 'Flow funnel stats are', basic_stats: 'Stats are', csv_export: 'CSV export is', schedule: 'Scheduling is',
 };
 /** Throw a friendly 402 (code plan_feature) when the plan does not include a feature. */
 async function requirePlanFeature(ws, key) {
@@ -204,6 +250,79 @@ async function usage(wsId) {
   return { ...r, subscribers: r.bot_subscribers };
 }
 
+/* ---------- Bots: plan checks (BOT_PLANS above) ---------- */
+
+/** The cheapest active paid plan whose bot limits pass `ok(botLimits)` (for "on the Starter plan and up" messages). */
+async function planForBots(ok) {
+  const plans = (await settings.plans({ activeOnly: true })).filter((p) => Number(p.price_month_cents) > 0 && ok(botPlanOf(p)));
+  plans.sort((a, b) => Number(a.price_month_cents) - Number(b.price_month_cents));
+  return plans[0] || null;
+}
+const upHint = (p) => (p ? `on the ${p.name} plan and up (${fmtUSD(p.price_month_cents)} a month)` : 'on a bigger plan');
+
+/** Throw a friendly 402 (code plan_bot_type) when the plan can't build this kind of bot (BOT_TYPES). */
+async function requireBotType(ws, type) {
+  const l = await limits(ws);
+  if (l.bots.bot_types.includes(type)) return;
+  if (type === 'broadcast' && featureSet(l).has('broadcasts')) return; // grandfathered broadcasts
+  const p = await planForBots((b) => b.bot_types.includes(type));
+  throw httpError(402, `${BOT_TYPE_WORDS[type] || 'This bot is'} ${upHint(p)}. Upgrade to use ${type === 'broadcast' ? 'them' : 'it'}.`, 'plan_bot_type', { bot_type: type, plan: p ? p.code : null });
+}
+
+/** Live bots (Welcome bots + Chat bots) of a workspace, not counting `exceptIds`. */
+async function liveBots(wsId, exceptIds = []) {
+  const r = await db.one(`select count(*)::int n from sequences q join connections c on c.id = q.connection_id
+    where q.workspace_id = $1 and q.active and c.status <> 'removed' and q.trigger_type in ('join_request','bot_start') and not (q.id = any($2::bigint[]))`, [wsId, exceptIds.map(Number)]);
+  return r.n;
+}
+/** Live Chat bots that have an "Invite friends" (referral) step, not counting `exceptIds`. */
+async function liveReferralBots(wsId, exceptIds = []) {
+  const r = await db.one(`select count(*)::int n from sequences q join connections c on c.id = q.connection_id
+    where q.workspace_id = $1 and q.active and c.status <> 'removed' and q.trigger_type in ('join_request','bot_start') and not (q.id = any($2::bigint[]))
+      and exists (select 1 from sequence_steps s where s.sequence_id = q.id and s.step_type = 'referral')`, [wsId, exceptIds.map(Number)]);
+  return r.n;
+}
+
+/**
+ * Can one more bot go live? (Active Bots limit; a draft never counts.) `exceptIds`: the bot itself and one it
+ * replaces. `referral`: it has an invite step (the plan's referral bots count too).
+ */
+async function assertBotSlots(ws, { exceptIds = [], referral = false } = {}) {
+  const l = await limits(ws);
+  const b = l.bots;
+  if (b.max_bots !== UNLIMITED && (await liveBots(ws.id, exceptIds)) >= b.max_bots) {
+    const p = await planForBots((x) => x.max_bots === UNLIMITED || x.max_bots > b.max_bots);
+    throw httpError(402, `Your ${l.plan.name} plan runs ${b.max_bots} bot${b.max_bots === 1 ? '' : 's'} at a time. Switch one off first, or get more bots ${upHint(p)}.`, 'limit_bots', { limit: b.max_bots, plan: p ? p.code : null });
+  }
+  if (referral) {
+    if (b.referral_bots === 0) await requireBotType(ws, 'referral');
+    if (b.referral_bots !== UNLIMITED && (await liveReferralBots(ws.id, exceptIds)) >= b.referral_bots) {
+      const p = await planForBots((x) => x.referral_bots === UNLIMITED || x.referral_bots > b.referral_bots);
+      throw httpError(402, `Your ${l.plan.name} plan runs ${b.referral_bots} referral bot${b.referral_bots === 1 ? '' : 's'} at a time. Switch one off first, or get more ${upHint(p)}.`, 'limit_referral_bots', { limit: b.referral_bots, plan: p ? p.code : null });
+    }
+  }
+}
+
+/** Lead answers this calendar month (UTC) against the plan: { used, limit, hard, over }. Over `hard` = new answers are kept hidden. */
+async function answersMeter(ws) {
+  const l = await limits(ws);
+  const lim = l.bots.lead_answers_per_month;
+  const since = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+  const used = (await db.one('select count(*)::int n from bot_answers where workspace_id = $1 and created_at >= $2', [ws.id, since])).n;
+  const hard = withGrace(lim);
+  return { used, limit: lim, hard, grace_pct: BOT_GRACE_PCT, over: hard !== UNLIMITED && used >= hard, since, resets_at: meterResets() };
+}
+
+/** Logged-in devices allowed per person: the biggest of the plans of the workspaces they belong to (2, or 3 on Scale). */
+async function sessionsPerSeat(userId) {
+  const rows = await db.many('select * from workspaces where owner_user_id = $1 or id in (select workspace_id from members where user_id = $1)', [userId]);
+  let n = BOT_PLANS.free.concurrent_sessions_per_seat;
+  for (const ws of rows) {
+    try { n = Math.max(n, (await limits(ws)).bots.concurrent_sessions_per_seat); } catch { /* plan missing: keep the default */ }
+  }
+  return n;
+}
+
 /** Throws a friendly error when the workspace may not send right now. */
 async function assertCanSend(ws) {
   if (ws.plan_status === 'paused' || ws.plan_status === 'cancelled') {
@@ -301,11 +420,12 @@ async function takePayment(c, wsId, amount, note, ref) {
 async function referralSettings() {
   const rs = { ...REFERRAL_DEFAULTS, ...((await settings.get('referral')) || {}) };
   rs.commission_cap_pct = Math.max(0, Math.min(HARD_CAP_PCT, Number(rs.commission_cap_pct ?? HARD_CAP_PCT)));
-  rs.yearly_cap_pct = Math.max(0, Math.min(rs.commission_cap_pct, Number(rs.yearly_cap_pct ?? 35)));
+  rs.yearly_cap_pct = Math.max(0, Math.min(rs.commission_cap_pct, Number(rs.yearly_cap_pct ?? HARD_CAP_PCT)));
   return rs;
 }
-const REFERRAL_DEFAULTS = { commission_cap_pct: 50, yearly_cap_pct: 35, first_attribution: true, net_of_fees: true };
-const HARD_CAP_PCT = 50;
+// Castvoo referral is 5 to 15% (Oct 2026): 15% is the hard cap on any payment, monthly or yearly.
+const REFERRAL_DEFAULTS = { commission_cap_pct: 15, yearly_cap_pct: 15, first_attribution: true, net_of_fees: true };
+const HARD_CAP_PCT = 15;
 
 /**
  * Who gets the commission on this workspace's plan payments (AUD-1): 'castvoo_referral' (users.referred_by),
@@ -471,6 +591,8 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
       where id = $1`, [wsId, plan.code, cycle, end, couponUsed ? 1 : 0, seats]);
     // AUD-8: a move to a smaller plan switches off the live flows beyond its limit (kept, paused_by_plan).
     const flowsOff = await trimFlows(c, wsId, plan, ws.keep_flow_ids);
+    // Bots: the same for Chat bots the smaller plan can't run (types, limits, live bots, referral bots).
+    await trimBots(c, wsId, plan);
     // One commission per payment: the Castvoo referral or the VooSquare affiliate (AUD-1).
     const { commission, voo, base } = await settleCommission(c, ws, paid, ref, cycle);
     // VooSquare: spend (cash part, net of fees) + plan_started / plan_renewed, queued in this same transaction.
@@ -604,7 +726,8 @@ async function dropToFree(wsId, { expect = null, remember = null, rememberCycle 
       cancel_at_period_end = false, pending_plan_code = null, pending_cycle = null, ai_used = 0, ai_period_start = now(), reminded_at = null,
       dropped_from = $3, dropped_cycle = $4, dropped_at = now(), extra_seats = 0, pending_extra_seats = null where id = $1`, [wsId, free.code, remember, rememberCycle]);
     const off = await trimFlows(c, wsId, free, ws.keep_flow_ids);
-    if (!(free.features || []).includes('drips')) await c.query("update sequences set active = false, paused_by_plan = true where workspace_id = $1 and trigger_type <> 'join_request' and active", [wsId]);
+    if (!(free.features || []).includes('drips')) await c.query("update sequences set active = false, paused_by_plan = true where workspace_id = $1 and trigger_type not in ('join_request','bot_start') and active", [wsId]);
+    await trimBots(c, wsId, free);
     if (!(free.features || []).includes('broadcasts')) await c.query("update broadcasts set status = 'draft' where workspace_id = $1 and status in ('scheduled','pending_approval')", [wsId]);
     return { ok: true, dropped: true, from: ws.plan_code, flowsOff: off };
   });
@@ -624,6 +747,41 @@ async function trimFlows(c, wsId, plan, keepIds) {
   const off = order.slice(Math.max(0, Number(plan.flows)));
   if (off.length) await c.query('update sequences set active = false, paused_by_plan = true where id = any($1::bigint[])', [off]);
   if (keepIds) await c.query('update workspaces set keep_flow_ids = null where id = $1', [wsId]);
+  return off.length;
+}
+
+/**
+ * Bots over a smaller plan's limits after a drop or a move to a smaller plan (inside transaction c), switched off and
+ * kept (paused_by_plan): Chat bots the plan can't run any more (a step type it lacks: "Ask a question" needs
+ * lead_questions, a check needs join_check; more questions, messages or menu buttons than it allows), invite (referral)
+ * bots beyond its referral bots, and Chat bots beyond the Active Bots limit (Welcome bots that stay live count first;
+ * the oldest Chat bots stay). Returns how many were switched off.
+ */
+async function trimBots(c, wsId, plan) {
+  const b = botPlanOf(plan);
+  const off = [];
+  const live = (await c.query(`select q.id,
+      exists (select 1 from sequence_steps s where s.sequence_id = q.id and s.variant = 0 and s.step_type = 'referral') as referral,
+      exists (select 1 from sequence_steps s where s.sequence_id = q.id and s.variant = 0 and s.step_type = 'check_join') as check_join,
+      (select count(*)::int from sequence_steps s where s.sequence_id = q.id and s.variant = 0 and s.step_type = 'ask') as asks,
+      (select count(*)::int from sequence_steps s where s.sequence_id = q.id and s.variant = 0 and s.step_type in ('message','referral') and s.trigger_type <> 'on_button') as msgs,
+      (select coalesce(max(n), 0)::int from (select count(*) n from links l join sequence_steps s on s.id = l.step_id where s.sequence_id = q.id and s.variant = 0 group by l.step_id) x) as buttons
+    from sequences q where q.workspace_id = $1 and q.trigger_type = 'bot_start' and q.active order by q.id`, [wsId])).rows;
+  const maxButtons = b.menu_buttons === UNLIMITED ? 12 : Math.min(12, b.menu_buttons);
+  const fits = (q) => (!q.asks || (b.bot_types.includes('lead_questions') && (b.lead_questions_per_form === UNLIMITED || q.asks <= b.lead_questions_per_form)))
+    && (!q.check_join || b.bot_types.includes('join_check'))
+    && (b.bot_steps === UNLIMITED || q.msgs <= b.bot_steps)
+    && q.buttons <= maxButtons;
+  const welcome = (await c.query("select count(*)::int n from sequences where workspace_id = $1 and trigger_type = 'join_request' and active", [wsId])).rows[0].n;
+  let slots = b.max_bots === UNLIMITED ? Infinity : Math.max(0, b.max_bots - welcome);
+  let refs = b.referral_bots === UNLIMITED ? Infinity : b.referral_bots;
+  for (const q of live) {
+    if (!fits(q)) { off.push(q.id); continue; }
+    if (q.referral) { if (refs <= 0) { off.push(q.id); continue; } refs--; }
+    if (slots <= 0) { off.push(q.id); continue; }
+    slots--;
+  }
+  if (off.length) await c.query('update sequences set active = false, paused_by_plan = true where id = any($1::bigint[])', [off]);
   return off.length;
 }
 
@@ -686,15 +844,16 @@ async function planState(ws) {
     plan_code: l.plan.code, plan_name: l.plan.name, status: ws.plan_status, cycle: ws.billing_cycle, free: isFreePlan(l.plan),
     trial_ends_at: ws.trial_ends_at, period_end: ws.period_end, cancel_at_period_end: ws.cancel_at_period_end, ai_refill_at: aiRefillAt(ws),
     pending_plan_code: ws.pending_plan_code, dropped_from: ws.dropped_from, coupon: coupon && ws.coupon_months_left > 0 ? { ...coupon, months_left: ws.coupon_months_left } : null,
-    limits: { connections: l.connections, subscribers: l.subscribers, ai_writes: l.ai_writes, seats: l.seats, plan_seats: l.plan_seats, extra_seats: l.extra_seats, join_requests: l.join_requests, flows: l.flows, flow_steps: l.flow_steps, ab_variants: l.ab_variants },
+    limits: { connections: l.connections, subscribers: l.subscribers, ai_writes: l.ai_writes, seats: l.seats, plan_seats: l.plan_seats, extra_seats: l.extra_seats, join_requests: l.join_requests, flows: l.flows, flow_steps: l.flow_steps, ab_variants: l.ab_variants, bots: l.bots },
     seats: await seatsInfo(ws, l),
     usage: { connections: u.connections, bots: u.bots, subscribers: u.subscribers, ai_writes: u.ai_used, seats: u.seats, join_requests: meter.used, flows: u.flows, active_flows: u.active_flows },
     features: [...featureSet(l)], branding: l.branding, welcome_only: !l.features.includes('broadcasts') && !l.legacy,
     join: meter,
     suggest_yearly: yearlySave > 0 ? { save: yearlySave / 100 } : null,
     plans: plans.map((p) => ({ code: p.code, name: p.name, price_month: p.price_month_cents / 100, price_year: p.price_year_cents / 100, connections: p.connections, subscribers: p.subscribers, ai_writes: p.ai_writes, seats: p.seats, popular: p.popular,
-      join_requests: p.join_requests, flows: p.flows, flow_steps: p.flow_steps, branding: p.branding, features: p.features || [] })),
+      join_requests: p.join_requests, flows: p.flows, flow_steps: p.flow_steps, branding: p.branding, features: p.features || [], cas_builds: p.cas_builds ?? 0,
+      bots: { max: botPlanOf(p).max_bots, menu_buttons: botPlanOf(p).menu_buttons } })),
   };
 }
 
-module.exports = { seatPrice, seatsNext, seatsTaken, seatsInfo, setExtraSeats, renewalCost, extraSeatsNow, UNLIMITED, LEGACY_FEATURES, featureSet, meterBump, meterEnsure, referralSettings, attributionOf, selfReferralSignal, mailbox, feeShare, settleCommission, trimFlows, aiRefillAt, effectivePlan, limits, hasFeature, requirePlanFeature, planFor, joinMeter, meterStart, isFreePlan, dropToFree, usage, assertCanSend, assertCanConnect, useAi, refundAi, activate, upgradeNow, planState, takePayment, payCommission, priceOf, periodDays };
+module.exports = { trimBots, BOT_PLANS, BOT_TYPES, BOT_GRACE_PCT, botPlanOf, botLimitsFor, withGrace, requireBotType, liveBots, liveReferralBots, assertBotSlots, answersMeter, sessionsPerSeat, planForBots, seatPrice, seatsNext, seatsTaken, seatsInfo, setExtraSeats, renewalCost, extraSeatsNow, UNLIMITED, LEGACY_FEATURES, featureSet, meterBump, meterEnsure, referralSettings, attributionOf, selfReferralSignal, mailbox, feeShare, settleCommission, trimFlows, aiRefillAt, effectivePlan, limits, hasFeature, requirePlanFeature, planFor, joinMeter, meterStart, isFreePlan, dropToFree, usage, assertCanSend, assertCanConnect, useAi, refundAi, activate, upgradeNow, planState, takePayment, payCommission, priceOf, periodDays };

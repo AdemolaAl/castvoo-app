@@ -31,14 +31,10 @@ async function vooLogin(c, user, startPath = '/auth/voosquare') {
 }
 const evs = (vooId) => app.fakes.voo.events.filter((e) => e.body.voo_id === vooId).map((e) => e.body);
 const queued = (vooId) => app.db.many("select payload from outbox where kind = 'voosquare' and payload->>'voo_id' = $1 order by id", [vooId]).then((r) => r.map((x) => x.payload));
-const paystackHook = (ev) => {
-  const body = JSON.stringify(ev);
-  return fetch(app.url + '/pay/paystack', { method: 'POST', body, headers: { 'content-type': 'application/json', 'x-paystack-signature': crypto.createHmac('sha512', 'sk_test_paystack').update(body).digest('hex') } });
-};
 async function topup(c, usd) {
-  const r = await c.post('/api/wallet/topup', { amount: usd, method: 'paystack_ng' });
+  const r = await c.post('/api/wallet/topup', { amount: usd, method: 'flw_ng' });
   assert.equal(r.status, 200, r.text);
-  Object.assign(app.fakes.paystack.txns.get(r.body.reference), { status: 'success' });
+  Object.assign(app.fakes.flw.txns.get(r.body.reference), { status: 'successful' });
   const ok = await c.post('/api/wallet/check', { reference: r.body.reference });
   assert.equal(ok.body.status, 'paid');
   return r.body.reference;
@@ -209,9 +205,10 @@ describe('Voo ID login', () => {
     const cfg = (await app.client().get('/api/public/config')).body;
     assert.equal(cfg.login.voosquare, true);
     assert.equal(cfg.voo.app_url, app.fakes.base + '/voo/app');
-    assert.equal(cfg.voo.widget_src, app.fakes.base + '/voo/widget.js');
+    // Our own support widget is the website chat (the same agents and speed as inside): VooSquare's widget is off
+    // unless VOO_SITE_WIDGET=on.
+    assert.equal(cfg.voo.widget_src, null);
     const home = await app.client().get('/');
-    assert.match(home.headers.get('content-security-policy'), new RegExp(`script-src [^;]*${app.fakes.base.replace(/[.:/]/g, '\\$&')}`));
     assert.match(home.text, /<script defer src="\/voo-connect-browser.js"><\/script>/);
     const js = await app.client().get('/voo-connect-browser.js');
     assert.equal(js.status, 200);
@@ -278,9 +275,9 @@ describe('Money events', () => {
     const rtx = await app.db.one("select * from wallet_tx where workspace_id = $1 and kind = 'refund' order by id desc limit 1", [ws.id]);
     const pay = await app.db.one("select * from payments where workspace_id = $1 and status = 'paid' order by id limit 1", [ws.id]);
     const plans = await app.db.many("select * from wallet_tx where workspace_id = $1 and kind = 'plan' order by id", [ws.id]);
-    const hook = { event: 'charge.dispute.create', data: { id: 777, transaction: { reference: pay.reference } } };
-    assert.equal((await paystackHook(hook)).status, 200);
-    assert.equal((await paystackHook(hook)).status, 200, 'Paystack repeats itself');
+    // The top-up (Flutterwave) is disputed: finance records it in Admin → Payments.
+    const cb = await owner.post(`/api/admin/payments/${pay.reference}/chargeback`, { reason: 'Bank dispute 777' });
+    assert.equal(cb.status, 200, cb.text);
     const q = await queued(u.voo_id);
     const refund = q.find((e) => e.event_id === `cv_rf_${rtx.id}`);
     assert.deepEqual([refund.type, refund.value_usd], ['refund', 2]);

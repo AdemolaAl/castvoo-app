@@ -1,5 +1,5 @@
 'use strict';
-/* Cas AI for customers: write, rewrite, translate, sequence, ask. Each call uses AI writes. */
+/* Cas AI for customers: write, rewrite, translate, sequence, build a Welcome Flow, ask. Each call uses AI writes. */
 
 const db = require('../db');
 const ai = require('../services/ai');
@@ -29,10 +29,15 @@ async function run(ctx, kind, writes, fn) {
     [ctx.workspace.id, ctx.user.id, k, writes, meter.input_tokens, meter.output_tokens, meter.provider || 'anthropic', meter.model || null, meter.cost_usd]);
   let out;
   try { out = await fn(complete); } catch (e) {
-    if (meter.calls > 0) await logUsage(kind + '_failed').catch(() => {}); // paid for: counted, and the writes stay used
-    else await billing.refundAi(ctx.workspace.id, writes);
+    if (meter.calls > 0) {
+      // Paid for: counted, and the writes stay used (a call that reserved more than it used keeps only e.used).
+      if (e.used != null && e.used < writes) { await billing.refundAi(ctx.workspace.id, writes - e.used).catch(() => {}); writes = e.used; }
+      await logUsage(kind + '_failed').catch(() => {});
+    } else await billing.refundAi(ctx.workspace.id, writes);
     throw e;
   }
+  // A call that knows its real count afterwards (Cas building a flow: one write per message) gives back the rest.
+  if (out.used != null && out.used < writes) { await billing.refundAi(ctx.workspace.id, writes - out.used); writes = out.used; }
   await logUsage(kind);
   const left = await billing.limits(ctx.workspace);
   const used = (await db.one('select ai_used from workspaces where id = $1', [ctx.workspace.id])).ai_used;
@@ -92,6 +97,29 @@ module.exports = (r) => {
       if (!out.length) throw badRequest('Cas could not write that sequence. Try describing the goal differently.');
       out[0].delay_value = 0; out[0].delay_unit = 'min';
       return { result: { steps: out } };
+    });
+  }, { auth: 'workspace', rate: [20, 600], shared: true });
+
+  /**
+   * "Tell Cas what you want": Cas builds a whole Welcome Flow (messages, buttons, when each one comes) from one
+   * sentence. The answer is one strict JSON object, checked by flows.cleanAiFlow (unknown fields are refused). It is a
+   * draft for the builder to review; nothing is saved. Counts one AI write per message (writes are reserved first and
+   * the unused ones given back).
+   */
+  r.post('/api/ai/flow', async (ctx) => {
+    const prompt = str(ctx.body.prompt, 'Describe your flow', { min: 8, max: 600 });
+    const flows = require('../services/flows');
+    const l = await billing.limits(ctx.workspace);
+    const used = (await db.one('select ai_used from workspaces where id = $1', [ctx.workspace.id])).ai_used;
+    const steps = l.flow_steps === billing.UNLIMITED ? 6 : Math.max(1, Math.min(6, l.flow_steps));
+    const reserve = Math.max(1, Math.min(steps, l.ai_writes - used));
+    return run(ctx, 'flow', reserve, async (complete) => {
+      const res = await complete({ system: await ai.systemPrompt({ profile: ctx.workspace.ai_profile }), maxTokens: 2500, temperature: 0.4, json: true,
+        messages: [{ role: 'user', content: ai.TASKS.flow({ prompt, max: reserve }) }] });
+      let flow;
+      try { flow = flows.cleanAiFlow(res.text, { maxMessages: reserve }); } catch (e) { e.used = 1; throw e; } // a refused answer costs 1 write
+      flow.steps = flow.steps.map((x) => ({ ...x, body: ai.clean(x.body).slice(0, 3500) }));
+      return { result: { flow }, used: flow.steps.length };
     });
   }, { auth: 'workspace', rate: [20, 600], shared: true });
 

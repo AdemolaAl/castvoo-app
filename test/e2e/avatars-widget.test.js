@@ -252,9 +252,9 @@ describe('floating support widget endpoints', () => {
     assert.equal((await other.get('/api/support/unread')).body.unread, 0);
   });
 
-  it('"Talk to a person" in the widget hands the chat to the team', async () => {
+  it('asking for a person in the widget (own words, iPhone apostrophe) hands the chat to the team', async () => {
     const d = await app.loginByEmail('widget.person@example.com');
-    await d.post('/api/support', { body: 'I\'d like to talk to a person from the team, please.' });
+    await d.post('/api/support', { body: 'I’d like to talk to a person from the team, please.' });
     await sai.tick();
     const t = await app.db.one('select needs_human from support_threads where user_id = $1', [d.user.id]);
     assert.equal(t.needs_human, true);

@@ -41,7 +41,7 @@ async function getThread(id, { includeInternal = true } = {}) {
       exists (select 1 from plans p where p.code = w.plan_code and coalesce(p.price_month_cents, 0) = 0 and coalesce(p.price_year_cents, 0) = 0) as plan_free
     from support_threads t join users u on u.id = t.user_id left join workspaces w on w.id = t.workspace_id where t.id = $1`, [id]);
   if (!t) throw notFound('That conversation');
-  const rows = await db.many(`select id, author_type, author_name, body, internal, via, persona_id, visible_at, created_at from support_messages
+  const rows = await db.many(`select id, author_type, author_name, body, internal, via, persona_id, links, visible_at, created_at from support_messages
     where thread_id = $1 ${includeInternal ? '' : 'and not internal'} order by id`, [id]);
   // Images: staff open them through /api/admin/support/attachments/:id (support.view). Paths are never sent.
   const att = await images.forMessages(rows.map((m) => m.id));
@@ -68,9 +68,12 @@ async function userMessage(user, workspaceId, body, attachments = []) {
   // Awaited: the copy for the VooSquare HQ inbox is in the outbox before we answer, so the next flush always has it.
   const copy = [text, pics.length ? `[${pics.length} image${pics.length > 1 ? 's' : ''} attached: open the conversation in Castvoo Admin → Support]` : ''].filter(Boolean).join('\n');
   await voosquare.supportMessage({ threadId: t.id, user, subject: t.subject, body: copy }).catch((e) => log.warn('VooSquare support copy not queued', { err: e.message }));
-  // The AI support team answers in the background (services/support-ai.js); this request does not wait for it.
   const ai = require('./support-ai');
-  if (!t.ai_paused && t.ai_enabled !== false && (await ai.isOn())) await ai.enqueue(t.id).catch((e) => log.warn('support ai not queued', { err: e.message }));
+  // "I want to talk to a person" (in the customer's own words) goes to the team right now, in this request, so it
+  // never depends on an AI turn that may still be answering an earlier message.
+  const handed = text ? await ai.customerAskedForHuman(t.id, m.id, text).catch((e) => { log.warn('human request check failed', { err: e.message }); return false; }) : false;
+  // Otherwise the AI support team answers in the background (services/support-ai.js); this request does not wait for it.
+  if (!handed && !t.ai_paused && t.ai_enabled !== false && (await ai.isOn())) await ai.enqueue(t.id).catch((e) => log.warn('support ai not queued', { err: e.message }));
   return t.id;
 }
 

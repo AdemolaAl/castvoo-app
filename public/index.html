@@ -3,38 +3,47 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>Castvoo · Telegram welcome bot, broadcasts and follow-ups on autopilot</title>
-<meta name="description" content="Welcome everyone who asks to join your Telegram channel or group, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links. Cas, the AI helper, writes the messages. Free plan for 1 channel, 7-day free trial, no card.">
+<title>Castvoo · Telegram broadcasts, automation and bot builder</title>
+<meta name="description" content="Build Telegram bots that accept join requests with a welcome, broadcast to your subscribers and follow up on autopilot. Join-check, free gift, menu, lead and referral bots, or let Cas AI build them by chat. Free plan, no card.">
 <meta name="theme-color" content="#2F6BFF">
-<meta property="og:title" content="Castvoo · Welcome. Broadcast. Follow up. All on autopilot.">
-<meta property="og:description" content="A Telegram welcome bot, broadcasts to all your subscribers and timed follow-up flows in a simple builder. Cas, the AI helper, writes the messages.">
+<meta property="og:title" content="Castvoo · Broadcast, automate and build bots on Telegram. All on autopilot.">
+<meta property="og:site_name" content="Castvoo">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Castvoo · Broadcast, automate and build bots on Telegram">
+<meta name="twitter:description" content="Welcome bots, broadcasts, follow-ups and a full Telegram bot builder: join-check, free gift, menu, lead and referral bots. Cas AI builds them with you by chat.">
+<meta property="og:description" content="Welcome bots, broadcasts, follow-ups and a full Telegram bot builder: join-check, free gift, menu, lead and referral bots. Cas AI builds them with you by chat. Free plan, no card.">
 <meta property="og:type" content="website">
 <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/css/castvoo.css?v=14">
-<script defer src="/js/core.js?v=4"></script>
+<link rel="stylesheet" href="/css/castvoo.css?v=26">
+<link rel="stylesheet" href="/css/site-home.css?v=5">
+<link rel="stylesheet" href="/css/aurora.css?v=3">
+<script defer src="/js/core.js?v=5"></script>
 <script defer src="/js/avatar.js?v=1"></script>
 <script defer src="/js/api.js?v=6"></script>
 <script defer src="/js/qr.js?v=1"></script>
-<script defer src="/js/site.js?v=10"></script>
+<script defer src="/js/site.js?v=17"></script>
 <script defer src="/js/site-story.js?v=1"></script>
 <script defer src="/js/signup.js?v=3"></script>
-<script defer src="/js/app.js?v=6"></script>
-<script defer src="/js/app-home.js?v=5"></script>
-<script defer src="/js/app-send.js?v=3"></script>
+<script defer src="/js/app.js?v=8"></script>
+<script defer src="/js/app-home.js?v=8"></script>
+<script defer src="/js/app-send.js?v=4"></script>
 <script defer src="/js/app-drips.js?v=4"></script>
-<script defer src="/js/app-flows.js?v=4"></script>
+<script defer src="/js/cas-engine.js?v=2"></script>
+<script defer src="/js/app-flows.js?v=15"></script>
+<script defer src="/js/app-cas-builder.js?v=7"></script>
 <script defer src="/js/app-people.js?v=2"></script>
 <script defer src="/js/app-connect.js?v=3"></script>
 <script defer src="/js/app-cas.js?v=2"></script>
-<script defer src="/js/app-money.js?v=5"></script>
-<script defer src="/js/app-account.js?v=8"></script>
+<script defer src="/js/app-money.js?v=8"></script>
+<script defer src="/js/app-account.js?v=9"></script>
 <script defer src="/js/app-avatar.js?v=1"></script>
 <script defer src="/js/app-zedapex.js?v=1"></script>
-<script defer src="/js/app-guides.js?v=5"></script>
-<script defer src="/js/widget.js?v=1"></script>
+<script defer src="/js/app-guides.js?v=8"></script>
+<script defer src="/js/widget.js?v=3"></script>
+<script defer src="/js/app-aurora.js?v=1"></script>
 <script defer src="/js/main.js?v=4"></script>
 <script defer src="/voo-connect-browser.js"></script>
 </head>
@@ -42,6 +51,9 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <linearGradient id="lgB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5A8CFF"/><stop offset=".5" stop-color="#2F6BFF"/><stop offset="1" stop-color="#1846DB"/></linearGradient>
+    <linearGradient id="auRing" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F6BFF"/><stop offset=".55" stop-color="#7C5CFF"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient>
+    <linearGradient id="auLine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2F6BFF"/><stop offset=".6" stop-color="#7C5CFF"/><stop offset="1" stop-color="#0EA5E9"/></linearGradient>
+    <linearGradient id="auArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7C5CFF" stop-opacity=".26"/><stop offset="1" stop-color="#2F6BFF" stop-opacity="0"/></linearGradient>
     <linearGradient id="tgG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#37BBFE"/><stop offset="1" stop-color="#1E96E8"/></linearGradient>
     <radialGradient id="casG" cx=".34" cy=".28" r=".85"><stop offset="0" stop-color="#9DBDFF"/><stop offset=".38" stop-color="#4B80FF"/><stop offset=".78" stop-color="#2052E6"/><stop offset="1" stop-color="#1638B8"/></radialGradient>
     <radialGradient id="casA" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#7DA6FF"/><stop offset="1" stop-color="#1F4FE0"/></radialGradient>
@@ -94,6 +106,7 @@
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4.5M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5M20 20v-4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="2" fill="currentColor"/><path d="m4 18 5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="7.5" width="16" height="12" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4v3.5M9 13.2v.6M15 13.2v.6M2 12.5v3M22 12.5v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="3.4" r="1.4" fill="currentColor"/></symbol>
     <symbol id="i-test" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
   </defs>
 </svg>
@@ -106,7 +119,7 @@
   <header class="hdr" id="hdr">
     <div class="wrap hdr-in">
       <a class="logo" href="#top" aria-label="Castvoo home"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></a>
-      <nav class="nav" aria-label="Main"><a href="#features" data-k="nf">Features</a><a href="#guide" data-k="nh">Setup guide</a><a href="#ai" data-k="na">AI</a><a href="#pricing" data-k="np">Pricing</a><a href="/blog" data-k="nb">Blog</a><a href="#faq" data-k="nq">FAQ</a></nav>
+      <nav class="nav" aria-label="Main"><a href="#features" data-k="nf">Features</a><a href="#bots">Bots</a><a href="#guide" data-k="nh">Setup guide</a><a href="#ai" data-k="na">AI</a><a href="#pricing" data-k="np">Pricing</a><a href="/blog" data-k="nb">Blog</a><a href="#faq" data-k="nq">FAQ</a></nav>
       <div class="hdr-r">
         <div class="lsw" id="lsw"></div>
         <a class="login" href="#login" data-out><svg><use href="#i-login"/></svg><span data-k="nl">Log in</span></a>
@@ -118,7 +131,7 @@
   </header>
   <div class="mnav" id="mnav"><div class="ov" data-close></div><div class="pn" role="dialog" aria-label="Menu">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span class="logo"><svg class="lm"><use href="#logo"/></svg><span class="wm">Cast<b>voo</b></span></span><button class="ib" type="button" data-close aria-label="Close menu"><svg><use href="#i-x"/></svg></button></div>
-    <a class="l" href="#features" data-close>Features <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#guide" data-close>Setup guide <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#ai" data-close>Cas, the AI helper <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#pricing" data-close>Pricing <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="/blog" data-close>Blog <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#faq" data-close>FAQ <svg width="18" height="18"><use href="#i-chev"/></svg></a>
+    <a class="l" href="#features" data-close>Features <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#bots" data-close>Bots you can build <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#guide" data-close>Setup guide <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#ai" data-close>Cas, the AI helper <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#pricing" data-close>Pricing <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="/blog" data-close>Blog <svg width="18" height="18"><use href="#i-chev"/></svg></a><a class="l" href="#faq" data-close>FAQ <svg width="18" height="18"><use href="#i-chev"/></svg></a>
     <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px"><div style="width:120px;align-self:center" data-cas="wave"></div><a class="btn b-blue" href="#signup" data-close data-out>Start free trial</a><a class="btn b-ghost" href="#login" data-close data-out>Log in</a><a class="btn b-blue" href="#app" data-close data-in hidden>Open dashboard</a></div>
   </div></div>
 
@@ -129,43 +142,128 @@
     <div class="gridbg"></div>
     <div class="wrap hero-in">
       <div class="hc">
-        <span class="chip"><span class="cb"><svg><use href="#i-tg"/></svg>Telegram</span><span class="ct" data-k="hc">Welcome bot · Broadcasts · Follow-ups</span></span>
-        <h1 class="h1" id="heroTitle">Welcome. Broadcast. Follow up. <em class="gtext">All on autopilot.</em></h1>
-        <p class="lead" id="heroSub">Greet everyone who asks to join, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links in a simple builder. Cas, the AI helper, writes the messages.</p>
+        <span class="chip"><span class="cb"><svg><use href="#i-tg"/></svg>Telegram</span><span class="ct" data-k="hc">Bot builder · Cas AI · 24/7 support</span></span>
+        <h1 class="h1" id="heroTitle">Broadcast, automate and build bots on Telegram. <em class="gtext">All on autopilot.</em></h1>
+        <p class="lead" id="heroSub">Welcome everyone who joins, send one message to all your subscribers, and let follow-ups and bots work for you, even while you sleep.</p>
+        <ul class="hfx" aria-label="What you can do"><li><span aria-hidden="true">✅</span><span data-k="hf1">Auto-accept join requests</span></li><li><span aria-hidden="true">📣</span><span data-k="hf2">Broadcasts</span></li><li><span aria-hidden="true">⏱</span><span data-k="hf3">Auto follow-ups</span></li><li><span aria-hidden="true">🤖</span><span data-k="hf4">Bot builder</span></li><li><span aria-hidden="true">✨</span><span data-k="hf5">Cas AI builds it for you</span></li></ul>
         <div class="hctas">
           <a class="btn b-blue hcta" href="#signup" id="heroCta"><span id="heroCtaT">Start my 7-day free trial</span><svg><use href="#i-arrow"/></svg></a>
           <div class="hsec"><a class="btn b-ghost hwatch" href="#how" id="heroWatch"><span class="hw-p"><svg><use href="#i-play"/></svg></span><span data-k="hw">Watch how it works</span></a><a class="hsetup" href="#guide"><span data-k="h2c">Watch the 40-second setup</span><svg><use href="#i-arrow"/></svg></a></div>
         </div>
-        <p class="trust"><span><svg><use href="#i-check"/></svg><span data-k="t1">No card needed</span></span><span><svg><use href="#i-check"/></svg><span data-k="t2">Free plan for 1 channel</span></span><span><svg><use href="#i-check"/></svg><span data-k="t3">Set up in about 5 minutes</span></span></p>
-        <nav class="hfeat" aria-label="What Castvoo does"><a href="#f-welcome"><svg><use href="#i-join"/></svg><span data-k="f1">Welcome bot</span></a><a href="#f-broadcasts"><svg><use href="#i-send"/></svg><span data-k="f2">Broadcasts</span></a><a href="#f-followups"><svg><use href="#i-clock"/></svg><span data-k="f3">Follow-up flows</span></a><a href="#how"><svg><use href="#i-drip"/></svg><span data-k="f4">Flow builder</span></a><a href="#ai"><svg><use href="#i-pencil"/></svg><span data-k="f5">AI writer</span></a></nav>
+        <p class="trust"><span><svg><use href="#i-check"/></svg><span data-k="t1">No card needed</span></span><span><svg><use href="#i-check"/></svg><span data-k="t2">Free plan with 2 bots</span></span><span><svg><use href="#i-check"/></svg><span data-k="t3">Set up in about 5 minutes</span></span></p>
       </div>
-      <div class="stage" aria-hidden="true">
-        <div class="halo"></div>
-        <div class="orb"><i style="left:-21px;top:40%"><svg><use href="#i-tg"/></svg></i><i style="right:6%;top:4%;color:var(--blue)"><svg style="width:20px;height:20px"><use href="#i-spark"/></svg></i><i style="right:-14px;top:64%;font-size:20px">💬</i><i style="left:16%;bottom:2%;font-size:20px">📣</i></div>
-        <div class="phone"><div class="notch"></div><div class="scr" id="heroScr"></div></div>
-        <div class="peeps"><div class="pc pc1" id="pc1"></div><div class="pc pc2" id="pc2"></div><div class="pc pc3" id="pc3"></div></div>
-        <div class="say" id="heroSay">Join request · answered in 1s ⚡</div>
-        <div class="cas-st" data-cas="wave"></div>
-        <span class="exl" style="left:4%;top:0">Example</span>
+      <!-- Hero photo stage: a real person holding the dashboard, an aurora glow, light across the screen and example
+           notifications that change every few seconds (site.js heroCards). Styles: css/site-home.css (hst-*) -->
+      <div class="stage" id="hst" aria-hidden="true">
+        <div class="hst-au"><i></i><i></i><i></i></div>
+        <div class="hst-fl">
+          <picture><source type="image/webp" srcset="/img/hero-person.webp?v=2"><img class="hst-img" src="/img/hero-person.jpg?v=2" width="880" height="1168" alt="" fetchpriority="high" decoding="async"></picture>
+          <span class="hst-sw"></span>
+        </div>
+        <div class="hst-n hst-n1"><span class="hst-ic">🎉</span><span class="hst-tx"><b>New subscriber</b><small>Amaka joined VIP Signals</small></span></div>
+        <div class="hst-n hst-n2"><span class="hst-ic">📣</span><span class="hst-tx"><b>Broadcast delivered</b><small>To 2,418 people</small></span></div>
+        <div class="hst-n hst-n3"><span class="hst-ic">✅</span><span class="hst-tx"><b>Join-check bot is live</b><small>Checks every new member</small></span></div>
+        <span class="exl hst-ex">Example</span>
+      </div>
+    </div>
+    <!-- Feature ticker: one dark strip that keeps moving (pauses on hover, off screen and for reduced motion). Styles: css/site-home.css (htk-*) -->
+    <div class="htk">
+      <div class="htk-tr">
+        <ul class="htk-g" aria-label="Features">
+          <li><svg class="g"><use href="#i-join"/></svg><span data-k="hf1">Auto-accept join requests</span></li>
+          <li><svg class="c"><use href="#i-send"/></svg><span data-k="hf2">Broadcasts</span></li>
+          <li><svg class="c"><use href="#i-clock"/></svg><span data-k="hf3">Auto follow-ups</span></li>
+          <li><svg class="g"><use href="#i-bot"/></svg><span data-k="hf4">Bot builder</span></li>
+          <li><svg class="g"><use href="#i-shield"/></svg><span data-k="tk1">Join-check</span></li>
+          <li><svg class="b"><use href="#i-help"/></svg><span data-k="tk2">Lead forms</span></li>
+          <li><svg class="g"><use href="#i-users"/></svg><span data-k="tk3">Referral bots</span></li>
+          <li><svg class="v"><use href="#i-spark"/></svg><span data-k="tk4">Cas AI</span></li>
+          <li><svg class="c"><use href="#i-chat"/></svg><span data-k="tk5">24/7 support</span></li>
+        </ul>
+        <ul class="htk-g" aria-hidden="true">
+          <li><svg class="g"><use href="#i-join"/></svg><span data-k="hf1">Auto-accept join requests</span></li>
+          <li><svg class="c"><use href="#i-send"/></svg><span data-k="hf2">Broadcasts</span></li>
+          <li><svg class="c"><use href="#i-clock"/></svg><span data-k="hf3">Auto follow-ups</span></li>
+          <li><svg class="g"><use href="#i-bot"/></svg><span data-k="hf4">Bot builder</span></li>
+          <li><svg class="g"><use href="#i-shield"/></svg><span data-k="tk1">Join-check</span></li>
+          <li><svg class="b"><use href="#i-help"/></svg><span data-k="tk2">Lead forms</span></li>
+          <li><svg class="g"><use href="#i-users"/></svg><span data-k="tk3">Referral bots</span></li>
+          <li><svg class="v"><use href="#i-spark"/></svg><span data-k="tk4">Cas AI</span></li>
+          <li><svg class="c"><use href="#i-chat"/></svg><span data-k="tk5">24/7 support</span></li>
+        </ul>
+      </div>
+    </div>
+    <!-- "What Castvoo does": the six jobs in one glance, right under the hero. Styles: css/site-home.css (wcd-*) -->
+    <div class="wcd" id="does" role="region" aria-labelledby="wcdT">
+      <div class="wrap">
+        <div class="wcd-box">
+          <div class="wcd-h"><span class="kick" id="wcdT">What Castvoo does</span><span class="wcd-247"><span class="sdot"></span>24/7 support on every plan</span></div>
+          <ul class="wcd-g">
+            <li><a class="wcd-c" href="#f-welcome"><span class="wcd-i"><svg><use href="#i-join"/></svg></span><span class="wcd-t"><b>Welcome bots</b><small>Auto-accept join requests and greet each person in a second.</small></span></a></li>
+            <li><a class="wcd-c" href="#f-broadcasts"><span class="wcd-i"><svg><use href="#i-send"/></svg></span><span class="wcd-t"><b>Broadcasts</b><small>One message to every subscriber, now or at 9am.</small></span></a></li>
+            <li><a class="wcd-c" href="#f-followups"><span class="wcd-i"><svg><use href="#i-clock"/></svg></span><span class="wcd-t"><b>Follow-ups</b><small>Day 1, 3 and 7 messages that send themselves.</small></span></a></li>
+            <li><a class="wcd-c" href="#bots"><span class="wcd-i"><svg><use href="#i-bot"/></svg></span><span class="wcd-t"><b>Bot builder</b><small>Chat bots that start when someone taps Start in your bot.</small></span></a></li>
+            <li><a class="wcd-c wcd-ai" href="#bots-cas"><span class="wcd-i"><svg><use href="#i-spark"/></svg></span><span class="wcd-t"><b>Build with Cas AI</b><small>Say what you want in plain words. Cas builds it with you.</small></span></a></li>
+            <li><a class="wcd-c" href="#bots"><span class="wcd-i"><svg><use href="#i-shield"/></svg></span><span class="wcd-t"><b>Join-check, leads, referrals</b><small>"Join my channel first", lead forms to CSV, invite-a-friend.</small></span></a></li>
+          </ul>
+        </div>
       </div>
     </div>
     <div class="wrap"><div class="sendsto"><span style="color:var(--mut2)">Works with</span><span><span class="bx" style="background:var(--tg-s)"><svg width="22" height="22"><use href="#i-tg"/></svg></span>Telegram bots</span><span><span class="bx" style="background:var(--tg-s)"><svg width="22" height="22"><use href="#i-tg"/></svg></span>Channels</span><span><span class="bx" style="background:var(--tg-s)"><svg width="22" height="22"><use href="#i-tg"/></svg></span>Groups</span></div></div>
   </section>
 
-  <!-- "See how it works": the real guide videos. Posters only until someone taps; js/app-guides.js opens its player (data-vset="site"). Styles: "How it works" block in css/castvoo.css -->
-  <section class="sec how" id="how" aria-labelledby="howT">
+
+  <!-- "Bots you can build": the bot types with plan badges + a Telegram chat that plays a bot (site.js siteBots). Styles: css/site-home.css (byb-*) -->
+  <section class="sec byb" id="bots" aria-labelledby="bybT">
     <div class="wrap">
-      <div class="center rv"><span class="kick">See it work</span><h2 class="h2" id="howT">Watch a join get <em class="gtext">greeted live.</em></h2><p class="lead">Real dashboard recordings with voice and captions. Start with the Welcome Flow. It takes under 2 minutes to watch.</p></div>
+      <div class="center rv"><span class="kick">Bot builder</span><h2 class="h2" id="bybT">Pick a bot. <em class="gtext">Switch it on.</em></h2><p class="lead">Start from a ready template, change the words, and it works day and night. Chat bots start when someone taps Start in your own Telegram bot, from an ad, a post or a link.</p></div>
+      <div class="byb-in">
+        <ul class="byb-g">
+          <li class="byb-c rv"><span class="byb-i"><svg><use href="#i-join"/></svg></span><span class="byb-t"><b>Welcome bot</b><small>Greets everyone who asks to join, then lets them in.</small></span><span class="byb-p">Free</span></li>
+          <li class="byb-c rv"><span class="byb-i"><svg><use href="#i-check"/></svg></span><span class="byb-t"><b>Join my channel first</b><small>Checks they joined your channel before the next step.</small></span><span class="byb-p">Free</span></li>
+          <li class="byb-c rv"><span class="byb-i"><svg><use href="#i-gift"/></svg></span><span class="byb-t"><b>Free gift</b><small>Sends your lead magnet the moment they tap Start from your ad.</small></span><span class="byb-p">Free</span></li>
+          <li class="byb-c rv"><span class="byb-i"><svg><use href="#i-menu"/></svg></span><span class="byb-t"><b>Menu with buttons</b><small>Answers common questions with buttons people tap.</small></span><span class="byb-p">Free</span></li>
+          <li class="byb-c rv"><span class="byb-i"><svg><use href="#i-help"/></svg></span><span class="byb-t"><b>Ask a few questions</b><small>Collects name, phone or email, checks it, and exports to CSV.</small></span><span class="byb-p up">Starter+</span></li>
+          <li class="byb-c rv"><span class="byb-i"><svg><use href="#i-send"/></svg></span><span class="byb-t"><b>Broadcast to bot subscribers</b><small>Message everyone who started a bot, in one send.</small></span><span class="byb-p up">Starter+</span></li>
+          <li class="byb-c rv"><span class="byb-i"><svg><use href="#i-users"/></svg></span><span class="byb-t"><b>Invite friends for a reward</b><small>Each person gets their own link. Reach the goal, get the reward.</small></span><span class="byb-p top">Growth+</span></li>
+        </ul>
+        <div class="byb-side rv">
+          <div class="byb-ph" aria-hidden="true">
+            <div class="byb-top"><span class="byb-av"><svg><use href="#logo"/></svg></span><div><b>Your bot</b><small>bot</small></div></div>
+            <div class="byb-chat" id="bybChat">
+              <div class="byb-m me">/start</div>
+              <div class="byb-m">Hi Ada 👋 Your free guide is ready. Join the channel first:<span class="byb-k"><i>📣 Open the channel</i><i class="tap">I've joined ✅</i></span></div>
+              <div class="byb-m sys">Ada joined the channel ✓</div>
+              <div class="byb-m">🎁 Here it is. Enjoy!<span class="byb-k"><i>📘 Open my free guide</i></span></div>
+              <div class="byb-m">Quick one: what's your email?</div>
+              <div class="byb-m me">ada@mail.com</div>
+              <div class="byb-m">Thanks Ada! Invite 3 friends to unlock the bonus lesson 👇<span class="byb-k"><i>📤 Share my link</i></span></div>
+            </div>
+            <span class="exl" style="right:12px;top:12px">Example</span>
+          </div>
+          <div class="byb-cas" id="bots-cas">
+            <div class="byb-casf" data-cas="wave"></div>
+            <div class="byb-cast"><b>Rather not build it yourself?</b><p>Tell Cas “a bot that gives my free guide after they join my channel” and Cas builds it with you, step by step.</p><a class="btn b-blue sm" href="#signup" data-out>Build my first bot free<svg><use href="#i-arrow"/></svg></a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- "See how it works": the real guide videos. Posters only until someone taps; js/app-guides.js opens its player (data-vset="site"). Styles: "How it works" block in css/castvoo.css -->
+  <section class="sec how hl-grid" id="how" aria-labelledby="howT">
+    <div class="wrap">
+      <div class="center rv"><span class="kick">See it work</span><h2 class="h2" id="howT">Watch a join get <em class="gtext">greeted live.</em></h2><p class="lead">Real dashboard recordings with voice and captions. Start with Cas Builder: your welcome bot in under 2 minutes.</p></div>
       <div class="how-g">
-        <button type="button" class="how-f rv" data-vguide="welcome-flow" data-vset="site" aria-label="Play video: Build a Welcome Flow (1:44)">
-          <span class="how-fr"><img src="/videos/welcome-flow.jpg?v=1" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl big"><i></i><svg><use href="#i-play"/></svg></span></span>
-          <span class="how-fb"><span class="how-tag">Start here</span><span class="how-ft"><b>Build a Welcome Flow</b><small>Greet, let in and follow up everyone who asks to join.</small></span><span class="how-len"><span data-len>1:44</span><small>Voice + captions</small></span></span>
+        <button type="button" class="how-f rv" data-vguide="cas-builder" data-vset="site" aria-label="Play video: Build your welcome bot with Cas (1:21)">
+          <span class="how-fr"><img src="/videos/cas-builder.jpg?v=1" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl big"><i></i><svg><use href="#i-play"/></svg></span></span>
+          <span class="how-fb"><span class="how-tag">Start here</span><span class="how-ft"><b>Build your welcome bot with Cas</b><small>Tap a few answers. Cas builds the whole bot, you watch it play and switch it on.</small></span><span class="how-len"><span data-len>1:21</span><small>Voice + captions</small></span></span>
         </button>
         <div class="how-l">
+          <button type="button" class="how-c rv" data-vguide="welcome-flow" data-vset="site" aria-label="Play video: Build it yourself (1:44)"><span class="how-th"><img src="/videos/welcome-flow.jpg?v=3" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl"><svg><use href="#i-play"/></svg></span><span class="how-d" data-len>1:44</span></span><span class="how-cb"><b>Build it yourself</b><small>Messages, Tap Start, buttons and a test, step by step.</small><span class="how-go"><svg><use href="#i-play"/></svg>Play video</span></span></button>
           <button type="button" class="how-c rv" data-vguide="connect-bot" data-vset="site" aria-label="Play video: Connect your Telegram bot (1:15)"><span class="how-th"><img src="/videos/connect-bot.jpg?v=1" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl"><svg><use href="#i-play"/></svg></span><span class="how-d" data-len>1:15</span></span><span class="how-cb"><b>Connect your Telegram bot</b><small>Make a bot with @BotFather and paste its token.</small><span class="how-go"><svg><use href="#i-play"/></svg>Play video</span></span></button>
-          <button type="button" class="how-c rv" data-vguide="send-broadcast" data-vset="site" aria-label="Play video: Send a broadcast (1:19)"><span class="how-th"><img src="/videos/send-broadcast.jpg?v=1" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl"><svg><use href="#i-play"/></svg></span><span class="how-d" data-len>1:19</span></span><span class="how-cb"><b>Send a broadcast</b><small>One personal message to all your subscribers, now or scheduled.</small><span class="how-go"><svg><use href="#i-play"/></svg>Play video</span></span></button>
-          <button type="button" class="how-c rv" data-vguide="wallet-plans" data-vset="site" aria-label="Play video: Wallet, plans and Free (1:24)"><span class="how-th"><img src="/videos/wallet-plans.jpg?v=1" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl"><svg><use href="#i-play"/></svg></span><span class="how-d" data-len>1:24</span></span><span class="how-cb"><b>Wallet, plans and Free</b><small>Top up, pick a plan, and see what Free includes.</small><span class="how-go"><svg><use href="#i-play"/></svg>Play video</span></span></button>
-          <p class="how-n"><svg><use href="#i-check"/></svg>All 9 guides are waiting in your dashboard.</p>
+          <button type="button" class="how-c rv" data-vguide="send-broadcast" data-vset="site" aria-label="Play video: Send a broadcast (1:19)"><span class="how-th"><img src="/videos/send-broadcast.jpg?v=2" alt="" width="960" height="540" loading="lazy" decoding="async"><span class="how-pl"><svg><use href="#i-play"/></svg></span><span class="how-d" data-len>1:19</span></span><span class="how-cb"><b>Send a broadcast</b><small>One personal message to all your subscribers, now or scheduled.</small><span class="how-go"><svg><use href="#i-play"/></svg>Play video</span></span></button>
+          <p class="how-n"><svg><use href="#i-check"/></svg>All 13 guides are waiting in your dashboard.</p>
         </div>
       </div>
     </div>
@@ -322,9 +420,9 @@
 
   <div class="wrap" id="banners"></div>
 
-  <section class="sec" id="pricing" style="background:#fff;border-block:1px solid var(--line)">
+  <section class="sec hl-pr" id="pricing">
     <div class="wrap">
-      <div class="center rv"><span class="kick">Pricing</span><h2 class="h2" id="prTitle">Simple prices. <em class="gtext">Start free.</em></h2><p class="lead" id="prSub">Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup or add-on fees.</p>
+      <div class="center rv"><span class="kick">Pricing</span><h2 class="h2" id="prTitle">Simple prices. <em class="gtext">Start free.</em></h2><p class="lead" id="prSub">Free runs 2 bots and welcomes 500 join requests a month on one channel. Paid plans from $19 add more bots, broadcasts, follow-ups, lead forms and Cas. No setup fees.</p>
         <div class="billtog" id="billTog"><button type="button" class="on" data-b="m">Monthly</button><button type="button" data-b="y">Yearly <small>2 months free</small></button></div></div>
       <div class="plans" id="plansBox"></div>
       <div class="prnotes" id="prNotes"></div>
@@ -338,7 +436,7 @@
         <div style="display:flex;flex-direction:column;gap:16px;position:relative;z-index:1">
           <span class="kick" style="color:#CFE0FF">Refer and earn</span>
           <h2 class="h2" style="color:#fff">Get paid when <em class="sky">your friends grow.</em></h2>
-          <p class="lead" id="refText">Earn 10 to 30% of every plan payment from people you invite, every month, for as long as they pay. Use it on your plan, or withdraw from $300 in USDT or Bitcoin.</p>
+          <p class="lead" id="refText">Earn up to 15% of every plan payment from people you invite, every month, for as long as they pay. Use it on your plan, or withdraw from $300 in USDT or Bitcoin.</p>
           <div><a class="btn b-w" href="#signup" id="refCta">Get my referral link</a></div>
         </div>
         <div class="tiers" id="refTiers" style="z-index:1"></div>
@@ -362,9 +460,9 @@
 
   <section class="sec" style="padding-top:0" data-shot="closer">
     <div class="wrap">
-      <div class="close rv">
+      <div class="close hl-cl rv">
         <div class="mesh" style="width:420px;height:420px;left:-10%;top:-40%;background:rgba(47,107,255,.45)"></div>
-        <div style="position:relative;display:flex;flex-direction:column;gap:18px"><h2 class="h2">Your ads keep bringing people. <em class="sky">Greet every one.</em></h2><p class="lead">Connect your channel, switch on a Welcome Flow, and your next join request gets a hello in seconds. Free to start, no card.</p><div><a class="btn b-blue" href="#signup" data-ctat>Start my 7-day free trial<svg><use href="#i-arrow"/></svg></a></div></div>
+        <div style="position:relative;display:flex;flex-direction:column;gap:18px"><h2 class="h2">Your ads keep bringing people. <em class="sky">Greet every one.</em></h2><p class="lead">Connect your channel, switch on a Welcome bot or pick a bot template, and your next join gets a hello in seconds. Free to start, no card.</p><div><a class="btn b-blue" href="#signup" data-ctat>Start my 7-day free trial<svg><use href="#i-arrow"/></svg></a></div></div>
         <div class="cc" data-cas="happy"></div>
       </div>
     </div>
@@ -413,24 +511,24 @@
       <button type="button" class="cnb" data-connect><span class="cnp"><svg><use href="#i-plus"/></svg></span><span><b>Connect Telegram</b><small>Add a channel, group or bot</small></span></button>
       <nav class="snav" id="snav">
         <button type="button" class="si" data-v="overview"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-home"/></svg></span><span class="lb">Home<small>Everything at a glance</small></span></button>
-        <button type="button" class="si" data-v="flows"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-join"/></svg></span><span class="lb">Welcome Flows<small>Greet new joiners</small></span><span class="tag" id="navFlows">New</span></button>
-        <button type="button" class="si" data-v="ai"><span class="ti" style="--b:#E8F1FF;--c:#2F6BFF"><span class="mic" data-cas="mini"></span></span><span class="lb">Ask Cas<small>Your AI helper</small></span><span class="tag">AI</span></button>
+        <button type="button" class="si" data-v="flows"><span class="ti" style="--b:#E3F9F0;--c:#12B886"><svg><use href="#i-join"/></svg></span><span class="lb">🤖 Bots<small>Welcome &amp; chat bots</small></span><span class="tag" id="navFlows">New</span></button>
+        <button type="button" class="si" data-v="ai"><span class="ti" style="--b:#F0ECFF;--c:#7C5CFF"><span class="mic" data-cas="mini"></span></span><span class="lb">Ask Cas<small>Your AI helper</small></span><span class="tag">AI</span></button>
         <span class="grp">Send</span>
-        <button type="button" class="si" data-v="broadcast"><span class="ti" style="--b:#FFF1E6;--c:#F76707"><svg><use href="#i-send"/></svg></span><span class="lb">Send a message<small>One message to many people</small></span></button>
-        <button type="button" class="si" data-v="drips"><span class="ti" style="--b:#E2F6EE;--c:#0E9F6E"><svg><use href="#i-drip"/></svg></span><span class="lb">Auto follow-ups<small>Messages that send themselves</small></span><span class="tag" id="navDrips" hidden></span></button>
-        <button type="button" class="si" data-v="calendar"><span class="ti" style="--b:#FDECF4;--c:#D6336C"><svg><use href="#i-cal"/></svg></span><span class="lb">Calendar<small>What goes out and when</small></span></button>
+        <button type="button" class="si" data-v="broadcast"><span class="ti" style="--b:#E1F4FD;--c:#0EA5E9"><svg><use href="#i-send"/></svg></span><span class="lb">Send a message<small>One message to many people</small></span></button>
+        <button type="button" class="si" data-v="drips"><span class="ti" style="--b:#E1F4FD;--c:#0891B2"><svg><use href="#i-drip"/></svg></span><span class="lb">Auto follow-ups<small>Messages that send themselves</small></span><span class="tag" id="navDrips" hidden></span></button>
+        <button type="button" class="si" data-v="calendar"><span class="ti" style="--b:#E1F4FD;--c:#0EA5E9"><svg><use href="#i-cal"/></svg></span><span class="lb">Calendar<small>What goes out and when</small></span></button>
         <span class="grp">Your people</span>
         <button type="button" class="si" data-v="bots"><span class="ti" style="--b:#E5F4FC;--c:#29A9EB"><svg class="tgx"><use href="#i-tg"/></svg></span><span class="lb">Channels &amp; bots<small>Your Telegram connections</small></span></button>
-        <button type="button" class="si" data-v="subscribers"><span class="ti" style="--b:#F1ECFF;--c:#7048E8"><svg><use href="#i-users"/></svg></span><span class="lb">Subscribers<small>Everyone you can reach</small></span></button>
-        <button type="button" class="si" data-v="audiences"><span class="ti" style="--b:#FFF6D9;--c:#E67700"><svg><use href="#i-seg"/></svg></span><span class="lb">Audiences<small>Groups of people to target</small></span></button>
-        <button type="button" class="si" data-v="clicks"><span class="ti" style="--b:#E6FCF5;--c:#0CA678"><svg><use href="#i-link"/></svg></span><span class="lb">Clicks<small>Who tapped your buttons</small></span></button>
+        <button type="button" class="si" data-v="subscribers"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-users"/></svg></span><span class="lb">Subscribers<small>Everyone you can reach</small></span></button>
+        <button type="button" class="si" data-v="audiences"><span class="ti" style="--b:#EAF0FF;--c:#4C6EF5"><svg><use href="#i-seg"/></svg></span><span class="lb">Audiences<small>Groups of people to target</small></span></button>
+        <button type="button" class="si" data-v="clicks"><span class="ti" style="--b:#FFEFE2;--c:#F76707"><svg><use href="#i-link"/></svg></span><span class="lb">Clicks<small>Who tapped your buttons</small></span></button>
         <span class="grp">Money</span>
-        <button type="button" class="si" data-v="wallet"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-wallet"/></svg></span><span class="lb">Wallet and plan<small>Balance, top-ups and plan</small></span></button>
-        <button type="button" class="si" data-v="earn" data-feat="referrals"><span class="ti" style="--b:#E2F6EE;--c:#0E9F6E"><svg><use href="#i-gift"/></svg></span><span class="lb">Earn<small>Invite friends, get paid</small></span><span class="tag" id="navEarn"></span></button>
+        <button type="button" class="si" data-v="wallet"><span class="ti" style="--b:#FFF4DA;--c:#F59F00"><svg><use href="#i-wallet"/></svg></span><span class="lb">Wallet and plan<small>Balance, top-ups and plan</small></span></button>
+        <button type="button" class="si" data-v="earn" data-feat="referrals"><span class="ti" style="--b:#E3F9F0;--c:#12B886"><svg><use href="#i-gift"/></svg></span><span class="lb">Earn<small>Invite friends, get paid</small></span><span class="tag" id="navEarn"></span></button>
         <span class="grp">Account</span>
         <button type="button" class="si" data-v="guides"><span class="ti" style="--b:#EAF0FF;--c:#2F6BFF"><svg><use href="#i-play"/></svg></span><span class="lb">Guides<small>Short video tutorials</small></span><span class="tag" id="navGuides">8</span></button>
-        <button type="button" class="si" data-v="help"><span class="ti" style="--b:#FFF0F0;--c:#E5484D"><svg><use href="#i-help"/></svg></span><span class="lb">Help<small>24/7 customer support</small></span><span class="tag r" id="navHelp" hidden>New</span></button>
-        <button type="button" class="si" data-v="settings"><span class="ti" style="--b:#F1F3F5;--c:#495057"><svg><use href="#i-gear"/></svg></span><span class="lb">Settings<small>Profile, team and data</small></span></button>
+        <button type="button" class="si" data-v="help"><span class="ti" style="--b:#EAF0FF;--c:#4C6EF5"><svg><use href="#i-help"/></svg></span><span class="lb">Help<small>24/7 customer support</small></span><span class="tag r" id="navHelp" hidden>New</span></button>
+        <button type="button" class="si" data-v="settings"><span class="ti" style="--b:#F1F4F8;--c:#64748B"><svg><use href="#i-gear"/></svg></span><span class="lb">Settings<small>Profile, team and data</small></span></button>
       </nav>
       <div class="zx"><span class="zxl">More from Zedapex</span>
         <button type="button" class="zxi" style="background:#EFEBFF;color:#4A2FE0" data-go="joinvoo"><svg width="28" height="28" style="flex:none"><use href="#jvLogo"/></svg>Joinvoo<span class="pill" style="background:#fff;color:#5B3DF5">Tracking</span></button>
@@ -458,7 +556,7 @@
       <button type="button" data-v="overview"><svg><use href="#i-home"/></svg>Home</button>
       <button type="button" data-v="ai"><span class="mic" data-cas="mini"></span>Cas</button>
       <button type="button" class="plus2" data-create aria-label="Create or connect"><svg><use href="#i-plus"/></svg></button>
-      <button type="button" data-v="flows"><svg><use href="#i-join"/></svg>Flows</button>
+      <button type="button" data-v="flows"><svg><use href="#i-join"/></svg>Bots</button>
       <button type="button" data-menu><svg><use href="#i-menu"/></svg>More<span class="ddot" id="dockDot" hidden></span></button>
     </nav>
   </div>

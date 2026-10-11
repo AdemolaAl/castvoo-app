@@ -45,7 +45,7 @@ describe('public endpoints', () => {
 
   it('public methods depend on the country', async () => {
     const ng = await app.client().get('/api/public/methods?country=NG');
-    assert.deepEqual(ng.body.methods.map((m) => m.key), ['paystack_ng', 'gatevoo']);
+    assert.deepEqual(ng.body.methods.map((m) => m.key), ['flw_ng', 'gatevoo']);
     const ke = await app.client().get('/api/public/methods?country=KE');
     assert.deepEqual(ke.body.methods.map((m) => m.key), ['flw_ke', 'gatevoo']);
     const unknown = await app.client().get('/api/public/methods?country=ZZ');
@@ -127,7 +127,8 @@ describe('public endpoints', () => {
     const box = { PAGES: {}, document: { addEventListener() {} } };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'app-guides.js'), 'utf8') + '\n;this.VGUIDES = VGUIDES; this.VG_SETS = VG_SETS; this.vgTime = vgTime;', box);
     const cards = [...sec.matchAll(/data-vguide="([a-z-]+)" data-vset="site"[\s\S]*?data-len>([0-9:]+)</g)].map((m) => [m[1], m[2]]);
-    assert.deepEqual(cards.map((c) => c[0]), ['welcome-flow', 'connect-bot', 'send-broadcast', 'wallet-plans']);
+    assert.deepEqual(cards.map((c) => c[0]), ['cas-builder', 'welcome-flow', 'connect-bot', 'send-broadcast']);
+    assert.match(sec, /All 13 guides/);
     assert.deepEqual(cards.map((c) => c[0]), [...box.VG_SETS.site]);
     for (const [id, len] of cards) {
       const g = box.VGUIDES.find((x) => x.id === id);
@@ -240,7 +241,7 @@ describe('public endpoints', () => {
     await app.db.query("update plans set tagline = 'Our growth line.' where code = 'growth'");
     await seed.run();
     assert.equal(await get('hero_title'), seed.CONTENT.hero_title);
-    assert.equal(seed.CONTENT.hero_title, 'Welcome. Broadcast. Follow up. *All on autopilot.*');
+    assert.equal(seed.CONTENT.hero_title, 'Broadcast, automate and build bots on Telegram. *All on autopilot.*');
     assert.equal(await get('hero_cta'), 'Start my 7-day free trial');
     assert.equal(await get('footer_tagline'), 'Every Telegram join, greeted and followed up.');
     assert.equal(await get('announcement_link'), '#how', 'the link follows its untouched text');
@@ -255,5 +256,55 @@ describe('public endpoints', () => {
     await app.db.query("update site_content set value = '#ai' where key = 'announcement_link'");
     await seed.run();
     assert.equal(await get('announcement_link'), '#ai');
+  });
+});
+
+/* The homepage hero must always be visible at rest. Regression: the Cas Builder's panel was styled with the bare
+ * class `.cb`, which the hero's Telegram badge also uses, so on phones the badge became a fixed full-screen box that
+ * covered the headline, subheadline, Start button and trust line. */
+describe('homepage hero stays visible', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const PUB = path.join(__dirname, '..', '..', 'public');
+  const html = fs.readFileSync(path.join(PUB, 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(PUB, 'css', 'castvoo.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const hero = html.slice(html.indexOf('<section class="hero" id="top">'), html.indexOf('</section>', html.indexOf('<section class="hero" id="top">')));
+  const hc = hero.slice(hero.indexOf('<div class="hc">'), hero.indexOf('<div class="stage"'));
+  // Every rule as [selector, declarations], including the ones inside @media blocks.
+  const rules = [];
+  for (const m of css.matchAll(/([^{}@;]+)\{([^{}]*)\}/g)) rules.push([m[1].trim(), m[2]]);
+
+  it('has the hero markup with nothing starting hidden', () => {
+    assert.ok(hc.includes('id="heroTitle"') && hc.includes('id="heroCta"') && hc.includes('class="trust"'));
+    assert.doesNotMatch(hc, /class="[^"]*\b(rv|reveal|fade|in-view)\b/, 'no scroll-reveal classes on the first screen');
+    assert.doesNotMatch(hc, /\shidden[\s>=]/, 'no hidden attribute in the hero copy');
+    assert.doesNotMatch(hc, /style="[^"]*(opacity\s*:\s*0|visibility\s*:\s*hidden|display\s*:\s*none)/);
+  });
+
+  it('no stylesheet rule written for another component can hide or move the hero copy', () => {
+    const classes = new Set([...hc.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1].split(/\s+/)).filter(Boolean));
+    const bad = [];
+    for (const [sel, decl] of rules) {
+      for (const one of sel.split(',').map((s) => s.trim())) {
+        // An unscoped rule for a class the hero uses: ".cb", ".chip:hover", ".lead.x"...
+        const m = /^\.([\w-]+)(?=[.:[]|$)[^\s>+~]*$/.exec(one);
+        if (!m || !classes.has(m[1]) || m[1] === 'hsetup') continue; // the secondary "40-second setup" link folds away on phones on purpose
+        if (/position\s*:\s*(fixed|absolute)|opacity\s*:\s*0(?![.\d])|visibility\s*:\s*hidden|display\s*:\s*none|height\s*:\s*0(?![.\d])/.test(decl)) bad.push(one + '{' + decl.trim().slice(0, 80) + '}');
+      }
+    }
+    assert.deepEqual(bad, []);
+  });
+
+  it('the Cas Builder panel uses its own class name', () => {
+    const bare = rules.filter(([sel]) => sel.split(',').some((s) => /^\.cb(?![\w-])/.test(s.trim())));
+    assert.deepEqual(bare.map(([s]) => s), [], 'the bare .cb class belongs to badges and chat bubbles');
+    assert.match(fs.readFileSync(path.join(PUB, 'js', 'app-cas-builder.js'), 'utf8'), /class="cb-win"/);
+  });
+
+  it('the support launcher stays out of the way while the hero is on screen', () => {
+    const w = fs.readFileSync(path.join(PUB, 'js', 'widget.js'), 'utf8');
+    assert.match(w, /#top \.hc/);
+    assert.match(w, /classList\.toggle\('away'/);
+    assert.ok(rules.some(([s, d]) => s === '.swg.away' && /visibility\s*:\s*hidden/.test(d)));
   });
 });

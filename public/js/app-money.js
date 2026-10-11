@@ -7,8 +7,8 @@
  *      GET/POST /api/app/plan, /api/app/plan/cancel, /api/app/coupon, GET /api/referrals, /use, /withdraw
  */
 
-const TX_ICON = { topup: ['↓', '#E2F6EE'], bonus: ['🎁', '#FCF2DE'], plan: ['↑', '#F0F3FA'], refund: ['↩', '#E5F4FC'], referral_credit: ['🎁', '#EFEBFF'], adjustment: ['±', '#F0F3FA'] };
-const TX_NAME = { topup: 'Top up', bonus: 'Top-up bonus', plan: 'Plan payment', refund: 'Refund', referral_credit: 'Referral earnings', adjustment: 'Adjustment' };
+const TX_ICON = { topup: ['↓', '#E2F6EE'], bonus: ['🎁', '#FCF2DE'], plan: ['↑', '#F0F3FA'], refund: ['↩', '#E5F4FC'], referral_credit: ['🎁', '#EFEBFF'], adjustment: ['±', '#F0F3FA'], cas_credits: ['💬', '#EAF0FF'] };
+const TX_NAME = { topup: 'Top up', bonus: 'Top-up bonus', plan: 'Plan payment', refund: 'Refund', referral_credit: 'Referral earnings', adjustment: 'Adjustment', cas_credits: 'Cas credits' };
 const PROVIDER = { paystack: 'Paystack', flutterwave: 'Flutterwave', gatevoo: 'Gatevoo (crypto)', manual_crypto: 'Crypto', manual: 'Manual payment' };
 /* Colours come from the admin. Only #RRGGBB goes into a style attribute. */
 const safeColor = (c, d = '#0B1430') => (/^#[0-9a-fA-F]{6}$/.test(String(c || '')) ? c : d);
@@ -23,6 +23,8 @@ PAGES.wallet = {
     if (q.ref) { checkPayment(q.ref); history.replaceState(null, '', '#app/wallet'); }
     const [w, p] = await Promise.all([GET('/api/wallet'), GET('/api/app/plan')]);
     if (!alive()) return;
+    // Deep links from the support chat: #app/wallet?topup=1 opens the top-up window, ?plans=1 the plans sheet.
+    if (q.topup || q.plans) { history.replaceState(null, '', '#app/wallet'); later(250, () => { if (!alive()) return; if (q.topup && CFG.features.topups !== false) openTopup(); else if (q.plans) planSheet(p); }); }
     APP.state.plan = p; APP.state.wallet = { cash: w.cash, bonus: w.bonus, total: w.total }; shellUI();
     const planOnly = planPrice(p);
     // Extra team seats renew with the plan, in the same wallet payment.
@@ -41,7 +43,7 @@ PAGES.wallet = {
     const rows = (w.transactions || []);
     el.innerHTML = '<div class="box balc"><div class="money" aria-hidden="true" data-money="12" data-h="260"></div><div class="mesh" style="width:300px;height:300px;right:-6%;top:-50%;background:rgba(110,195,255,.5)"></div>' +
       '<div class="bl"><small>Wallet balance</small><div class="bal tnum" id="wB">$0.00</div><small>' + money(w.cash) + ' cash' + (w.bonus ? ' · ' + money(w.bonus) + ' bonus credit (for plans only)' : '') + '</small><small>' + renew + '</small>' +
-      '<div class="ac">' + (CFG.features.topups !== false ? '<button type="button" class="btn b-w" data-topup>' + icon('plus') + 'Top up</button>' : '') + (CFG.features.referrals !== false ? '<button type="button" class="btn b-g" data-go="earn">' + icon('gift') + 'Earn ' + (CFG.referral.rates || [10])[0] + '%+</button>' : '') + '</div></div><div class="wart" data-art="wallet"></div></div>' +
+      '<div class="ac">' + (CFG.features.topups !== false ? '<button type="button" class="btn b-w" data-topup>' + icon('plus') + 'Top up</button>' : '') + (CFG.features.referrals !== false ? '<button type="button" class="btn b-g" data-go="earn">' + icon('gift') + 'Earn up to ' + Math.max(...(CFG.referral.rates || [15])) + '%</button>' : '') + '</div></div><div class="wart" data-art="wallet"></div></div>' +
       (short ? '<div class="pban warn"><span class="pbi">⚠️</span><div style="flex:1"><b>Your next renewal needs ' + usd(price) + '</b><p>You have ' + money(w.total) + '. Top up before ' + fmtDate(p.period_end, false) + ' so sending doesn\'t pause.</p></div><button type="button" class="btn b-blue xs" data-topup>Top up</button></div>' : '') +
       ((w.pending || []).length ? '<div class="box"><div class="bh"><h3>Payments in progress</h3></div>' + w.pending.map((x) => '<div class="txr"><span class="ti" style="background:var(--warn-s)">⏳</span><div class="tx"><b>' + money(x.amount) + ' · ' + esc(x.provider === 'manual' ? x.method_label || PROVIDER.manual : PROVIDER[x.provider] || x.provider) + (x.coin ? ' ' + esc(x.coin) : '') + '</b><small>Started ' + ago(x.created_at) + (x.provider === 'manual_crypto' ? (x.txid ? ' · transaction ID sent, the team is checking it' : ' · waiting for your transaction ID') : x.provider === 'manual' ? (x.submitted ? ' · sent, the team is checking it' : ' · waiting for your payment') : '') + '</small></div>' + (x.provider === 'manual_crypto' ? (x.txid ? '' : '<button type="button" class="btn b-blue xs" data-txid="' + esc(x.reference) + '">Add transaction ID</button>') : x.provider === 'manual' ? (x.submitted ? '' : '<button type="button" class="btn b-blue xs" data-man="' + esc(x.reference) + '">Finish payment</button>') : '<button type="button" class="btn b-ghost xs" data-chk="' + esc(x.reference) + '">Check now</button>') + '</div>').join('') + '</div>' : '') +
       '<div class="dg"><div class="box c7"><div class="bh"><h3>Wallet activity</h3><span class="hint">Newest first</span></div><div>' + (rows.length ? rows.map((t) => { const ic = TX_ICON[t.kind] || ['•', '#F0F3FA']; const pos = t.amount > 0; return '<div class="txr"><span class="ti" style="background:' + ic[1] + ';color:' + (pos ? 'var(--ok)' : 'var(--mut)') + ';font-weight:800">' + ic[0] + '</span><div class="tx"><b>' + esc(t.note || TX_NAME[t.kind] || t.kind) + '</b><small>' + fmtDate(t.created_at) + (t.method ? ' · ' + esc(t.method) : '') + '</small></div><span class="am" style="color:' + (pos ? 'var(--ok)' : 'var(--ink)') + '">' + (pos ? '+' : '−') + money(Math.abs(t.amount)) + '</span></div>'; }).join('') : emptyBox({ plain: 1, emoji: '👛', title: 'No wallet activity yet', text: 'Top-ups and plan payments show up here.' })) + '</div></div>' +
@@ -177,19 +179,24 @@ function openUpgrade(o = {}) {
     if (o.limit === 'flows' && !(x.flows < 0 || x.flows > (L.flows ?? 0))) return false;
     if (o.limit === 'flow_steps' && !(x.flow_steps < 0 || x.flow_steps > (L.flow_steps ?? 0))) return false;
     if (o.limit === 'join_requests' && !(x.join_requests < 0 || x.join_requests > (L.join_requests ?? 0))) return false;
+    const LB = L.bots || {};
+    if (o.limit === 'bots' && x.bots && !(x.bots.max < 0 || x.bots.max > (LB.max_bots ?? 0))) return false;
+    if (o.limit === 'bot_buttons' && x.bots && !(x.bots.menu_buttons < 0 || x.bots.menu_buttons > (LB.menu_buttons ?? 0))) return false;
     return st.status === 'trial' || x.price_month > (cur.price_month || 0);
   };
   const list = all.filter(better).slice(0, 2);
   const facts = (x) => {
     const f = [];
     if (x.join_requests != null) f.push((x.join_requests < 0 ? 'Unlimited' : fmt(x.join_requests)) + ' join requests a month');
-    if (x.flows != null) f.push((x.flows < 0 ? 'Unlimited' : fmt(x.flows)) + ' Welcome Flows, ' + (x.flow_steps < 0 ? 'unlimited' : fmt(x.flow_steps)) + ' steps each');
+    // Bots switched on at once (not the same as connected Telegram bots, channels and groups: docs/BOTS-PRICING.md).
+    if (x.bots && x.bots.max != null) f.push(x.bots.max < 0 ? 'Unlimited bots switched on (fair use)' : plural(x.bots.max, 'bot') + ' switched on at once');
+    if (x.flows != null) f.push((x.flows < 0 ? 'Unlimited' : fmt(x.flows)) + ' welcome bots, ' + (x.flow_steps < 0 ? 'unlimited' : fmt(x.flow_steps)) + ' messages each');
     const F = x.features || [];
     if (F.includes('ab_welcome_4')) f.push('A/B welcome with up to 4 versions'); else if (F.includes('ab_welcome_2')) f.push('A/B welcome and click conditions');
     else if (F.includes('tap_to_start')) f.push('"Tap to start" button and follow-ups');
-    f.push(plural(x.connections, 'bot, channel or group', 'bots, channels or groups'));
+    f.push(plural(x.connections, 'Telegram bot, channel or group', 'Telegram bots, channels or groups') + ' connected');
     if (!x.branding) f.push('No Castvoo line on your welcome');
-    return f.slice(0, 5);
+    return f.slice(0, 6);
   };
   const owner = canBilling();
   const h = sheet(esc(o.title || 'Upgrade your plan'), '<span class="spk">' + icon('up') + '</span>',

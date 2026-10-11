@@ -1,0 +1,308 @@
+/*
+ * site-home.css: the homepage blocks that say what Castvoo does (index.html, website view only).
+ *   wcd-*  "What Castvoo does": six cards straight under the hero
+ *   byb-*  "Bots you can build": bot types with plan badges, a Telegram chat that plays a bot (site.js siteBots), Cas
+ *   hst-*  hero photo stage: person holding the dashboard, aurora glow, screen light, example notifications (site.js heroCards)
+ *   htk-*  the dark feature ticker under the hero
+ *   hl-*   section backgrounds and motion (grid on the videos, tinted pricing, aurora closing band); .hl-off pauses
+ *          a block's animations while it is off screen (site.js siteLive)
+ * Tokens come from castvoo.css. Class names are prefixed so they never meet the dashboard's own classes.
+ * Mobile first; motion is opacity/transform only and stops with prefers-reduced-motion.
+ */
+
+/* ---------- What Castvoo does ---------- */
+/* Phones and tablets: hero copy, then the photo stage and the feature ticker (so the first screen has life), then the
+   "What Castvoo does" cards. (.hero-in steps aside with display:contents; desktop keeps its two columns.) */
+@media (max-width:980px){
+  .hero{display:flex;flex-direction:column}
+  .hero-in{display:contents}
+  .hero-in>.hc{position:relative;z-index:1;order:1;width:100%;max-width:1180px;margin-inline:auto;padding:30px 20px 0}
+  .hero>.wcd{order:4;margin-top:24px}
+  .hero-in>.stage{position:relative;z-index:1;order:2;align-self:center;width:calc(100% - 40px);margin-top:28px}
+  .hero>.wrap{position:relative;z-index:1;order:5}
+}
+@media (max-width:600px){
+  .hero-in>.hc{padding:22px 16px 0}
+  .hero>.wcd{margin-top:22px}
+  .hero-in>.stage{width:calc(100% - 32px);margin-top:20px}
+}
+.wcd{position:relative;z-index:1;padding-block:4px 8px}
+.wcd-box{background:rgba(255,255,255,.86);border:1px solid var(--line);border-radius:26px;padding:16px;box-shadow:0 1px 2px rgba(11,20,48,.04),0 30px 60px -42px rgba(25,60,190,.45);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.wcd-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:2px 4px 12px}
+.wcd-h .kick{font-size:11px}
+.wcd-247{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--mut)}
+.wcd-g{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.wcd-g>li{min-width:0;display:flex}
+.wcd-c{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px;padding:13px 12px 14px;border-radius:18px;background:linear-gradient(170deg,#fff,#F7F9FE);border:1px solid var(--line);text-decoration:none;color:var(--ink);transition:transform .25s var(--ease),border-color .25s,box-shadow .25s}
+.wcd-i{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:var(--blue-s);color:var(--blue);flex:none;transition:background .25s,color .25s,transform .25s var(--ease)}
+.wcd-i svg{width:18px;height:18px}
+.wcd-t{display:flex;flex-direction:column;gap:3px;min-width:0}
+.wcd-t b{font-size:14px;line-height:1.25;letter-spacing:-.02em}
+.wcd-t small{font-size:12.5px;line-height:1.42;color:var(--mut)}
+.wcd-ai{background:linear-gradient(150deg,#2F6BFF,#1846DB);border-color:transparent;color:#fff}
+.wcd-ai .wcd-i{background:rgba(255,255,255,.16);color:#fff}
+.wcd-ai .wcd-t small{color:rgba(255,255,255,.82)}
+@media (hover:hover){
+  .wcd-c:hover{transform:translateY(-3px);border-color:#C9D7FF;box-shadow:0 18px 32px -24px rgba(47,107,255,.7)}
+  .wcd-c:hover .wcd-i{background:var(--blue);color:#fff;transform:scale(1.06)}
+  .wcd-ai:hover .wcd-i{background:#fff;color:var(--blue)}
+}
+/* a soft entrance, one card after another (transform/opacity only, so nothing moves the layout) */
+@keyframes wcdIn{from{opacity:0;transform:translateY(12px)}}
+.wcd-g>li{animation:wcdIn .7s var(--ease) both}
+.wcd-g>li:nth-child(2){animation-delay:.06s}.wcd-g>li:nth-child(3){animation-delay:.12s}.wcd-g>li:nth-child(4){animation-delay:.18s}.wcd-g>li:nth-child(5){animation-delay:.24s}.wcd-g>li:nth-child(6){animation-delay:.3s}
+.wcd-ai .wcd-i svg{animation:wcdSp 3.6s ease-in-out infinite}
+@keyframes wcdSp{0%,100%{transform:none}50%{transform:rotate(14deg) scale(1.08)}}
+/* phones: icon and title on one line, the sentence under both */
+@media (max-width:699px){
+  .wcd-c{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;align-content:start;gap:9px 10px;padding:12px}
+  .wcd-t{display:contents}
+  .wcd-i{width:32px;height:32px;border-radius:11px}
+  .wcd-i svg{width:16px;height:16px}
+  .wcd-t b{font-size:13.5px}
+  .wcd-t small{grid-column:1/-1;font-size:12.5px}
+}
+@media (min-width:700px){
+  .wcd-box{padding:18px}
+  .wcd-g{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .wcd-c{flex-direction:row;align-items:flex-start;gap:12px;padding:15px}
+}
+/* desktop: a slightly tighter hero so the strip starts inside the first screen */
+@media (min-width:981px){
+  .hero-in{padding-block:26px 30px}
+  .hero .h1{font-size:clamp(44px,4.1vw,54px)}
+  .hero .hc{gap:18px}
+}
+@media (min-width:1100px){
+  .wcd{padding-block:0 12px}
+  .wcd-g{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .wcd-c{flex-direction:column;gap:12px;padding:16px 15px 18px}
+  .wcd-t b{font-size:14.5px}
+}
+@media (max-width:340px){.wcd-g{grid-template-columns:1fr}}
+
+/* ---------- Bots you can build ---------- */
+.byb{padding-bottom:clamp(40px,6vw,80px)}
+.byb-in{display:grid;grid-template-columns:1fr;gap:20px;margin-top:34px}
+.byb-g{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr;gap:10px;align-content:start}
+.byb-c{position:relative;display:flex;align-items:flex-start;gap:13px;padding:15px 15px 16px;border-radius:20px;background:#fff;border:1px solid var(--line);box-shadow:var(--sh-s);min-width:0;transition:transform .25s var(--ease),border-color .25s,box-shadow .25s}
+.byb-i{width:42px;height:42px;border-radius:14px;flex:none;display:grid;place-items:center;background:var(--blue-s);color:var(--blue)}
+.byb-i svg{width:20px;height:20px}
+.byb-t{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1;padding-right:64px}
+.byb-t b{font-size:15.5px;line-height:1.3;letter-spacing:-.02em}
+.byb-t small{font-size:13.5px;line-height:1.45;color:var(--mut)}
+.byb-p{position:absolute;right:12px;top:12px;font:700 10.5px/1 var(--mono);letter-spacing:.04em;padding:5px 8px;border-radius:999px;background:var(--ok-s);color:#08744F;white-space:nowrap}
+.byb-p.up{background:var(--blue-s);color:var(--blue-t)}
+.byb-p.top{background:var(--grad);color:#fff}
+@media (hover:hover){.byb-c:hover{transform:translateY(-2px);border-color:#C9D7FF;box-shadow:0 22px 40px -28px rgba(47,107,255,.6)}}
+.byb-g .rv:nth-child(2n){animation-delay:.07s}
+
+.byb-side{display:flex;flex-direction:column;gap:14px;min-width:0}
+/* the Telegram chat: fixed height, newest message at the bottom, older ones slide out of the top */
+.byb-ph{position:relative;border-radius:26px;overflow:hidden;background:#fff;border:1px solid var(--line);box-shadow:var(--sh-l)}
+.byb-top{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.byb-av{width:34px;height:34px;flex:none}
+.byb-av svg{width:34px;height:34px;display:block}
+.byb-top b{display:block;font-size:14px;line-height:1.2}
+.byb-top small{font-size:12px;color:#5B9BD5;font-weight:600}
+.byb-chat{height:350px;display:flex;flex-direction:column;justify-content:flex-end;gap:7px;padding:12px;overflow:hidden;background:linear-gradient(165deg,#D7E6F6,#E4EEF7 45%,#D3E3F2)}
+.byb-m{align-self:flex-start;max-width:84%;padding:8px 11px;border-radius:14px 14px 14px 5px;background:#fff;font-size:13px;line-height:1.42;color:var(--ink);box-shadow:0 1px 1px rgba(11,20,48,.08)}
+.byb-m.me{align-self:flex-end;border-radius:14px 14px 5px 14px;background:#E3F5D5}
+.byb-m.sys{align-self:center;padding:4px 11px;border-radius:999px;background:rgba(14,140,96,.88);color:#fff;font-size:11px;font-weight:700;box-shadow:none}
+.byb-k{display:flex;flex-direction:column;gap:5px;margin:8px -4px -3px}
+.byb-k i{display:block;font-style:normal;text-align:center;padding:7px 8px;border-radius:10px;background:var(--blue-s);color:var(--blue-t);font-size:12px;font-weight:800}
+.byb-k i.tap{background:#D3E0FF}
+/* site.js plays the chat: .play hides what has not "arrived" yet; without JS or with reduced motion everything shows */
+.byb-chat.play .byb-m{display:none}
+.byb-chat.play .byb-m.on{display:block;animation:bybIn .45s var(--ease) both}
+.byb-chat.play .byb-m.sys.on{display:block}
+@keyframes bybIn{from{opacity:0;transform:translateY(10px) scale(.97)}}
+.byb-typ{align-self:flex-start;display:inline-flex;gap:4px;padding:10px 12px;border-radius:14px 14px 14px 5px;background:#fff}
+.byb-typ i{width:6px;height:6px;border-radius:50%;background:#9AA6BF;animation:bybDot 1s infinite}
+.byb-typ i:nth-child(2){animation-delay:.15s}.byb-typ i:nth-child(3){animation-delay:.3s}
+@keyframes bybDot{0%,60%,100%{transform:none;opacity:.5}30%{transform:translateY(-3px);opacity:1}}
+
+.byb-cas{position:relative;display:flex;align-items:center;gap:14px;padding:16px;border-radius:24px;background:radial-gradient(120% 140% at 0% 0%,#2C5BEA 0%,#13227A 52%,var(--night) 100%);color:#fff;overflow:hidden}
+.byb-casf{width:76px;flex:none}
+.byb-cast{display:flex;flex-direction:column;gap:6px;min-width:0;align-items:flex-start}
+.byb-cast b{font-size:16px;letter-spacing:-.02em}
+.byb-cast p{font-size:13.5px;line-height:1.5;color:#C9D5F5}
+.byb-cast .btn{margin-top:6px}
+.byb-cas[id]{scroll-margin-top:96px}
+
+@media (min-width:700px){
+  .byb-g{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .byb-g>li:last-child{grid-column:1/-1}
+  .byb-c{flex-direction:column;gap:12px;padding:18px}
+  .byb-t{padding-right:0}
+  .byb-chat{height:390px}
+}
+@media (min-width:981px){
+  .byb-in{grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:24px;align-items:start}
+  .byb-side{position:sticky;top:96px}
+}
+@media (max-width:600px){
+  .byb-in{margin-top:26px}
+  .byb-chat{height:330px}
+  .byb-cas{padding:14px;gap:12px;align-items:flex-start}
+  .byb-casf{width:60px}
+  .byb-g{gap:8px}
+  .byb-c{padding:13px 13px 14px;gap:12px;border-radius:18px}
+  .byb-i{width:36px;height:36px;border-radius:12px}
+  .byb-i svg{width:18px;height:18px}
+  .byb-t b{font-size:15px}
+  .byb-t small{font-size:13px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .wcd-g>li,.wcd-ai .wcd-i svg,.byb-typ i{animation:none}
+  .wcd-c,.wcd-i,.byb-c{transition:none}
+  .byb-chat.play .byb-m{display:block}
+  .byb-chat.play .byb-m.on{animation:none}
+}
+
+/* Hero feature chips: name every job at a glance (broadcast, automate, build bots) */
+.hfx{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.hfx li{display:inline-flex;align-items:center;gap:7px;padding:7px 12px 7px 10px;border-radius:999px;background:rgba(255,255,255,.82);border:1px solid var(--line);box-shadow:0 1px 2px rgba(11,20,48,.04);font-size:14px;font-weight:650;color:var(--ink);white-space:nowrap;animation:hfIn .5s var(--ease) both}
+.hfx li span:first-child{font-size:14px;line-height:1}
+.hfx li:nth-child(2){animation-delay:.06s}.hfx li:nth-child(3){animation-delay:.12s}.hfx li:nth-child(4){animation-delay:.18s}.hfx li:nth-child(5){animation-delay:.24s}
+.hfx li:last-child{background:var(--blue-s);border-color:#C9D7FF;color:var(--blue-t,#1846DB)}
+@keyframes hfIn{from{opacity:0;transform:translateY(6px)}}
+@media (max-width:980px){.hfx{justify-content:center}}
+@media (max-width:480px){.hfx{gap:6px}.hfx li{font-size:13px;padding:6px 10px 6px 9px}}
+@media (prefers-reduced-motion:reduce){.hfx li{animation:none}}
+
+
+/* ================= Hero photo stage ================= */
+/* The photo is a cut-out (webp with alpha) so the aurora can glow behind him; the jpg fallback keeps its own pale backdrop. */
+#hst{aspect-ratio:880/1168;height:auto;width:100%;max-width:468px;justify-self:center;align-self:end;isolation:isolate}
+.hst-au{position:absolute;left:-2%;top:0;width:104%;aspect-ratio:1;z-index:0;pointer-events:none}
+.hst-au i{position:absolute;display:block;will-change:transform}
+.hst-au i:nth-child(1){inset:12% 8% 6% 14%;border-radius:43% 57% 62% 38%/46% 41% 59% 54%;background:conic-gradient(from 30deg,#2F6BFF,#7C5CFF,#0EA5E9,#6EC3FF,#9D7BFF,#2F6BFF);filter:blur(38px);opacity:.6;animation:hstSpin 24s linear infinite}
+.hst-au i:nth-child(2){width:54%;height:54%;left:44%;top:10%;border-radius:50%;background:radial-gradient(circle,rgba(124,92,255,.62),rgba(124,92,255,0) 68%);animation:hstDrA 13s ease-in-out infinite alternate}
+.hst-au i:nth-child(3){width:50%;height:50%;left:2%;top:38%;border-radius:50%;background:radial-gradient(circle,rgba(14,165,233,.5),rgba(14,165,233,0) 68%);animation:hstDrB 16s ease-in-out infinite alternate}
+@keyframes hstSpin{0%{transform:rotate(0) scale(1)}50%{transform:rotate(180deg) scale(1.08,.94)}100%{transform:rotate(360deg) scale(1)}}
+@keyframes hstDrA{to{transform:translate(-18%,14%) scale(1.18)}}
+@keyframes hstDrB{to{transform:translate(16%,-12%) scale(.9)}}
+.hst-fl{position:absolute;inset:0;z-index:1;animation:hstFl 7s ease-in-out infinite}
+.hst-fl picture{display:block;width:100%;height:100%}
+.hst-img{display:block;width:100%;height:100%;object-fit:contain;-webkit-user-select:none;user-select:none;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 7%,#000 86%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 7%,#000 86%,transparent 100%)}
+@keyframes hstFl{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+/* a soft light that passes over the phone screen (clipped to the screen's corners in the photo) */
+.hst-sw{position:absolute;inset:0;clip-path:polygon(16.7% 30.3%,44.1% 31%,43.7% 74.3%,15.9% 74.2%);pointer-events:none;overflow:hidden}
+.hst-sw::before{content:"";position:absolute;left:10%;top:26%;width:40%;height:54%;background:linear-gradient(104deg,transparent 34%,rgba(255,255,255,.5) 50%,transparent 66%);transform:translateX(-95%);animation:hstSw 6.5s cubic-bezier(.45,0,.25,1) 1.4s infinite}
+@keyframes hstSw{0%{transform:translateX(-95%)}38%,100%{transform:translateX(115%)}}
+/* example notifications: glass cards around him */
+.hst-n{position:absolute;z-index:3;display:flex;align-items:center;gap:10px;max-width:292px;padding:9px 15px 9px 9px;border-radius:18px;background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(12px) saturate(1.6);backdrop-filter:blur(12px) saturate(1.6);border:1px solid rgba(255,255,255,.95);box-shadow:inset 0 1px 0 #fff,0 0 0 1px rgba(104,112,196,.1),0 24px 44px -24px rgba(40,40,150,.5);color:var(--ink);transition:opacity .45s var(--ease),transform .6s var(--ease)}
+.hst-ic{width:36px;height:36px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:17px;line-height:1;background:#EAF0FF}
+.hst-ic.g{background:#DDF7EC}.hst-ic.c{background:#DDF2FC}.hst-ic.v{background:#ECE6FF}.hst-ic.b{background:#E3EAFF}
+.hst-tx{display:flex;flex-direction:column;min-width:0;line-height:1.28}
+.hst-tx b{font-size:13.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hst-tx small{font-size:12px;font-weight:600;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hst-n1{left:-9%;top:12%}
+.hst-n2{right:-7%;top:47%}
+.hst-n3{left:-6%;top:79%}
+.hst-ex{right:4%;top:2%}
+/* with JS the cards pop in one after another and change every few seconds (site.js heroCards); without JS they simply show */
+#hst.js .hst-n{opacity:0;transform:translateY(14px) scale(.9)}
+#hst.js .hst-n.on{opacity:1;transform:none}
+@media (min-width:981px){
+  /* the photo stands on the ticker; it overlaps it a little so the float never opens a gap */
+  #hst{margin-bottom:-46px}
+}
+@media (max-width:980px){
+  .hero-in>#hst{width:100%;max-width:470px;margin-top:22px;margin-bottom:-16px}
+}
+@media (max-width:600px){
+  .hero-in>#hst{width:100%;margin-top:0}
+  /* a slightly tighter hero copy so the photo starts inside the first phone screen */
+  .hero-in>.hc{gap:14px;padding-top:14px}
+  .hst-n{max-width:min(212px,56%);gap:8px;padding:7px 11px 7px 7px;border-radius:15px;-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(255,255,255,.94)}
+  .hst-ic{width:30px;height:30px;border-radius:10px;font-size:14px}
+  .hst-tx b{font-size:12.5px}.hst-tx small{font-size:11.5px}
+  .hst-n1{left:12px;top:8%}.hst-n2{right:12px;top:46%}.hst-n3{left:12px;top:79%}
+  .hst-ex{right:12px;top:1%}
+}
+
+/* ================= Feature ticker ================= */
+.htk{position:relative;z-index:2;overflow:hidden;background:linear-gradient(90deg,#060C26,#0E1747 50%,#060C26);color:#E8EDFF;box-shadow:inset 0 1px 0 rgba(124,92,255,.35),inset 0 -1px 0 rgba(14,165,233,.22)}
+.htk::before,.htk::after{content:"";position:absolute;top:0;bottom:0;width:56px;z-index:1;pointer-events:none}
+.htk::before{left:0;background:linear-gradient(90deg,#060C26,rgba(6,12,38,0))}
+.htk::after{right:0;background:linear-gradient(270deg,#060C26,rgba(6,12,38,0))}
+.htk-tr{display:flex;width:max-content;animation:htkGo 42s linear infinite}
+.htk:hover .htk-tr{animation-play-state:paused}
+.htk-g{list-style:none;margin:0;padding:0;display:flex;flex:none}
+.htk-g li{display:inline-flex;align-items:center;gap:10px;padding:17px 0 17px 28px;font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.htk-g li::after{content:"";width:5px;height:5px;border-radius:50%;background:rgba(167,179,217,.4);margin-left:18px}
+.htk-g svg{width:18px;height:18px;flex:none;color:#7DA2FF}
+.htk-g svg.g{color:#3DDC97}.htk-g svg.c{color:#4CC4FA}.htk-g svg.v{color:#B39BFF}
+@keyframes htkGo{to{transform:translateX(-50%)}}
+@media (max-width:980px){.hero>.htk{order:3}}
+@media (max-width:600px){.htk-g li{font-size:14px;padding:14px 0 14px 22px;gap:9px}.htk-g li::after{margin-left:14px}}
+
+/* ================= Section life ================= */
+/* Bots you can build: a deep navy aurora stage, the example chat glowing on it */
+#v-site .byb{position:relative;isolation:isolate;overflow:hidden;color:#fff;background:
+  radial-gradient(70% 46% at 8% 0%,rgba(47,107,255,.34),transparent 70%),
+  radial-gradient(56% 44% at 100% 34%,rgba(124,92,255,.26),transparent 70%),
+  radial-gradient(60% 50% at 40% 104%,rgba(14,165,233,.16),transparent 70%),
+  linear-gradient(180deg,#0A1340,#060C26 60%)}
+#v-site .byb::before{content:"";position:absolute;z-index:-1;left:30%;top:-18%;width:min(900px,90%);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(124,92,255,.22),rgba(47,107,255,.1) 40%,transparent 66%);animation:hlDrift 22s ease-in-out infinite alternate;pointer-events:none}
+#v-site .byb::after{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse 70% 50% at 50% 12%,#000 20%,transparent 75%);mask-image:radial-gradient(ellipse 70% 50% at 50% 12%,#000 20%,transparent 75%);pointer-events:none}
+@keyframes hlDrift{to{transform:translate(-28%,22%) scale(1.15)}}
+#v-site .byb .h2{color:#fff}
+#v-site .byb .lead{color:#B6C2E8}
+#v-site .byb .kick{color:#8FD3FF}
+#v-site .byb .gtext{background:linear-gradient(100deg,#8DB2FF,#BBA4FF 55%,#72D8FF);-webkit-background-clip:text;background-clip:text}
+#v-site .byb-c{background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.03));border-color:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+#v-site .byb-t small{color:#B0BCE2}
+#v-site .byb-i{background:rgba(61,220,151,.13);color:#5BE7AE}
+#v-site .byb-g>li:nth-child(5) .byb-i{background:rgba(125,162,255,.16);color:#9DB8FF}
+#v-site .byb-g>li:nth-child(6) .byb-i{background:rgba(76,196,250,.15);color:#7FD6FF}
+#v-site .byb-p{background:rgba(61,220,151,.14);color:#7BF2C0}
+#v-site .byb-p.up{background:rgba(76,196,250,.15);color:#9BE0FF}
+#v-site .byb-p.top{background:linear-gradient(135deg,#7C5CFF,#2F6BFF);color:#fff}
+@media (hover:hover){#v-site .byb-c:hover{border-color:rgba(157,184,255,.38);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 24px 50px -30px rgba(124,92,255,.8)}}
+#v-site .byb-side::before{content:"";position:absolute;z-index:-1;left:-8%;right:-8%;top:-4%;height:70%;border-radius:50%;background:radial-gradient(closest-side,rgba(124,92,255,.42),rgba(47,107,255,.2) 55%,transparent);animation:hlGlow 6s ease-in-out infinite alternate;pointer-events:none}
+@keyframes hlGlow{from{opacity:.65;transform:scale(.94)}to{opacity:1;transform:scale(1.04)}}
+#v-site .byb-ph{border-color:rgba(255,255,255,.14);box-shadow:0 0 0 1px rgba(255,255,255,.06),0 40px 90px -36px rgba(124,92,255,.75)}
+#v-site .byb-cas{background:radial-gradient(120% 140% at 0% 0%,#6A4BF0 0%,#2C2196 48%,#140F52 100%);border:1px solid rgba(179,155,255,.28)}
+#v-site .byb-cast p{color:#DAD2FF}
+
+/* See it work: white, with a faint grid */
+#v-site .hl-grid{position:relative;isolation:isolate;background:#fff;border-bottom:1px solid var(--line)}
+#v-site .hl-grid::before{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(47,107,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(47,107,255,.06) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:radial-gradient(ellipse 75% 55% at 50% 22%,#000 25%,transparent 78%);mask-image:radial-gradient(ellipse 75% 55% at 50% 22%,#000 25%,transparent 78%);pointer-events:none}
+
+/* Pricing: a soft blue to violet wash; the popular plan gets a slowly turning gradient edge */
+#v-site .hl-pr{position:relative;background:
+  radial-gradient(56% 36% at 12% 0%,rgba(124,92,255,.13),transparent 70%),
+  radial-gradient(50% 36% at 92% 18%,rgba(14,165,233,.12),transparent 70%),
+  linear-gradient(180deg,#F3F5FF,#EFEEFF 55%,#F3F7FF);border-block:1px solid #E2E4F5}
+#v-site .hl-pr .plan.hot{isolation:isolate;border-color:transparent;background:transparent}
+#v-site .hl-pr .plan.hot::before{content:"";position:absolute;z-index:-2;left:50%;top:50%;width:330%;aspect-ratio:1;margin:-165% 0 0 -165%;background:conic-gradient(from 0deg,#fff 0deg,#8FD3FF 50deg,#7C5CFF 130deg,#2F6BFF 200deg,#38BDF8 280deg,#fff 360deg);animation:hlRing 7s linear infinite;pointer-events:none}
+#v-site .hl-pr .plan.hot::after{content:"";position:absolute;z-index:-1;inset:2.5px;border-radius:27.5px;background:linear-gradient(150deg,#4A7DFF 0%,#2F62F5 45%,#3D45E0 100%);pointer-events:none}
+@keyframes hlRing{to{transform:rotate(360deg)}}
+#v-site .hl-pr .plan{transition:transform .3s var(--ease),box-shadow .3s}
+@media (hover:hover){#v-site .hl-pr .plan:not(.hot):hover{transform:translateY(-4px);box-shadow:0 30px 60px -36px rgba(70,50,190,.45)}}
+
+/* Final call to action: a moving aurora behind the words */
+#v-site .hl-cl{isolation:isolate;background:radial-gradient(90% 120% at 100% 100%,#1C2178 0%,transparent 60%),linear-gradient(140deg,#0A1440,#060C26 62%)}
+#v-site .hl-cl::before,#v-site .hl-cl::after{content:"";position:absolute;z-index:-1;aspect-ratio:1;pointer-events:none}
+#v-site .hl-cl::before{width:min(760px,90%);right:-18%;top:-80%;border-radius:50%;background:radial-gradient(34% 34% at 32% 34%,rgba(124,92,255,.62),transparent 100%),radial-gradient(36% 36% at 68% 58%,rgba(47,107,255,.6),transparent 100%),radial-gradient(28% 28% at 40% 76%,rgba(14,165,233,.5),transparent 100%);animation:hstSpin 20s linear infinite}
+#v-site .hl-cl::after{width:min(420px,60%);left:-12%;bottom:-60%;border-radius:50%;background:radial-gradient(circle,rgba(14,165,233,.45),transparent 66%);animation:hlDrift 16s ease-in-out infinite alternate}
+
+/* off screen or hidden tab: nothing animates */
+.hl-off,.hl-off::before,.hl-off::after,.hl-off *,.hl-off *::before,.hl-off *::after{animation-play-state:paused!important}
+
+@media (prefers-reduced-motion:reduce){
+  .hst-au i,.hst-fl,.hst-sw::before,.htk-tr,#v-site .byb::before,#v-site .byb-side::before,#v-site .hl-pr .plan.hot::before,#v-site .hl-cl::before,#v-site .hl-cl::after{animation:none}
+  .hst-sw{display:none}
+  #hst.js .hst-n{opacity:1;transform:none}
+  .htk-tr{width:auto;justify-content:center}
+  .htk-g{flex:1 1 auto;min-width:0;flex-wrap:wrap;justify-content:center;padding:6px 14px}
+  .htk-g[aria-hidden]{display:none}
+  .htk-g li{padding:9px 10px}
+  .htk-g li::after{display:none}
+  .htk::before,.htk::after{display:none}
+  #v-site .hl-pr .plan,.hst-n{transition:none}
+}

@@ -88,6 +88,7 @@ const WS_PERMS = {
   'ws.team':    ['owner'],                       // invite, remove, change roles, the helper's switches
   'ws.leave':   ['sender', 'drafter', 'helper'], // leave a workspace you were invited to
   'ws.export':  ['owner'],                       // download every subscriber as a CSV file
+  'ws.leads':   ['owner', 'helper'],             // see what people typed into a Chat bot's questions (names, phones, emails); others see counts only
   'ws.earnings':['owner', 'sender', 'drafter'],  // referral earnings: see, move into a wallet, withdraw (never the helper)
 };
 // A permission the owner can switch on for the helper: the workspace column that turns it on.
@@ -157,10 +158,31 @@ const WS_ROUTES = {
   'POST /api/flows/:id/duplicate': 'ws.run',
   'DELETE /api/flows/:id': 'ws.run',
   'POST /api/flows/:id/invite-link': 'ws.run',
+  'POST /api/flows/:id/audience': 'ws.run',
+  'POST /api/flows/tests': 'ws.run',
+  'GET /api/flows/tests/:tid': 'ws.view',
+  'POST /api/flows/tests/:tid/stop': 'ws.run',
+  'GET /api/bots': 'ws.view',
+  'POST /api/bots/check-join': 'ws.view',
+  'GET /api/bots/:id/answers': 'ws.view',
+  'GET /api/bots/:id/answers.csv': 'ws.export',
+  'GET /api/bots/:id/referrals': 'ws.view',
+  'POST /api/bots/:id/audience': 'ws.run',
+  'GET /api/cas-builder': 'ws.view',
+  'POST /api/cas-builder/sessions': 'ws.run',
+  'GET /api/cas-builder/sessions/:id': 'ws.view',
+  'POST /api/cas-builder/sessions/:id/reply': 'ws.run',
+  'POST /api/cas-builder/sessions/:id/edit': 'ws.run',
+  'POST /api/cas-builder/sessions/:id/tweak': 'ws.run',
+  'POST /api/cas-builder/sessions/:id/undo': 'ws.run',
+  'POST /api/cas-builder/sessions/:id/save': 'ws.run',
+  'POST /api/cas-builder/sessions/:id/close': 'ws.run',
+  'POST /api/cas-builder/credits': 'ws.billing',
   'POST /api/ai/write': 'ws.run',
   'POST /api/ai/rewrite': 'ws.run',
   'POST /api/ai/translate': 'ws.run',
   'POST /api/ai/sequence': 'ws.run',
+  'POST /api/ai/flow': 'ws.run',
   'POST /api/ai/ask': 'ws.view',
   'GET /api/ai/my-examples': 'ws.view',
   'GET /api/wallet': 'ws.view',

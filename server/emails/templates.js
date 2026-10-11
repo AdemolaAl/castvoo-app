@@ -783,7 +783,7 @@ ${TEAM}`,
         ['Settles on', '{{settle_date}}'],
       ]),
       p(`${B('Here is the best part:')} this is not a one-off. You earn every time {{referral_name}} pays, every month, for as long as they stay on a paid plan.`),
-      p('And your share grows as you go: 10% with 1 to 4 paying referrals, 20% from 5, and 30% from 20.'),
+      p('And your share grows as you go: 5% with 1 to 4 paying referrals, 10% from 5, and up to 15% from 20.'),
       button('{{referrals_url}}', 'Share my link again'),
       small('Once earnings settle, use them to pay for your own plan, or withdraw them in USDT (TRC20) or Bitcoin from $300. We hold new earnings for 30 days in case of refunds or chargebacks.'),
       signoff(CAS),
@@ -798,7 +798,7 @@ Settles on: {{settle_date}}
 
 Here is the best part: this is not a one-off. You earn every time {{referral_name}} pays, every month, for as long as they stay on a paid plan.
 
-And your share grows as you go: 10% with 1 to 4 paying referrals, 20% from 5, and 30% from 20.
+And your share grows as you go: 5% with 1 to 4 paying referrals, 10% from 5, and up to 15% from 20.
 
 Share my link again: {{referrals_url}}
 
@@ -1212,7 +1212,7 @@ P.S. People who tap your button are your warmest leads. On bots, Castvoo knows w
       infoBox(`${B('Say you run a VIP signals channel.')}<br>Someone asks to join from your ad. At once they get: <em>"Hi Tunde, welcome! Tap below to get started."</em> They tap, press Start, and they are in. A day later, your bot sends them your free guide. You did nothing.`),
       lead('Live in three steps:'),
       steps([
-        ['Pick a template', 'Try "Welcome + 3-day follow-up" or "Free gift / lead magnet".'],
+        ['Pick a template', 'Try "Welcome + 3-day follow-up" or "Welcome → Please tap Start reminder → Thanks + free gift".'],
         ['Make it yours', 'Change the words, or ask Cas to write them.'],
         ['Switch it on', 'Castvoo checks your channel settings and tells you what to fix.'],
       ]),
@@ -1232,7 +1232,7 @@ Say you run a VIP signals channel. Someone asks to join from your ad. At once th
 Live in three steps:
 
 1. Pick a template
-   Try "Welcome + 3-day follow-up" or "Free gift / lead magnet".
+   Try "Welcome + 3-day follow-up" or "Welcome → Please tap Start reminder → Thanks + free gift".
 
 2. Make it yours
    Change the words, or ask Cas to write them.

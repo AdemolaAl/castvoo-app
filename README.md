@@ -100,7 +100,8 @@ server/
   routes/             one file per area of the API (auth, broadcasts, wallet, admin/...)
   services/           the logic: telegram, flows (Welcome Flows), billing (plans, limits, Free plan), email, ai (Cas),
                       llm (Claude / OpenRouter / OpenAI), support, support-ai + support-tools (the 24/7 AI support team), voosquare ...
-  payments/index.js   Paystack, Flutterwave, Gatevoo, manual crypto and the team's own manual methods
+  payments/index.js   Flutterwave, Gatevoo, manual crypto and the team's own manual methods (Paystack: retired,
+                      old payments still verify)
   workers/            background loops: sending queue, follow-ups, billing, emails, cleanup
   emails/             email layout + all 35 templates
   legal/              the 6 policy pages

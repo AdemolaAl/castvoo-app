@@ -25,7 +25,7 @@ Tick every line before opening Castvoo to the public.
       token; see DEPLOY-RAILWAY.md → "Castvoo bot not answering"). Tap Start on the bot: it answers within a second
 - [ ] Email: test email arrives (check spam). SPF/DKIM verified in Resend
 - [ ] Cas AI: test passes, Anthropic account has credit and a monthly spend limit
-- [ ] Paystack: LIVE secret key, webhook URL saved, NGN/GHS/ZAR enabled
+- [ ] Flutterwave: NGN, GHS and ZAR enabled (Nigeria, Ghana and South Africa pay through Flutterwave now; Paystack is retired)
 - [ ] Flutterwave: LIVE secret key, webhook URL + secret hash saved, M-Pesa / XAF enabled
 - [ ] Gatevoo: key + webhook secret set, "Send test" from Gatevoo succeeds, castvoo.com in EMBED_ORIGINS
 - [ ] VooSquare: Admin → Products → Castvoo filled in (SSO on, both redirect URIs, summary URL, support webhook),
@@ -60,7 +60,7 @@ See also [DEPLOY-NOTES-OCT-2026.md](DEPLOY-NOTES-OCT-2026.md) for the October 20
 - [ ] Add @CastvooBot to a test channel with one tap; post to it
 - [ ] Create a follow-up and receive step 1 and step 2
 - [ ] Join-request welcome on a test channel with "approve new members" on
-- [ ] Top up $10 with Paystack (card), $10 with Flutterwave, $2 with Gatevoo USDT: wallet credited, receipt emails arrive
+- [ ] Top up $10 with Flutterwave from a Nigerian account (bank transfer or USSD), $10 with Flutterwave card, $2 with Gatevoo USDT: wallet credited, receipt emails arrive
 - [ ] Look at one paid Gatevoo invoice's JSON and confirm it has `order_id` and a paid USD amount (`amount_paid_usd`, `paid_usd` or `amount_usd`): Castvoo needs both to credit
 - [ ] If you use manual USDT: top up $10, send the exact amount shown (with its cents), paste the txid, approve it in Admin → Payments
 - [ ] On Railway, upload a photo in a broadcast, redeploy, and check the photo is still there (proves the `/data` volume works)

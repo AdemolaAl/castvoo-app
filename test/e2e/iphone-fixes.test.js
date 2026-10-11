@@ -20,7 +20,7 @@ const VIDEOS = [...guides.matchAll(/\{ id: '([a-z-]+)', title:/g)].map((m) => m[
 
 describe('guide videos play with sound', () => {
   it('every video has an AAC audio track', () => {
-    assert.equal(VIDEOS.length, 9);
+    assert.equal(VIDEOS.length, 13);
     for (const id of VIDEOS) {
       const buf = fs.readFileSync(path.join(PUB, 'videos', id + '.mp4'));
       assert.ok(buf.includes(Buffer.from('soun')), id + ' has a sound track');
@@ -96,7 +96,8 @@ describe('the page does not jump on iPhones', () => {
 
   it('the homepage animation does not keep running behind the dashboard', () => {
     const site = read('js/site.js');
-    assert.doesNotMatch(site, /else hjT\.push\(setTimeout\(heroJoin, 2000\)\)/);
-    assert.match(site, /const again = \(\) => \{ if \(siteOn\(\)\) heroJoin\(\); else hjT\.push\(setTimeout\(again, 2000\)\); \};/);
+    // The hero photo stage's notifications only change while the website shows and the hero is on screen.
+    assert.doesNotMatch(site, /function heroJoin\(/);
+    assert.match(site, /if \(!siteOn\(\) \|\| st\.closest\('\.hl-off'\)\) return;/);
   });
 });

@@ -152,7 +152,8 @@ module.exports = (r) => {
       // form can't show them, so saving here would lose them. Those flows are edited in Welcome Flows only.
       if (q.trigger_type !== trig.type) throw badRequest('Welcome Flows and follow-ups are different things now. Make a new one instead.');
       const fancy = await db.one(`select 1 from sequence_steps s where s.sequence_id = $1 and (s.variant > 0 or s.condition is not null
-          or exists (select 1 from links l where l.step_id = s.id and l.row is not null)) limit 1`, [q.id]);
+          or s.trigger_type in ('on_start','on_button','no_response') or s.action_start_flow_id is not null
+          or exists (select 1 from links l where l.step_id = s.id and (l.row is not null or l.kind = 'reply'))) limit 1`, [q.id]);
       if (fancy || q.start_button || q.invite_link || q.approve_mode === 'tap') throw httpError(409, 'This flow uses Welcome Flows features (A/B versions, conditions, buttons side by side, Tap to start or an invite link). Edit it in Welcome Flows.', 'edit_in_flows');
       const f = await flows.cleanFlow(ws, flowBodyFrom(conn, b, int(b.join_connection_id, 'Channel or group')));
       if (q.active) {
@@ -217,7 +218,7 @@ module.exports = (r) => {
       const chat = await db.one("select * from connections where workspace_id = $1 and kind <> 'bot' and status <> 'removed' and tg_chat_id::text = $2", [ws.id, cur.trigger_value || '']);
       if (!chat) throw badRequest('This flow\'s channel or group is not connected any more.');
       const steps = await flows.loadSteps(cur.id);
-      const f = await flows.cleanFlow(ws, { name: cur.name, chat_id: chat.id, bot_id: cur.connection_id, approve_mode: cur.approve_mode, start_button: cur.start_button, start_label: cur.start_label, invite_link: cur.invite_link, blocks: flows.stepsToBlocks(steps) });
+      const f = await flows.cleanFlow(ws, { name: cur.name, chat_id: chat.id, bot_id: cur.connection_id, approve_mode: cur.approve_mode, start_button: cur.start_button, start_label: cur.start_label, invite_link: cur.invite_link, steps: flows.stepsToV2(steps) }, { flowId: cur.id });
       flows.assertNoPlaceholders(f.steps);
       const clash = await flows.liveClash(chat, cur.invite_link, cur.id);
       if (clash) throw httpError(409, `"${clash.name}" is already live on ${chat.title}. Switch it off first.`, 'flow_live_clash');

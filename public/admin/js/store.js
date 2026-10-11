@@ -39,6 +39,9 @@
         <div class="f"><label>Messages per flow</label><input name="flow_steps" type="number" min="-1" value="${p.flow_steps}"${dis}><span class="hint">-1 = no limit</span></div>
         <div class="f"><label class="check" style="margin-top:26px"><input type="checkbox" name="branding" ${p.branding ? raw('checked') : ''}${dis}> "Free welcome bot by Castvoo.com" line</label></div>
       </div>
+      <div class="fr four">
+        <div class="f"><label>Cas Builder builds</label><input name="cas_builds" type="number" min="-1" value="${p.cas_builds ?? 0}"${dis}><span class="hint">New flows built by chatting with Cas, a month (a $0 plan: for the life of the workspace). -1 = unlimited (fair use). Editing a flow by chat never counts.</span></div>
+      </div>
       <div class="f"><label>Features</label><div class="row" style="flex-wrap:wrap;gap:6px 14px">${(PF || []).map((x) => html`<label class="check small"><input type="checkbox" name="feat" value="${x.key}" ${(p.features || []).includes(x.key) ? raw('checked') : ''}${dis}> ${x.name}</label>`)}</div></div>
       <div class="f"><label>What's included (one line each)</label><textarea name="bullets" rows="6"${dis}>${(p.bullets || []).join('\n')}</textarea></div>
       <div class="row">
@@ -53,7 +56,7 @@
     name: f.name.value.trim(), tagline: f.tagline.value.trim(), price_month: Number(f.price_month.value), price_year: Number(f.price_year.value),
     connections: Number(f.connections.value), subscribers: Number(f.subscribers.value), ai_writes: Number(f.ai_writes.value), seats: Number(f.seats.value),
     bullets: f.bullets.value, popular: f.popular.checked, active: f.active.checked, sort: Number(f.sort.value) || 0,
-    join_requests: Number(f.join_requests.value), flows: Number(f.flows.value), flow_steps: Number(f.flow_steps.value), branding: f.branding.checked,
+    join_requests: Number(f.join_requests.value), flows: Number(f.flows.value), flow_steps: Number(f.flow_steps.value), branding: f.branding.checked, cas_builds: Number(f.cas_builds.value),
     features: [...f.querySelectorAll('input[name=feat]:checked')].map((x) => x.value),
   });
   let PF = [];
@@ -351,7 +354,7 @@
       </div>`;
       const page = html`
         <div class="card"><div class="ch"><h3>${icon('plug')} Payment providers</h3><a class="btn ghost sm" href="#settings">Connect in Settings ${icon('chev')}</a></div>
-          <div class="integ">${['paystack', 'flutterwave', 'gatevoo'].map((k) => html`<span class="bd ${integ[k] ? 'ok' : 'bad'}"><span class="dot"></span>${CV.INTEG[k]}: ${integ[k] ? 'connected' : 'not connected'}</span>`)}</div>
+          <div class="integ">${['flutterwave', 'gatevoo'].map((k) => html`<span class="bd ${integ[k] ? 'ok' : 'bad'}"><span class="dot"></span>${CV.INTEG[k]}: ${integ[k] ? 'connected' : 'not connected'}</span>`)}</div>
           <div class="note warn">${icon('warn')}<span>Exchange rates are typed by hand. Check them against today's real rate before launch and every week after. ⚠ on a method means its provider is not connected yet.</span></div></div>
         <div class="card flat">
           <div class="ch" style="padding:16px"><h3>${icon('globe')} Countries</h3>

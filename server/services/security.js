@@ -11,7 +11,8 @@
  * account, so the person can log in again and lock out whoever else has the login.
  *
  * The goal is gentle: people sharing one login see these alerts and the device list, real teams use seats or the
- * setup helper. Nothing is blocked.
+ * setup helper. Nothing is blocked. Logged-in devices per person are capped by the plan (2, or 3 on Scale;
+ * auth.capSessions): a login beyond that logs out the oldest device and always sends this alert (force).
  */
 
 const db = require('../db');
@@ -95,14 +96,15 @@ function checkLogoutAll(q) {
  * After a login (auth.createSession). `created` = the account was just made. Records the device + country pair and
  * sends an alert when the pair is new for this account. Never throws (a login never fails because of an alert).
  */
-async function onLogin(ctx, user, { created = false, dev, country } = {}) {
+async function onLogin(ctx, user, { created = false, dev, country, force = false } = {}) {
   try {
     const key = dev.key, cc = country || '';
     const had = await db.one('select count(*)::int n from user_devices where user_id = $1', [user.id]);
     const seen = await db.one(`select 1 from user_devices where user_id = $1 and device_key = $2 and country = $3 and last_seen > now() - make_interval(days => $4)`, [user.id, key, cc, SEEN_DAYS]);
     await db.query(`insert into user_devices(user_id, device_key, country) values ($1,$2,$3)
       on conflict (user_id, device_key, country) do update set last_seen = now()`, [user.id, key, cc]);
-    if (created || !had.n || seen) return { alerted: false, reason: created ? 'new_account' : !had.n ? 'first_login' : 'known' };
+    // force: this login logged out an older device (too many at once), so the person always hears about it.
+    if (created || (!force && (!had.n || seen))) return { alerted: false, reason: created ? 'new_account' : !had.n ? 'first_login' : 'known' };
     const a = await rl.hitShared('login-alert-h:' + user.id, 3, 3600);
     const b = a.ok ? await rl.hitShared('login-alert-d:' + user.id, 10, 86400) : { ok: false };
     if (!a.ok || !b.ok) { log.info('new-login alert skipped (rate limit)', { user: user.id }); return { alerted: false, reason: 'rate_limited' }; }

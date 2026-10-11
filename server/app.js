@@ -20,8 +20,8 @@ const activity = require('./services/activity');
 const voo = require('./lib/voo');
 
 const ROUTE_FILES = [
-  'public', 'auth', 'workspace', 'connections', 'subscribers', 'segments', 'media', 'broadcasts', 'drips', 'flows',
-  'ai', 'wallet', 'referrals', 'support', 'telegram-webhooks', 'payment-webhooks', 'voosquare', 'voo-connect', 'blog', 'pages',
+  'public', 'auth', 'workspace', 'connections', 'subscribers', 'segments', 'media', 'broadcasts', 'drips', 'flows', 'bots',
+  'ai', 'cas-builder', 'wallet', 'referrals', 'support', 'telegram-webhooks', 'payment-webhooks', 'voosquare', 'voo-connect', 'blog', 'pages',
   'admin/index',
 ];
 
