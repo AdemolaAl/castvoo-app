@@ -357,6 +357,9 @@ describe('SEC-7: tracked links', () => {
     assert.equal(r.status, 200);
     assert.match(await r.text(), /You are leaving Castvoo[\s\S]*phish\.example\.net/);
     assert.equal((await fetch(app.url + '/l/sec7tme', { redirect: 'manual' })).status, 302, 'Telegram links go straight through');
+    app.config.linkWarnNewDays = 0;
+    assert.equal((await fetch(app.url + '/l/sec7aaa', { redirect: 'manual' })).status, 302, 'the warning page is disabled when the setting is 0');
+    app.config.linkWarnNewDays = 7;
     await app.db.query('update workspaces set paid_ever = true where id = $1', [ws.id]);
     assert.equal((await fetch(app.url + '/l/sec7aaa', { redirect: 'manual' })).status, 302, 'paying customers redirect straight away');
     const owner = await app.owner();

@@ -240,7 +240,7 @@ The same steps, in more detail, are in `docs/DEPLOY-NOTES-OCT-2026.md`.
 2. Download a PostgreSQL backup (Postgres → Backups → Backup now) and turn on daily backups. Turn on backups for the volume too.
 3. **The volume marker needs nothing from you.** The new version writes it by itself. Do **not** set `ALLOW_NO_VOLUME`.
 4. Add a new variable **`VOO_SERVICE_KEY`**. Make it with `openssl rand -hex 32`, and make it different from `VOO_API_KEY`. Send it to VooSquare for the staff sync.
-5. Optional: `LINK_WARN_NEW_DAYS=7` (already the default).
+5. The external-link warning page is disabled by default; leave `LINK_WARN_NEW_DAYS` unset or set it to `0`.
 6. Do not change `APP_SECRET`. Keep `NODE_ENV=production`, and keep `APP_URL` starting with https://.
 
 **Deploy, then check straight away**

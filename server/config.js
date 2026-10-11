@@ -36,8 +36,8 @@ const config = {
   // (without a proxy the header is whatever the visitor sends, and per-IP rate limits could be dodged).
   trustProxy: bool(env.TRUST_PROXY, !!env.RAILWAY_ENVIRONMENT),
   // SEC-7: tracked links of accounts younger than this (that never paid) show a "You are leaving Castvoo" page before
-  // going to a site outside Telegram and Castvoo. 0 = off.
-  linkWarnNewDays: Math.max(0, num(env.LINK_WARN_NEW_DAYS, 7)),
+  // going to a site outside Telegram and Castvoo. 0 = off (the default).
+  linkWarnNewDays: Math.max(0, num(env.LINK_WARN_NEW_DAYS, 0)),
 
   // Country from the visitor's address (lib/geoip.js): the free DB-IP "IP to Country Lite" file, kept in
   // UPLOAD_DIR/geo/. GEOIP_AUTO_DOWNLOAD (default on in production) fetches the new monthly file from db-ip.com.

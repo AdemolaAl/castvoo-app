@@ -18,7 +18,7 @@ The upgrade keeps all data. Follow these steps in order. Tick each one.
 4. **Add `VOO_SERVICE_KEY`.** Make it with `openssl rand -hex 32`. It must be different from `VOO_API_KEY`.
    Send it to whoever runs VooSquare: the VooSquare staff sync (`/api/voosquare/staff`) must now send this key.
    Until they change it, staff sync answers 401. The summary and the support desk keep working with `VOO_API_KEY`.
-5. Optional: `LINK_WARN_NEW_DAYS=7`. That is already the default, so you can leave it out.
+5. The external-link warning page is disabled by default. Leave `LINK_WARN_NEW_DAYS` unset or set it to `0`.
 6. Check these did **not** change:
    - `NODE_ENV=production`
    - `APP_URL` starts with `https://`
