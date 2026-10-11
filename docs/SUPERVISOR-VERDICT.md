@@ -170,7 +170,7 @@ All PASS at both widths. There were **0 page errors** and **no horizontal scroll
 |---|---|
 | Welcome Flows builder | From scratch: welcome, then 4 × (wait + message), so 9 blocks. Waits of 1–4 hours, labelled "hour" / "hours". A "Join VIP" link button was added. Saved with status 200: 5 steps with delays 0/60/120/180/240 minutes, and the button is stored as a tracked link. (`flows-builder`, `flows-saved`) |
 | Free plan branding line | A real join request on a Free flow sent "Hi Bo, welcome! ⚡ Free welcome bot by Castvoo.com" (with the `/r/` link). (`free-flows`) |
-| AI support chat | The "24/7 customer support" label, cartoon faces (8 images), a "Powered by Replyvoo" link to replyvoo.com in a new tab, an image upload (1 attachment saved), and an AI reply shown with the agent's name. (`help-chat`) |
+| AI support chat | The "24/7 customer support" label, cartoon faces (8 images), a non-clickable "Powered by Replyvoo" label, an image upload (1 attachment saved), and an AI reply shown with the agent's name. (`help-chat`) |
 | Guides videos page | 8 video guides; the player opens and the video streams (206); it closes when you leave the page. (`guides`, `guide-player`) |
 | No Google login | No "google" text on the website, login, signup, settings or admin (fonts excluded); `/auth/google` returns 404. (`login`, `signup`) |
 | Admin adds a payment method | Admin → Countries & payments → Add: created `gtbank_transfer_*` as an active bank method. (`admin-add-method-form`, `admin-methods`) |

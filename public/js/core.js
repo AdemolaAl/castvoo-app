@@ -464,7 +464,7 @@ function spark(vals, color) {
 /* ---------- Support chat helpers (Help page and the website chat) ---------- */
 /* The small "Powered by Replyvoo" line (Admin → Support AI). Replyvoo is Zedapex's AI support product. */
 function poweredBy(text) {
-  return text ? '<a class="pwr" href="https://replyvoo.com" target="_blank" rel="noopener"><span class="pwr-b" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M9.2 1.5 3.6 9h3.6l-.9 5.5L12.4 7H8.6z"/></svg></span>' + esc(text) + '</a>' : '';
+  return text ? '<span class="pwr"><span class="pwr-b" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M9.2 1.5 3.6 9h3.6l-.9 5.5L12.4 7H8.6z"/></svg></span>' + esc(text) + '</span>' : '';
 }
 /* Tap a chat image to see it big. Esc, tap or the close button closes it. */
 function openLightbox(src) {

@@ -167,7 +167,7 @@ Files: `services/support-ai.js` (queue, persona, prompt, handoff, sandbox, websi
 - Receipt screenshots: when `recheck_payment` finds the customer's OWN pending manual top-up in a turn where they sent an
   image, `images.linkAsProof()` copies it to that payment's proof (only if it has none and the method takes
   screenshots) and the Finance handoff note gets a copy. Nothing is approved or credited.
-- The website chat (logged out) refuses images (`images_not_allowed`). "Powered by Replyvoo" under both chats:
+- The website chat (logged out) refuses images (`images_not_allowed`). "Powered by Replyvoo" under both chats is a non-clickable label:
   `support_ai.powered_by` / `powered_by_text`.
 - Tests: `test/e2e/support-ai.test.js`; the fake Anthropic plays tool calls with `fakes.ai.script`, the OpenRouter mock
   with `mock.script`. Call `require('server/services/support-ai').tick()` to run the worker once.

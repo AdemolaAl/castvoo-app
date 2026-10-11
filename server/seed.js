@@ -107,7 +107,7 @@ const SETTINGS = {
     resolution_goal_pct: 99,
     // Customers (and the team) can send screenshots in the support chat; the AI reads them. Never in the website chat.
     customer_images: true,
-    // The small "Powered by Replyvoo" line under the support chat and the website chat (links to replyvoo.com).
+    // The small "Powered by Replyvoo" line under the support chat and the website chat.
     powered_by: true, powered_by_text: 'Powered by Replyvoo',
   },
   legal_updated: '9 October 2026',
