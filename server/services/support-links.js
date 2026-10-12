@@ -26,11 +26,14 @@ const APP = {
   wallet: ['Wallet and plan', 'Balance, payments and your plan', '#app/wallet'],
   topup: ['Top up your wallet', 'Opens the top-up window', '#app/wallet?topup=1'],
   plans: ['Plans and upgrade', 'Compare plans and switch', '#app/wallet?plans=1'],
+  subscriber_packs: ['Add subscriber packs', 'Scale: more bot subscribers, paid from the wallet', '#app/wallet?packs=1'],
+  talk_to_us: ['Talk to us about a custom plan', 'More than the biggest plan and packs allow', '#app/help?topic=custom'],
   bots: ['🤖 Bots', 'Your Welcome bots and Chat bots', '#app/flows'],
   new_bot: ['Make a new bot', 'Welcome bot or Chat bot', '#app/flows?newbot=1'],
   cas_builder: ['Build a bot with Cas', 'Cas asks a few questions and builds it', '#app/flows?cas=1'],
   channels: ['Channels & bots', 'Connect or fix your Telegram bots, channels and groups', '#app/bots'],
   send: ['Send a message', 'Broadcast now, later or at 9am', '#app/broadcast'],
+  repeats: ['Repeating messages', 'Repeat a message every day, on weekdays or chosen days', '#app/broadcast?repeat=1'],
   calendar: ['Scheduled messages', 'Your sending calendar', '#app/calendar'],
   follow_ups: ['Auto follow-ups', 'Messages your bot sends by itself', '#app/drips'],
   audiences: ['Audiences', 'Saved groups of bot subscribers', '#app/audiences'],
@@ -52,12 +55,14 @@ const APP = {
 };
 // A bot of the customer's own workspace: key → [label, tab].
 const BOT = { bot: ['Open the bot', null], bot_leads: ['Leads', 'leads'], bot_invites: ['Invites', 'invites'], bot_requests: ['Join requests', 'requests'], bot_stats: ['Stats', 'stats'] };
+// A broadcast of the customer's own workspace: message:<id> opens its report (#app/broadcast?id=<id>).
+const MESSAGE = 'message';
 
 // Video guides on the Guides page (public/js/app-guides.js VGUIDES ids; a test checks they all exist there).
 const GUIDES = {
   'connect-bot': 'Connect your Telegram bot', 'add-channel': 'Add a channel or group', 'cas-builder': 'Build a welcome bot with Cas',
   'welcome-flow': 'Build a welcome bot yourself', 'bots-with-cas': 'Build any bot with Cas', 'bots-yourself': 'Build a bot yourself',
-  'bots-leads-invites': 'Leads, invites & broadcasts', 'send-broadcast': 'Send a broadcast', 'auto-follow-ups': 'Auto follow-ups',
+  'bots-leads-invites': 'Leads, invites & broadcasts', 'send-broadcast': 'Send a broadcast', 'repeat-voice': 'Repeat, voice notes & round videos', 'auto-follow-ups': 'Auto follow-ups',
   'audiences-start-links': 'Audiences & start links', 'wallet-plans': 'Wallet, plans & the Free plan', 'referrals-help': 'Earn with referrals & get help',
   'setup-helper': 'Invite a setup helper',
 };
@@ -87,6 +92,7 @@ function keysText() {
   return [
     'Dashboard: ' + Object.keys(APP).join(', '),
     'One of their bots: bot:<id>, bot_leads:<id>, bot_invites:<id>, bot_requests:<id>, bot_stats:<id> (id from get_bots)',
+    'One of their messages (its report): message:<id> (broadcast id from get_broadcasts or get_repeats)',
     'Video guides: ' + Object.keys(GUIDES).map((g) => 'guide:' + g).join(', '),
     'Help article: article:<key> (knowledge key, e.g. article:connect-bot)',
     'Blog post: blog:<slug>',
@@ -104,6 +110,8 @@ function keyFromUrl(raw) {
     if (appHit) return appHit[0];
     const m = u.match(/^#app\/flows\?id=(\d{1,12})(?:&tab=(leads|invites|requests|stats))?$/);
     if (m) return (m[2] ? 'bot_' + m[2] : 'bot') + ':' + m[1];
+    const b = u.match(/^#app\/broadcast\?id=(\d{1,12})$/);
+    if (b) return MESSAGE + ':' + b[1];
     return null;
   }
   let url;
@@ -142,6 +150,13 @@ async function resolve(input, scope = {}) {
       if ((tab === 'leads' || tab === 'invites') && q.trigger_type !== 'bot_start') return { ok: false, reason: 'Leads and Invites are tabs of Chat bots only.' };
       if (tab === 'requests' && q.trigger_type !== 'join_request') return { ok: false, reason: 'Join requests are a tab of Welcome bots only.' };
       return { ok: true, card: { key, kind: 'app', label: label || `${l}: ${String(q.name).slice(0, 40)}`, sub: '🤖 Bots', href: `#app/flows?id=${q.id}${tab ? '&tab=' + tab : ''}` } };
+    }
+    if (kind === MESSAGE && arg) {
+      if (!scope.workspaceId) return { ok: false, reason: 'Message links need the customer to be logged in.' };
+      const id = Number(arg);
+      const b = Number.isInteger(id) && id > 0 ? await db.one('select id, title from broadcasts where id = $1 and workspace_id = $2', [id, scope.workspaceId]) : null;
+      if (!b) return { ok: false, reason: 'No message with that id in this workspace. Use get_broadcasts for the real ids.' };
+      return { ok: true, card: { key, kind: 'app', label: label || `Report: ${String(b.title || 'Message').slice(0, 50)}`, sub: 'Send a message', href: `#app/broadcast?id=${b.id}` } };
     }
     if (kind === 'guide' && GUIDES[arg]) return { ok: true, card: { key, kind: 'guide', label: label || GUIDES[arg], sub: 'Video guide', href: '#app/guides', guide: arg } };
     if (kind === 'legal' && LEGAL[arg]) return { ok: true, card: { key, kind: 'legal', label: LEGAL[arg], sub: 'castvoo.com', href: '/legal/' + arg } };

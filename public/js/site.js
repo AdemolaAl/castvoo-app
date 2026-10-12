@@ -343,6 +343,34 @@ const B_AI = [
   ['"Translate it to French"', 'Bienvenue 👋 Chaque matin, tu reçois ici une astuce utile.\n\nCommence par notre post le plus enregistré.\n\n[ Lire le meilleur post → ]'],
   ['"Make it shorter"', 'Welcome 👋 One useful tip every morning. Start with our top post below.\n\n[ Read it → ]'],
 ];
+/*
+ * The typing demos change length all the time. Without a reserved height their box grows and shrinks every few
+ * seconds and everything under it moves, and Safari (no scroll anchoring) moves the page under the reader: the
+ * "website shakes" on iPhone. reserveHeight measures every text the box will show (on an invisible copy at the same
+ * width) and keeps the box at the tallest one. Measured again when the width changes and when the web font arrives.
+ */
+function reserveHeight(box, n, fill) {
+  if (!box) return;
+  let w = -1;
+  const measure = (force) => {
+    const cw = box.clientWidth;
+    if (!cw || (cw === w && !force)) return;
+    w = cw;
+    const c = box.cloneNode(true);
+    c.removeAttribute('id'); $$('[id]', c).forEach((x) => x.removeAttribute('id'));
+    c.setAttribute('aria-hidden', 'true');
+    c.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;min-height:0;height:auto;width:' + box.getBoundingClientRect().width + 'px';
+    box.parentNode.appendChild(c);
+    let h = 0;
+    for (let i = 0; i < n; i++) { fill(c, i); h = Math.max(h, c.getBoundingClientRect().height); }
+    c.remove();
+    box.style.minHeight = Math.ceil(h) + 'px';
+  };
+  measure();
+  if ('ResizeObserver' in window) new ResizeObserver(() => measure()).observe(box);
+  else addEventListener('resize', () => measure());
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => measure(true)).catch(() => {});
+}
 let bk = 0, bkIv = null;
 function bAiTick() {
   const q = B_AI[bk % 3][0], t = B_AI[bk % 3][1];
@@ -460,6 +488,9 @@ function siteInit() {
   const sgTick = () => { sgEls.forEach((e, i) => e.classList.toggle('on', sgSets[sk].includes(i))); countTo($('#sgN'), sgCounts[sk], 700); sk = (sk + 1) % sgSets.length; };
   sgTick(); setInterval(() => { if (siteOn()) sgTick(); }, 2200);
   $('#clks').innerHTML = ['Mon', 'Tue', 'Wed'].map((c, i) => '<div class="clk"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2.5"/><line class="hh" x1="24" y1="24" x2="24" y2="13" stroke="#fff" stroke-width="3" stroke-linecap="round" style="animation-delay:-' + (i * 12) + 's"/><line class="hm" x1="24" y1="24" x2="24" y2="8" stroke="#CFE0FF" stroke-width="2" stroke-linecap="round" style="animation-delay:-' + (i * 2) + 's"/><circle cx="24" cy="24" r="2.5" fill="#fff"/></svg>' + c + '<small>09:00</small></div>').join('');
+  reserveHeight($('#bAiT') && $('#bAiT').parentNode, B_AI.length, (c, i) => { $('.q', c).textContent = B_AI[i][0]; const o = $('.q', c).nextElementSibling; o.textContent = B_AI[i][1]; o.classList.add('typing'); });
+  reserveHeight($('#aiPrompt') && $('#aiPrompt').parentNode, AIX.length, (c, i) => { c.lastElementChild.textContent = AIX[i].p; });
+  reserveHeight($('#aiOut'), AIX.length, (c, i) => { c.textContent = AIX[i].o; c.classList.add('typing'); });
   bAiTick(); setInterval(() => { if (siteOn()) bAiTick(); }, 8000);
   $('#teamStack').innerHTML = mav('dayo', 36) + mav('zainab', 36) + mav('emeka', 36) + mav('wanjiku', 36) + '<span class="more">+6</span>';
   aiShow(0); setInterval(() => { if (!siteOn()) return; aiAuto = (aiAuto + 1) % AIX.length; aiShow(aiAuto); }, 9500);

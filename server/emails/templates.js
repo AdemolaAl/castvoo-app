@@ -398,7 +398,7 @@ ${TEAM}`,
     when: 'Sent each time a plan is paid from the wallet.',
     subject: 'Receipt for your {{plan_name}} plan',
     preheader: 'We paid {{amount}} from your wallet. Receipt {{receipt_id}}. You are all set.',
-    vars: ['plan_name', 'amount', 'period_start', 'period_end', 'extra_seats', 'receipt_id', 'wallet_balance', 'billing_url'],
+    vars: ['plan_name', 'amount', 'period_start', 'period_end', 'extra_seats', 'subscriber_packs', 'receipt_id', 'wallet_balance', 'billing_url'],
     body: [
       h1('Thanks, your {{plan_name}} plan is paid'),
       p('Hi {{first_name}}, we paid for your <strong>{{plan_name}}</strong> plan from your Castvoo wallet. Your welcomes and follow-ups keep running. Here is your receipt.'),
@@ -407,6 +407,7 @@ ${TEAM}`,
         ['Plan', '{{plan_name}}'],
         ['Period', '{{period_start}} to {{period_end}}'],
         ['Extra team seats', '{{extra_seats}}'],
+        ['Subscriber packs', '{{subscriber_packs}}'],
         ['Wallet balance now', '{{wallet_balance}}'],
         ['Paid from wallet', '{{amount}}'],
       ], { boldLast: true }),
@@ -423,6 +424,7 @@ Receipt: {{receipt_id}}
 Plan: {{plan_name}}
 Period: {{period_start}} to {{period_end}}
 Extra team seats: {{extra_seats}}
+Subscriber packs: {{subscriber_packs}}
 Wallet balance now: {{wallet_balance}}
 Paid from wallet: {{amount}}
 
@@ -431,6 +433,48 @@ View billing: {{billing_url}}
 Tip: pay yearly and get 2 months free. A yearly plan costs 10 months and runs for 12. You can switch to yearly in your wallet.
 
 Plan payments cannot be refunded once a billing period starts. If you were charged twice or something looks wrong, write to {{support_email}} with your receipt number and we will put it right.
+
+${TEAM}`,
+  },
+
+  packs_receipt: {
+    category: 'transactional',
+    name: 'Subscriber packs receipt',
+    when: 'Sent when a Scale customer adds subscriber packs and they are paid from the wallet for the rest of the period.',
+    subject: 'Receipt for your subscriber packs',
+    preheader: 'We paid {{amount}} from your wallet for {{packs_added}}. Receipt {{receipt_id}}.',
+    vars: ['packs_added', 'subscriber_limit', 'amount', 'pack_price', 'period_end', 'receipt_id', 'wallet_balance', 'billing_url'],
+    body: [
+      h1('More room for your audience'),
+      p('Hi {{first_name}}, we added {{packs_added}} to your workspace and paid for the rest of this period from your Castvoo wallet. You can broadcast to up to <strong>{{subscriber_limit}}</strong> bot subscribers now.'),
+      receipt([
+        ['Receipt', '{{receipt_id}}'],
+        ['Added', '{{packs_added}}'],
+        ['Bot subscribers you can have now', '{{subscriber_limit}}'],
+        ['Price', '{{pack_price}}, renewed with your plan'],
+        ['Period ends', '{{period_end}}'],
+        ['Wallet balance now', '{{wallet_balance}}'],
+        ['Paid from wallet', '{{amount}}'],
+      ], { boldLast: true }),
+      button('{{billing_url}}', 'View your plan'),
+      small('From your next renewal, your packs are paid together with your plan. You can lower the number any time in Wallet and plan; the change starts at your next renewal and nothing is ever deleted. Pack payments for a period that has started are not refunded, except double charges or billing errors. Questions: {{support_email}}.'),
+      signoff(TEAM),
+    ].join('\n'),
+    text: `More room for your audience
+
+Hi {{first_name}}, we added {{packs_added}} to your workspace and paid for the rest of this period from your Castvoo wallet. You can broadcast to up to {{subscriber_limit}} bot subscribers now.
+
+Receipt: {{receipt_id}}
+Added: {{packs_added}}
+Bot subscribers you can have now: {{subscriber_limit}}
+Price: {{pack_price}}, renewed with your plan
+Period ends: {{period_end}}
+Wallet balance now: {{wallet_balance}}
+Paid from wallet: {{amount}}
+
+View your plan: {{billing_url}}
+
+From your next renewal, your packs are paid together with your plan. You can lower the number any time in Wallet and plan; the change starts at your next renewal and nothing is ever deleted. Pack payments for a period that has started are not refunded, except double charges or billing errors. Questions: {{support_email}}.
 
 ${TEAM}`,
   },

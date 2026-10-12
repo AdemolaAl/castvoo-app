@@ -8,22 +8,30 @@ const db = require('../db');
 const tg = require('./telegram');
 const seg = require('./segments');
 const { senderKey } = require('./connections');
-const { badRequest, url: vUrl, str, randomCode } = require('../lib/util');
+const config = require('../config');
+const { badRequest, httpError, url: vUrl, str, randomCode } = require('../lib/util');
 
-/** Validate text + media + buttons. Returns clean values. */
+/** Media kinds whose message may be sent without text (a voice note or round video says it all). */
+const TEXT_OPTIONAL = ['voice', 'video_note'];
+/** The most characters a message may have with this media kind (a round video's text goes in its own message). */
+const textLimit = (kind) => (!kind || kind === 'video_note' ? tg.LIMITS.text : tg.LIMITS.caption);
+
+/** Validate text + media + buttons. Returns clean values (media_kind too). */
 async function checkMessage(wsId, { body, media_id, buttons }) {
-  // max here is a rough guard in JS string units (an emoji is 2). The real Telegram limit is checked
-  // just below with visibleLength(), so 4,096 emoji (8,192 units) must still pass this line.
-  const text = str(body, 'Message', { min: 1, max: 20000, trim: false }).replace(/\r\n/g, '\n');
-  if (!text.trim()) throw badRequest('Write a message first.');
   let media = null;
   if (media_id) {
     media = await db.one('select id, kind from media where id = $1 and workspace_id = $2', [Number(media_id), wsId]);
     if (!media) throw badRequest('That photo or video was not found. Upload it again.');
   }
+  const optional = !!media && TEXT_OPTIONAL.includes(media.kind);
+  // max here is a rough guard in JS string units (an emoji is 2). The real Telegram limit is checked
+  // just below with visibleLength(), so 4,096 emoji (8,192 units) must still pass this line.
+  const text = (optional && (body == null || body === '') ? '' : str(body, 'Message', { min: 1, max: 20000, trim: false })).replace(/\r\n/g, '\n');
+  if (!text.trim() && !optional) throw badRequest('Write a message first.');
   const len = tg.visibleLength(text);
-  if (media && len > tg.LIMITS.caption) throw badRequest(`With a photo or video, Telegram allows 1,024 characters. This message has ${len.toLocaleString('en-US')}. Shorten it or remove the file.`);
-  if (!media && len > tg.LIMITS.text) throw badRequest(`Telegram allows 4,096 characters per message. This one has ${len.toLocaleString('en-US')}.`);
+  if (media && media.kind === 'voice' && len > tg.LIMITS.caption) throw badRequest(`With a voice note, Telegram allows 1,024 characters. This message has ${len.toLocaleString('en-US')}. Shorten it or remove the voice note.`);
+  if (media && !optional && len > tg.LIMITS.caption) throw badRequest(`With a photo or video, Telegram allows 1,024 characters. This message has ${len.toLocaleString('en-US')}. Shorten it or remove the file.`);
+  if (len > tg.LIMITS.text) throw badRequest(`Telegram allows 4,096 characters per message. This one has ${len.toLocaleString('en-US')}.`);
   const btns = [];
   for (const b of (Array.isArray(buttons) ? buttons : []).slice(0, 6)) {
     if (!b || (!b.label && !b.url)) continue;
@@ -31,7 +39,60 @@ async function checkMessage(wsId, { body, media_id, buttons }) {
     btns.push({ label, url: vUrl(b.url, `Link for "${label}"`) });
   }
   if (Array.isArray(buttons) && buttons.length > 6) throw badRequest('Use 6 buttons or fewer.');
-  return { body: text, media_id: media ? media.id : null, buttons: btns };
+  return { body: text.trim() ? text : '', media_id: media ? media.id : null, media_kind: media ? media.kind : null, buttons: btns };
+}
+
+/** A short title from the text (or what the message is when it has none). */
+function titleFrom(body, mediaKind) {
+  const line = String(body || '').replace(/[*_]/g, '').split('\n').find((l) => l.trim());
+  if (line) return line.trim().slice(0, 60);
+  return mediaKind === 'voice' ? '🎙️ Voice note' : mediaKind === 'video_note' ? '⭕ Round video' : 'Message';
+}
+
+/*
+ * Auto-delete and auto-pin (Oct 2026). Telegram lets bots delete their messages for 48 hours (private chats; in a
+ * channel the bot needs its posting / delete rights), so "Delete this message after…" is 1 to 47 hours. Pinning works in
+ * each person's bot chat and in a channel or group where the bot may pin (channels: "Edit messages of others";
+ * groups: "Pin messages"). The sender queues the delete / pin / unpin of every message right after it is sent
+ * (workers/sender.js followUps), so the times count from each person's own message.
+ */
+const DELETE_MAX_HOURS = 47;
+const UNPIN_MAX_HOURS = 30 * 24;
+const hoursOf = (v, name, max) => {
+  if (v === undefined || v === null || v === '' || v === false || v === 0 || v === '0') return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1) throw badRequest(`${name}: pick a whole number of hours.`);
+  if (n > max) throw badRequest(max === DELETE_MAX_HOURS ? 'Telegram lets bots delete messages for up to 48 hours, so pick 47 hours or less.' : 'Unpin after: pick 30 days or less.');
+  return n;
+};
+
+/** Can the bot pin in this channel or group? Throws a friendly 400 (code pin_rights) with the fix. Bots' own chats: yes. */
+async function checkPinRights(conn) {
+  if (conn.kind === 'bot') return true;
+  const token = config.telegram.botToken;
+  const botId = Number(String(token || '').split(':')[0]) || 0;
+  const where = conn.kind === 'channel' ? 'channel' : 'group';
+  const right = conn.kind === 'channel' ? 'Edit messages of others' : 'Pin messages';
+  let m;
+  try { m = await tg.platform('getChatMember', { chat_id: conn.tg_chat_id, user_id: botId }); } catch (e) {
+    if (e.code === 400 || e.code === 403) m = null; else return true; // Telegram is slow or down: let it save, the pin reports itself
+  }
+  const ok = m && (m.status === 'creator' || (m.status === 'administrator' && (conn.kind === 'channel' ? m.can_edit_messages : m.can_pin_messages)));
+  if (!ok) {
+    const name = conn.title ? `"${conn.title}"` : `your ${where}`;
+    throw httpError(400, `@${config.telegram.botUsername || 'CastvooBot'} can't pin in ${name} yet. In Telegram, open the ${where} → Administrators → @${config.telegram.botUsername || 'CastvooBot'} and turn on "${right}", then try again.`, 'pin_rights');
+  }
+  return true;
+}
+
+/** "Delete after", "Pin it", "Notify members", "Unpin after" from a form → clean values (checks pin rights). */
+async function checkExtras(conn, b) {
+  const del = hoursOf(b.delete_after_hours, 'Delete after', DELETE_MAX_HOURS);
+  const pin = !!b.pin;
+  let unpin = pin ? hoursOf(b.unpin_after_hours, 'Unpin after', UNPIN_MAX_HOURS) : null;
+  if (unpin && del && unpin >= del) unpin = null; // it is deleted before it would be unpinned
+  if (pin) await checkPinRights(conn);
+  return { delete_after_hours: del, pin, pin_notify: pin && !!b.pin_notify, unpin_after_hours: unpin };
 }
 
 /** Create tracked short links for the buttons. Returns buttons with codes. */
@@ -51,9 +112,19 @@ async function makeLinks(c, wsId, buttons, { broadcastId = null, stepId = null }
 }
 
 /** The wall-clock date and time in a zone at moment `t` (ms). */
+// One formatter per zone (making an Intl.DateTimeFormat is slow; the repeating-messages calendar calls this thousands of times).
+const WALL_FMT = new Map();
+function wallFmt(zone) {
+  let f = WALL_FMT.get(zone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (WALL_FMT.size > 500) WALL_FMT.clear();
+    WALL_FMT.set(zone, f);
+  }
+  return f;
+}
 function wallClock(zone, t) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    .formatToParts(new Date(t)).map((p) => [p.type, p.value]));
+  const parts = Object.fromEntries(wallFmt(zone).formatToParts(new Date(t)).map((p) => [p.type, p.value]));
   return { y: +parts.year, m: +parts.month, d: +parts.day, h: +parts.hour, min: +parts.minute, s: +parts.second };
 }
 /** How many minutes a zone is ahead of UTC at moment `t` (ms). Uses whole seconds, so no rounding errors. */
@@ -136,10 +207,10 @@ async function enqueue(b) {
 
 /** Queue edit / pin / delete for every message of a sent broadcast. */
 async function queueAction(b, action) {
-  const r = await db.query(`insert into deliveries(workspace_id, sender_key, action, broadcast_id, subscriber_id, chat_id, message_id, priority, due_at)
-    select workspace_id, sender_key, $2, broadcast_id, subscriber_id, chat_id, message_id, 3, now() from deliveries
+  const r = await db.query(`insert into deliveries(workspace_id, sender_key, action, broadcast_id, subscriber_id, chat_id, message_id, message_id2, priority, due_at)
+    select workspace_id, sender_key, $2, broadcast_id, subscriber_id, chat_id, message_id, message_id2, 3, now() from deliveries
     where broadcast_id = $1 and action = 'send' and status = 'sent' and message_id is not null`, [b.id, action]);
   return r.rowCount;
 }
 
-module.exports = { checkMessage, makeLinks, enqueue, queueAction, next9 };
+module.exports = { checkExtras, checkPinRights, DELETE_MAX_HOURS, UNPIN_MAX_HOURS, checkMessage, makeLinks, enqueue, queueAction, next9, wallClock, offsetMinutes, titleFrom, textLimit, TEXT_OPTIONAL };

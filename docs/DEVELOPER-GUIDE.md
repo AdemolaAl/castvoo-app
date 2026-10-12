@@ -167,7 +167,7 @@ Files: `services/support-ai.js` (queue, persona, prompt, handoff, sandbox, websi
 - Receipt screenshots: when `recheck_payment` finds the customer's OWN pending manual top-up in a turn where they sent an
   image, `images.linkAsProof()` copies it to that payment's proof (only if it has none and the method takes
   screenshots) and the Finance handoff note gets a copy. Nothing is approved or credited.
-- The website chat (logged out) refuses images (`images_not_allowed`). "Powered by Replyvoo" under both chats is a non-clickable label:
+- The website chat (logged out) refuses images (`images_not_allowed`). "Powered by Replyvoo" under both chats:
   `support_ai.powered_by` / `powered_by_text`.
 - Tests: `test/e2e/support-ai.test.js`; the fake Anthropic plays tool calls with `fakes.ai.script`, the OpenRouter mock
   with `mock.script`. Call `require('server/services/support-ai').tick()` to run the worker once.
@@ -220,7 +220,7 @@ to `OPTIONS` and draw it in the matching part function; old saved avatars keep w
 
 ## Guide videos (public/videos)
 
-The Guides page plays the 13 videos listed in `VGUIDES` (public/js/app-guides.js). Each guide needs `<id>.mp4`,
+The Guides page plays the 14 videos listed in `VGUIDES` (public/js/app-guides.js). Each guide needs `<id>.mp4`,
 `<id>.vtt` (captions) and `<id>.jpg` (poster). They are part of the app: deploy them with the code (one zip, or git).
 A start-up warning ("guide videos missing") and `npm run check` (section 11) catch a deploy without them.
 

@@ -24,7 +24,7 @@ const SW = {
   el: null, open: false, view: null, mode: null,
   d: null, site: { msgs: [], busy: false, agent: null, cta: null, login: false },
   pend: [], unread: 0, busy: false, fastUntil: 0, lastKey: '', pollT: null, unreadT: null, greetT: null,
-  scrollY: 0, locked: false, lastFocus: null,
+  scrollY: 0, locked: false, lastFocus: null, seen: new Set(), fitQ: 0, fitH: -1, fitT: -1,
 };
 
 const swSmall = () => window.matchMedia('(max-width:600px)').matches;
@@ -57,7 +57,8 @@ function swSiteLoad() {
 function swSiteSave() {
   try { store.sset('cv_sw_site', JSON.stringify({ msgs: SW.site.msgs.slice(-40), cta: SW.site.cta, login: SW.site.login })); } catch (_) { /* full or blocked */ }
 }
-const swAgentFace = (url, name) => (url ? '<img class="sw-av" src="' + esc(url) + '" alt="" width="30" height="30" loading="lazy">' : '<span class="sw-av team" aria-hidden="true">' + esc(String(name || 'C')[0]) + '</span>');
+// No loading="lazy": every redraw makes new <img>s, and lazy ones blink empty for a frame on iPhone.
+const swAgentFace = (url, name) => (url ? '<img class="sw-av" src="' + esc(url) + '" alt="" width="30" height="30" decoding="async">' : '<span class="sw-av team" aria-hidden="true">' + esc(String(name || 'C')[0]) + '</span>');
 
 /* ---------- mount / show / hide ---------- */
 function swMount() {
@@ -76,7 +77,7 @@ function swMount() {
   document.addEventListener('focusin', (e) => { const t = e.target; if (window.innerWidth <= 980 && t && !t.closest('#sw') && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) && !/^(checkbox|radio|button|submit|file)$/.test(t.type || '')) w.classList.add('kb'); });
   document.addEventListener('focusout', () => setTimeout(() => { const a = document.activeElement; if (!a || !(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable) || a.closest('#sw')) w.classList.remove('kb'); }, 60));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) swUnreadTick(); });
-  if (window.visualViewport) { visualViewport.addEventListener('resize', swFit); visualViewport.addEventListener('scroll', swFit); }
+  if (window.visualViewport) { visualViewport.addEventListener('resize', swFitSoon); visualViewport.addEventListener('scroll', swFitSoon); }
   swHeroWatch();
   return w;
 }
@@ -156,10 +157,12 @@ async function swUnreadTick() {
 }
 
 /* ---------- open / close ---------- */
+/* The page can scroll on the window or on <body> (iOS web views, the demo frame): read and restore the real one. */
+const swScrolled = () => Math.max(window.scrollY || 0, document.documentElement.scrollTop || 0, document.body.scrollTop || 0);
 function swLock() {
   if (SW.locked || !swSmall()) return;
   SW.locked = true;
-  SW.scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  SW.scrollY = swScrolled();
   const b = document.body.style;
   b.position = 'fixed'; b.top = -SW.scrollY + 'px'; b.left = '0'; b.right = '0'; b.width = '100%';
   document.documentElement.classList.add('sw-lock');
@@ -172,14 +175,27 @@ function swUnlock() {
   document.documentElement.classList.remove('sw-lock');
   // Back to the same place, instantly (the page has smooth scrolling on, which would visibly scroll).
   const h = document.documentElement, prev = h.style.scrollBehavior;
-  h.style.scrollBehavior = 'auto'; window.scrollTo(0, SW.scrollY); h.style.scrollBehavior = prev;
+  h.style.scrollBehavior = 'auto'; window.scrollTo(0, SW.scrollY);
+  if (document.body.scrollTop !== SW.scrollY && document.body.scrollHeight > document.body.clientHeight) document.body.scrollTop = SW.scrollY;
+  h.style.scrollBehavior = prev;
 }
-/* Phones: keep the panel the size of what is visible above the keyboard. */
+/*
+ * Phones: keep the panel the size of what is visible above the keyboard. It follows visualViewport with `top` and
+ * `height` (never `transform`: the panel's open animation transitions transform, so every keyboard or URL-bar event
+ * started a 0.3 s slide and the panel chased the viewport: "the chat box shakes"). iOS fires these events many times
+ * a frame while the keyboard moves: at most one write per frame, and only when a value really changed.
+ */
+function swFitSoon() {
+  if (SW.fitQ || !SW.open) return;
+  SW.fitQ = requestAnimationFrame(() => { SW.fitQ = 0; swFit(); });
+}
 function swFit() {
   const p = $('#swP');
-  if (!p || !SW.open || !swSmall() || !window.visualViewport) { if (p) { p.style.height = ''; p.style.transform = ''; } return; }
-  p.style.height = Math.round(visualViewport.height) + 'px';
-  p.style.transform = 'translateY(' + Math.round(visualViewport.offsetTop) + 'px)';
+  if (!p) return;
+  if (!SW.open || !swSmall() || !window.visualViewport) { if (SW.fitH !== -1) { p.style.height = ''; p.style.top = ''; SW.fitH = SW.fitT = -1; } return; }
+  const h = Math.round(visualViewport.height), t = Math.max(0, Math.round(visualViewport.offsetTop));
+  if (h !== SW.fitH) { p.style.height = h + 'px'; SW.fitH = h; }
+  if (t !== SW.fitT) { p.style.top = t + 'px'; SW.fitT = t; }
 }
 
 function swOpen() {
@@ -214,7 +230,7 @@ function swClose(quiet) {
   SW.el.classList.remove('open');
   $('#swL').setAttribute('aria-expanded', 'false');
   swUnlock();
-  p.style.height = ''; p.style.transform = '';
+  p.style.height = ''; p.style.top = ''; SW.fitH = SW.fitT = -1;
   setTimeout(() => { if (!SW.open) p.hidden = true; }, quiet ? 0 : 220);
   swBadge();
   if (!quiet) { const f = SW.lastFocus && document.contains(SW.lastFocus) && SW.lastFocus !== document.body && SW.lastFocus.offsetParent !== null && !SW.lastFocus.closest('.sw-greet') ? SW.lastFocus : $('#swL'); try { f.focus({ preventScroll: true }); } catch (_) { /* gone */ } }
@@ -314,11 +330,12 @@ function swDraw(force) {
     if (!ms.length) h += swBubble({ mine: false, first: true, last: true, face: first ? swAgentFace(first.avatar, first.name) : '<span class="sw-av team">C</span>', name: first ? first.name : 'Castvoo', html: 'Hi' + (ME.user && typeof greetName === 'function' && greetName() ? ' ' + esc(greetName()) : '') + '! 👋 I\'m ' + esc(first ? first.name : 'from Castvoo') + '. Ask me anything about setup, sending, payments or your bot. I can check your account for you' + ((d.chat || {}).images !== false ? ', and you can send me a screenshot' : '') + '.' });
     ms.forEach((m, i) => {
       const mine = m.author_type === 'user';
+      const k = String(m.id).startsWith('tmp') ? 'b:' + m.body : 'm' + m.id;
       const same = (x) => x && (x.author_type === 'user') === mine && (mine || x.author_name === m.author_name);
       const fst = !same(ms[i - 1]);
       const lst = !same(ms[i + 1]) && !(d.typing && !mine && i === ms.length - 1 && d.typing.name === m.author_name);
       const pics = (m.attachments || []).length ? '<span class="cpics n' + Math.min(m.attachments.length, 3) + '">' + m.attachments.map((x) => '<button type="button" class="cpic" data-lb="' + esc(x.url) + '" aria-label="Open image"><img src="' + esc(x.url) + '" alt="Image"></button>').join('') + '</span>' : '';
-      h += swBubble({ mine, first: fst, last: lst, face: mine ? swMine(30) : swAgentFace(m.avatar, m.author_name), name: m.author_name || 'Castvoo team', staff: m.author_type === 'staff', html: pics + (m.body ? esc(m.body).replace(/\n/g, '<br>') : '') + (mine ? '' : supLinkCards(m.links, 'w' + m.id)), time: lst ? (m.sending ? 'Sending…' : fmtDate(m.created_at)) : '' });
+      h += swBubble({ k, alt: mine ? 'b:' + m.body : '', mine, first: fst, last: lst, face: mine ? swMine(30) : swAgentFace(m.avatar, m.author_name), name: m.author_name || 'Castvoo team', staff: m.author_type === 'staff', html: pics + (m.body ? esc(m.body).replace(/\n/g, '<br>') : '') + (mine ? '' : supLinkCards(m.links, 'w' + m.id)), time: lst ? (m.sending ? 'Sending…' : fmtDate(m.created_at)) : '' });
     });
     if (d.typing) h += swTyping(d.typing.avatar, d.typing.name);
   } else if (SW.mode === 'site') {
@@ -332,7 +349,7 @@ function swDraw(force) {
       const nx = ms[i + 1], pv = ms[i - 1];
       const fst = !(pv && pv.role === m.role);
       const lst = !(nx && nx.role === m.role) && !(SW.site.busy && !mine && i === ms.length - 1);
-      h += swBubble({ mine, first: fst, last: lst, face: mine ? '' : face, name: ag.name, html: (m.html || esc(m.content).replace(/\n/g, '<br>')) + (mine ? '' : supLinkCards(m.links, 's' + i)), time: lst && m.at ? fmtDate(m.at) : '' });
+      h += swBubble({ k: 's' + i, mine, first: fst, last: lst, face: mine ? '' : face, name: ag.name, html: (m.html || esc(m.content).replace(/\n/g, '<br>')) + (mine ? '' : supLinkCards(m.links, 's' + i)), time: lst && m.at ? fmtDate(m.at) : '' });
     });
     if (SW.site.busy) h += swTyping(ag.avatar, ag.name);
   } else {
@@ -340,16 +357,48 @@ function swDraw(force) {
   }
   const atBottom = L.scrollHeight - L.scrollTop - L.clientHeight < 90;
   L.innerHTML = h;
+  swMarkNew(L);
   paintCas(L);
   if (atBottom || force) {
     L.scrollTop = L.scrollHeight;
     $$('img', L).forEach((im) => { if (!im.complete) im.addEventListener('load', () => { L.scrollTop = L.scrollHeight; }, { once: true }); });
   }
 }
+/*
+ * Only bubbles that were not on screen before rise in. The list is redrawn on every message and typing change; when
+ * every bubble replayed its entrance each time, the whole conversation jumped ("the chat box shakes").
+ */
+function swMarkNew(L) {
+  const now = new Set();
+  $$('.sw-msg[data-k]', L).forEach((el) => {
+    const k = el.dataset.k, alt = el.dataset.alt;
+    if (!SW.seen.has(k) && !(alt && SW.seen.has(alt))) el.classList.add('nw');
+    now.add(k); if (alt) now.add(alt);
+  });
+  SW.seen = now;
+}
+/* The same for the Help page chat (app-account.js), whose bubbles have no ids: a bubble is known by its side and text
+ * (the time under it left out, it changes from "Sending…"); repeats are counted. Known bubbles get .old (no entrance). */
+function chatMarkOld(L, sel) {
+  const prev = L.__cvSeen || new Set(), now = new Set(), count = {};
+  $$(sel, L).forEach((el) => {
+    let k = 'typing';
+    if (!el.classList.contains('typing')) {
+      let t = '';
+      const b = el.querySelector('.cb');
+      if (b) b.childNodes.forEach((n) => { if (!(n.nodeType === 1 && n.matches('small.ct'))) t += n.textContent; });
+      k = (el.classList.contains('u') ? 'u:' : 'a:') + t.slice(0, 300);
+      count[k] = (count[k] || 0) + 1; k += '#' + count[k];
+    }
+    if (prev.has(k)) el.classList.add('old');
+    now.add(k);
+  });
+  L.__cvSeen = now;
+}
 function swBubble(o) {
   const ava = o.last ? (o.face || '') : '<span class="sw-av sp" aria-hidden="true"></span>';
   const nm = !o.mine && o.first ? '<small class="sw-n">' + esc(o.name) + (o.staff ? ' <span class="steam-tag">Team</span>' : '') + '</small>' : '';
-  return '<div class="sw-msg ' + (o.mine ? 'u' : 'a') + (o.first ? ' first' : '') + (o.last ? ' last' : '') + '">' + (o.mine && !o.face ? '' : ava) + '<div class="sw-b">' + nm + o.html + (o.time ? '<small class="sw-tm">' + esc(o.time) + '</small>' : '') + '</div></div>';
+  return '<div class="sw-msg ' + (o.mine ? 'u' : 'a') + (o.first ? ' first' : '') + (o.last ? ' last' : '') + '" data-k="' + esc(o.k || 'x') + '"' + (o.alt ? ' data-alt="' + esc(o.alt) + '"' : '') + '>' + (o.mine && !o.face ? '' : ava) + '<div class="sw-b">' + nm + o.html + (o.time ? '<small class="sw-tm">' + esc(o.time) + '</small>' : '') + '</div></div>';
 }
 /*
  * Link cards under an agent's bubble (server: services/support-links.js, every card checked against a whitelist).
@@ -393,7 +442,7 @@ function supLinkClick(e, onApp) {
 }
 
 function swTyping(url, name) {
-  return '<div class="sw-msg a typing first last">' + swAgentFace(url, name) + '<div class="sw-b"><span class="tg-typing in"><i></i><i></i><i></i></span></div><span class="sw-tl">' + esc(name) + ' is typing…</span></div>';
+  return '<div class="sw-msg a typing first last" data-k="typing">' + swAgentFace(url, name) + '<div class="sw-b"><span class="tg-typing in"><i></i><i></i><i></i></span></div><span class="sw-tl">' + esc(name) + ' is typing…</span></div>';
 }
 
 async function swRefresh(force) {

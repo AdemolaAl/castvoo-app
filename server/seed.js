@@ -71,7 +71,9 @@ const COUNTRIES = [
 const SETTINGS = {
   company: { name: 'Zedapex', address: 'Lagos, Nigeria', support_email: 'support@castvoo.com', privacy_email: 'privacy@castvoo.com', billing_email: 'billing@castvoo.com' },
   trial: { days: 7, plan: 'growth', ai_writes: 50, join_requests: 3000, on_end: 'free' },
-  billing: { refund_days: 14, data_retention_days: 60, min_topup_cents: 1000, max_topup_cents: 500000, renew_reminder_days: 3, limit_grace_pct: 10, seat_price_cents: 500 },
+  billing: { refund_days: 14, data_retention_days: 60, min_topup_cents: 1000, max_topup_cents: 500000, renew_reminder_days: 3, limit_grace_pct: 10, seat_price_cents: 500,
+    // Scale subscriber packs (billing.js packConf): bot subscribers per pack, price a month (0 = not sold), most packs.
+    sub_pack_size: 50000, sub_pack_price_cents: 2900, sub_pack_max: 8 },
   referral: { rates: [5, 10, 15], commission_cap_pct: 15, yearly_cap_pct: 15, tier2_min: 5, tier3_min: 20, settle_days: 30, min_withdraw_cents: 30000, cookie_days: 60 },
   ai: { model: 'claude-haiku-4-5-20251001', max_output_tokens: 900, temperature: 0.7, house_rules: '' },
   // Who answers for Cas. provider '' = AI_PROVIDER env. key_enc is encrypted and only used for the endpoint in key_for.
@@ -107,7 +109,7 @@ const SETTINGS = {
     resolution_goal_pct: 99,
     // Customers (and the team) can send screenshots in the support chat; the AI reads them. Never in the website chat.
     customer_images: true,
-    // The small "Powered by Replyvoo" line under the support chat and the website chat.
+    // The small "Powered by Replyvoo" line under the support chat and the website chat (links to replyvoo.com).
     powered_by: true, powered_by_text: 'Powered by Replyvoo',
   },
   legal_updated: '9 October 2026',

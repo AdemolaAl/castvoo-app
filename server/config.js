@@ -32,12 +32,14 @@ const config = {
   // Set to true only to start in production without a volume on purpose (uploads are lost on every deploy).
   allowNoVolume: bool(env.ALLOW_NO_VOLUME, false),
   runWorkers: bool(env.RUN_WORKERS, true),
+  // Voice notes and round videos are converted with ffmpeg (services/media-convert.js). Empty = `ffmpeg` on the PATH.
+  ffmpegPath: (env.FFMPEG_PATH || '').trim(),
   // Trust X-Forwarded-For only behind a proxy that appends the real address: on by default on Railway, off elsewhere
   // (without a proxy the header is whatever the visitor sends, and per-IP rate limits could be dodged).
   trustProxy: bool(env.TRUST_PROXY, !!env.RAILWAY_ENVIRONMENT),
   // SEC-7: tracked links of accounts younger than this (that never paid) show a "You are leaving Castvoo" page before
-  // going to a site outside Telegram and Castvoo. 0 = off (the default).
-  linkWarnNewDays: Math.max(0, num(env.LINK_WARN_NEW_DAYS, 0)),
+  // going to a site outside Telegram and Castvoo. 0 = off.
+  linkWarnNewDays: Math.max(0, num(env.LINK_WARN_NEW_DAYS, 7)),
 
   // Country from the visitor's address (lib/geoip.js): the free DB-IP "IP to Country Lite" file, kept in
   // UPLOAD_DIR/geo/. GEOIP_AUTO_DOWNLOAD (default on in production) fetches the new monthly file from db-ip.com.

@@ -267,14 +267,14 @@ p{margin:0;text-wrap:pretty}
 .gp-ph .scr>.sl{position:absolute;inset:0;display:flex;flex-direction:column;animation:slin .45s var(--ease)}
 @keyframes slin{from{transform:translateX(30px);opacity:0}}
 .gp-side{display:flex;flex-direction:column;gap:16px;min-width:0}
-.gp-ch{display:grid;gap:8px}
+.gp-ch{display:grid;gap:8px;align-content:start}
 .gp-c{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:18px;border:1.5px solid var(--line);background:#fff;cursor:pointer;text-align:left;transition:all .3s var(--ease);position:relative;overflow:hidden;width:100%}
 .gp-c .n{width:30px;height:30px;border-radius:10px;background:var(--soft);display:grid;place-items:center;font-weight:800;font-size:13px;flex:none;transition:all .3s}
 .gp-c b{display:block;font-size:15px;letter-spacing:-.02em}
 .gp-c small{display:block;color:var(--mut);font-size:13.5px;line-height:1.45;max-height:0;overflow:hidden;transition:max-height .4s var(--ease)}
 .gp-c.on{border-color:var(--blue);box-shadow:0 0 0 4px var(--blue-s)}
 .gp-c.on .n{background:var(--grad);color:#fff}
-.gp-c.on small{max-height:80px}
+.gp-c.on small{max-height:80px;max-height:var(--h,80px)}
 .gp-c.done .n{background:var(--ok-s);color:var(--ok)}
 .gp-c .bar{position:absolute;left:0;bottom:0;height:3px;background:var(--grad);width:0}
 .gp-ctl{display:flex;align-items:center;gap:12px}
@@ -2464,9 +2464,11 @@ input.trigsel::placeholder{color:rgba(255,255,255,.5)}
 .chat-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--mut2);font-weight:600;margin-top:-2px}
 .chat-foot>span{display:inline-flex;align-items:center;gap:6px}
 .chat-foot>span svg{width:14px;height:14px;color:var(--ok)}
-.pwr{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--mut2);letter-spacing:.01em}
+.pwr{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--mut2);text-decoration:none;letter-spacing:.01em;transition:color .2s}
+.pwr:hover{color:var(--ink2)}
 .pwr-b{width:16px;height:16px;border-radius:50%;background:#FFC928;display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,201,40,.22)}
 .pwr-b svg{width:11px;height:11px;fill:#fff}
+.pwr:hover .pwr-b{box-shadow:0 0 0 4px rgba(255,201,40,.25)}
 .dropz{position:absolute;inset:6px;border-radius:22px;border:2px dashed var(--blue);background:rgba(234,240,255,.92);display:grid;place-items:center;z-index:5;pointer-events:none;animation:pop .2s var(--ease)}
 .dropz span{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--blue-t)}
 .dropz svg{width:24px;height:24px}
@@ -2927,6 +2929,15 @@ html:has(#v-app:not([hidden])){scroll-behavior:auto}
 .seat-q b{color:var(--ink)}
 .seatbx .ferr{margin:0}
 .seatbx #sxGo{align-self:flex-start}
+/* Subscriber packs (Wallet → Your plan, Scale) and "Talk to us" */
+.seatbx #pkGo{align-self:flex-start}
+#pkBox{margin:4px 0}
+#pkBox.flash{animation:pkflash 1.6s ease-out 1}
+@keyframes pkflash{0%{box-shadow:0 0 0 0 rgba(47,107,255,.45)}100%{box-shadow:0 0 0 14px rgba(47,107,255,0)}}
+.pk-talk{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;font-size:13.5px;color:var(--mut);padding-top:8px;border-top:1px dashed var(--line)}
+.pk-talk b{color:var(--ink)}
+.pk-tb{display:inline-flex;gap:6px;flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){#pkBox.flash{animation:none}}
 
 /* ---------- Settings → Security: active devices ---------- */
 .devl{display:flex;flex-direction:column}
@@ -3082,7 +3093,7 @@ body.noscroll .swg:not(.open){opacity:0;pointer-events:none}
 .sw-gx{position:absolute;top:-10px;left:-10px;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--mut);display:grid;place-items:center;cursor:pointer;box-shadow:var(--sh-s);z-index:1}
 .sw-gx svg{width:12px;height:12px}
 /* The panel */
-.sw-p{position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(var(--sw-b) + 74px);width:380px;height:min(600px,calc(100dvh - var(--sw-b) - 100px));display:flex;flex-direction:column;background:var(--bg);border-radius:26px;overflow:hidden;box-shadow:0 2px 6px rgba(11,20,48,.06),0 50px 100px -30px rgba(15,40,140,.55);border:1px solid rgba(213,220,234,.8);transform-origin:calc(100% - 30px) calc(100% + 40px);opacity:0;transform:translateY(14px) scale(.96);transition:opacity .22s,transform .3s var(--ease)}
+.sw-p{position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(var(--sw-b) + 74px);width:380px;height:min(600px,calc(100vh - var(--sw-b) - 100px));height:min(600px,calc(100svh - var(--sw-b) - 100px));display:flex;flex-direction:column;background:var(--bg);border-radius:26px;overflow:hidden;box-shadow:0 2px 6px rgba(11,20,48,.06),0 50px 100px -30px rgba(15,40,140,.55);border:1px solid rgba(213,220,234,.8);transform-origin:calc(100% - 30px) calc(100% + 40px);opacity:0;transform:translateY(14px) scale(.96);transition:opacity .22s,transform .3s var(--ease)}
 .sw-p.in{opacity:1;transform:none}
 .sw-h{position:relative;display:flex;align-items:center;gap:12px;padding:16px 14px 16px 16px;background:radial-gradient(140% 160% at 0% 0%,#5A8CFF 0%,#2F6BFF 38%,#1638B8 100%);color:#fff;flex:none}
 .sw-h::after{content:"";position:absolute;inset:auto 0 -1px 0;height:1px;background:rgba(255,255,255,.12)}
@@ -3104,7 +3115,9 @@ body.noscroll .swg:not(.open){opacity:0;pointer-events:none}
 .sw-msg{display:flex;gap:8px;align-items:flex-end;max-width:90%;position:relative}
 .sw-msg.u{align-self:flex-end;flex-direction:row-reverse}
 .sw-msg:not(.first){margin-top:-6px}
-.sw-b{padding:10px 13px;border-radius:18px;font-size:14.5px;line-height:1.5;word-break:break-word;animation:rise .3s var(--ease) both;min-width:0}
+.sw-b{padding:10px 13px;border-radius:18px;font-size:14.5px;line-height:1.5;word-break:break-word;min-width:0}
+/* only new bubbles rise in (widget.js swMarkNew); the list is redrawn often and old bubbles must stay still */
+.sw-msg.nw .sw-b{animation:rise .3s var(--ease) both}
 .sw-msg.a .sw-b{background:#fff;border:1px solid var(--line);border-bottom-left-radius:6px}
 .sw-msg.a:not(.first) .sw-b{border-top-left-radius:6px}
 .sw-msg.u .sw-b{background:var(--grad);color:#fff;border-bottom-right-radius:6px}
@@ -3113,7 +3126,8 @@ body.noscroll .swg:not(.open){opacity:0;pointer-events:none}
 .sw-b a{color:var(--blue-t);font-weight:700}
 .sw-n{display:block;font-size:12px;font-weight:800;color:var(--blue-t);margin-bottom:2px}
 .sw-tm{display:block;font-size:11px;opacity:.65;margin-top:3px;text-align:right}
-.sw-av{width:30px;height:30px;border-radius:50%;flex:none;object-fit:cover;background:#EAF1FF;animation:pop .35s var(--ease)}
+.sw-av{width:30px;height:30px;border-radius:50%;flex:none;object-fit:cover;background:#EAF1FF}
+.sw-msg.nw .sw-av{animation:pop .35s var(--ease)}
 .sw-av.team{background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:800;font-size:12px}
 .sw-av.sp{visibility:hidden;animation:none}
 .sw-msg .uav{width:30px!important;height:30px!important}
@@ -3167,7 +3181,7 @@ body.noscroll .swg:not(.open){opacity:0;pointer-events:none}
 }
 /* Phones: a full-screen sheet */
 @media (max-width:600px){
-  .sw-p{inset:0 0 auto 0;right:0;bottom:auto;width:100%;height:100%;height:100dvh;border-radius:0;border:0;transform-origin:50% 100%;transform:translateY(24px);padding-top:env(safe-area-inset-top,0px);background:var(--bg)}
+  .sw-p{inset:0 0 auto 0;right:0;bottom:auto;width:100%;height:100%;height:100svh;border-radius:0;border:0;transform-origin:50% 100%;transform:translateY(24px);padding-top:env(safe-area-inset-top,0px);background:var(--bg)}
   .sw-p.in{transform:none}
   .sw-h{padding-top:calc(14px + env(safe-area-inset-top,0px));margin-top:calc(-1 * env(safe-area-inset-top,0px))}
   .swg.open .sw-l,.swg.open .sw-greet{opacity:0;pointer-events:none}
@@ -3698,3 +3712,5 @@ body:has(.wf-bar) .toast{bottom:calc(86px + env(safe-area-inset-bottom,0px))}
 .sw-msg.a .sw-b:has(.slk),.cmsg.a .cb:has(.slk){min-width:min(270px,100%)}
 @media (max-width:600px){.slk-c{min-height:56px}.slk-t b{font-size:14.5px}}
 @media (prefers-reduced-motion:reduce){.slk-c,.slk-c::before,.slk-a{transition:none}.slk-art{animation:none}}
+/* Help page chat: bubbles already on screen keep still when the list is redrawn (widget.js chatMarkOld) */
+.cmsg.old .cb,.cmsg.old .sav,.cmsg.old .uav.sav{animation:none}

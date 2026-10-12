@@ -59,6 +59,7 @@ async function list(wsId) {
     from sequences q join connections c on c.id = q.connection_id where q.workspace_id = $1 and c.status <> 'removed' order by q.id`, [wsId]);
   for (const q of seqs) {
     q.steps = await db.many(`select s.id, s.position, s.delay_seconds, s.delay_minutes, s.body, s.media_id,
+        (select m.kind from media m where m.id = s.media_id) as media_kind, (select m.duration_sec from media m where m.id = s.media_id) as media_duration,
         (select coalesce(json_agg(json_build_object('label', l.label, 'url', l.url, 'code', l.code) order by l.position, l.created_at, l.code), '[]') from links l where l.step_id = s.id) as buttons,
         (select count(*)::int from deliveries d where d.step_id = s.id and d.status = 'sent') as sent,
         (select count(*)::int from clicks k join links l on l.code = k.code where l.step_id = s.id) as clicks

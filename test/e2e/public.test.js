@@ -128,7 +128,7 @@ describe('public endpoints', () => {
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'app-guides.js'), 'utf8') + '\n;this.VGUIDES = VGUIDES; this.VG_SETS = VG_SETS; this.vgTime = vgTime;', box);
     const cards = [...sec.matchAll(/data-vguide="([a-z-]+)" data-vset="site"[\s\S]*?data-len>([0-9:]+)</g)].map((m) => [m[1], m[2]]);
     assert.deepEqual(cards.map((c) => c[0]), ['cas-builder', 'welcome-flow', 'connect-bot', 'send-broadcast']);
-    assert.match(sec, /All 13 guides/);
+    assert.match(sec, /All 14 guides/);
     assert.deepEqual(cards.map((c) => c[0]), [...box.VG_SETS.site]);
     for (const [id, len] of cards) {
       const g = box.VGUIDES.find((x) => x.id === id);

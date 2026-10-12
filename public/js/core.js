@@ -384,6 +384,34 @@ function guideScreen(s) {
 function guide(host, opt) {
   opt = opt || {};
   host.innerHTML = '<div class="gp' + (opt.compact ? ' compact' : '') + '"><div class="gp-ph"><div class="notch"></div><div class="scr"><div class="sl"></div></div><span class="gp-ex">Example</span></div><div class="gp-side">' + (opt.compact ? '' : '<span class="gp-live"><i></i>Setup guide · 0:41</span><h3 class="h3">From @BotFather to connected, every tap.</h3>') + '<div class="gp-ch">' + GUIDE_CH.map((c, i) => '<button type="button" class="gp-c" data-c="' + i + '"><span class="n">' + (i + 1) + '</span><span><b>' + c.n + '</b><small>' + c.d + '</small></span><span class="bar"></span></button>').join('') + '</div><div class="gp-ctl"><button type="button" class="gp-pl" aria-label="Pause"><svg><use href="#i-pause"/></svg></button><div class="gp-seg">' + GUIDE_CH.map((c, i) => '<i data-c="' + i + '"><b></b></i>').join('') + '</div><span class="gp-tm">0:00 / 0:41</span></div></div></div>';
+  // The open chapter shows its sentence (max-height 0 → 80px). Keep the list at its tallest size (every chapter closed
+  // plus the longest sentence) so the page under the guide does not move each time the chapter changes (Safari has no
+  // scroll anchoring, so that read as the page shaking on iPhone). Measured again when the width changes.
+  const chl = $('.gp-ch', host);
+  if (chl && !opt.compact) {
+    let cw = -1;
+    const fit = (force) => {
+      if (!host.isConnected || (chl.clientWidth === cw && !force) || !chl.clientWidth) return;
+      cw = chl.clientWidth;
+      // each sentence opens to its own height (not a fixed 80px), so the closing and the opening chapter move at the
+      // same pace and the list never grows past the size kept below while they swap
+      $$('.gp-c small', chl).forEach((sm) => sm.style.setProperty('--h', Math.min(80, sm.scrollHeight) + 'px'));
+      // an invisible copy at the same width, each chapter opened in turn (no transitions), keeps the tallest height
+      const c = chl.cloneNode(true);
+      c.setAttribute('aria-hidden', 'true');
+      c.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;min-height:0;width:' + chl.getBoundingClientRect().width + 'px';
+      $$('*', c).forEach((x) => { x.style.transition = 'none'; });
+      chl.parentNode.appendChild(c);
+      const bs = $$('.gp-c', c);
+      let h = 0;
+      bs.forEach((b, i) => { bs.forEach((x, j) => x.classList.toggle('on', j === i)); h = Math.max(h, c.getBoundingClientRect().height); });
+      c.remove();
+      chl.style.minHeight = Math.ceil(h) + 'px';
+    };
+    requestAnimationFrame(() => fit());
+    if ('ResizeObserver' in window) new ResizeObserver(() => fit()).observe(chl);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fit(true)).catch(() => {});
+  }
   const S = {}, A = guideActions(), scr = $('.scr', host), stage = $('.sl', host);
   let t = 0, ai = 0, playing = !RM, last = 0, raf = 0, lastScr = '', dead = false;
   function render() {
@@ -464,7 +492,7 @@ function spark(vals, color) {
 /* ---------- Support chat helpers (Help page and the website chat) ---------- */
 /* The small "Powered by Replyvoo" line (Admin → Support AI). Replyvoo is Zedapex's AI support product. */
 function poweredBy(text) {
-  return text ? '<span class="pwr"><span class="pwr-b" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M9.2 1.5 3.6 9h3.6l-.9 5.5L12.4 7H8.6z"/></svg></span>' + esc(text) + '</span>' : '';
+  return text ? '<a class="pwr" href="https://replyvoo.com" target="_blank" rel="noopener"><span class="pwr-b" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M9.2 1.5 3.6 9h3.6l-.9 5.5L12.4 7H8.6z"/></svg></span>' + esc(text) + '</a>' : '';
 }
 /* Tap a chat image to see it big. Esc, tap or the close button closes it. */
 function openLightbox(src) {

@@ -114,6 +114,7 @@ async function remove(ws, id) {
     await c.query("update connections set status = 'removed', token_enc = null where id = $1", [conn.id]);
     await c.query("update deliveries set status = 'skipped', error = 'Connection removed' where status = 'queued' and sender_key = $1 and workspace_id = $2", [senderKey(conn), ws.id]);
     await c.query("update broadcasts set status = 'cancelled' where connection_id = $1 and status in ('scheduled','pending_approval','sending')", [conn.id]);
+    await c.query("update repeat_series set status = 'stopped', next_run_at = null, last_error = 'Stopped: its bot, channel or group was removed.', updated_at = now() where connection_id = $1 and status in ('active','paused','pending_approval')", [conn.id]);
     await c.query('update sequences set active = false where connection_id = $1', [conn.id]);
     // ENG-6: a flow's connection_id is its bot; a removed channel or group also switches off this workspace's
     // Welcome Flows on that chat (they stay as drafts), so the chat is free for whoever connects it next.

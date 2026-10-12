@@ -37,9 +37,8 @@ async function botAudience(ws, q) {
   const l = await billing.limits(ws);
   const u = await billing.usage(ws.id);
   const cap = billing.withGrace(l.bots.max_bot_subscribers);
-  if (cap !== billing.UNLIMITED && u.subscribers > cap) {
-    throw httpError(402, `You have ${u.subscribers.toLocaleString('en-US')} bot subscribers and your ${l.plan.name} plan allows ${l.bots.max_bot_subscribers.toLocaleString('en-US')}. Upgrade to broadcast again. Nothing is deleted, and your bots keep answering.`, 'limit_subscribers');
-  }
+  // Over the limit + 10%: on Scale the 402 offers a subscriber pack; above the most packs, "talk to us".
+  if (cap !== billing.UNLIMITED && u.subscribers > cap) throw await billing.subscriberLimitError(ws, l, u.subscribers, l.bots.max_bot_subscribers);
   const name = ('Started ' + q.name).slice(0, 60);
   const rules = [{ field: 'bot_started', value: Number(q.id), name: q.name.slice(0, 60) }];
   let seg = await db.one('select id from segments where workspace_id = $1 and rules @> $2::jsonb and jsonb_array_length(rules) = 1', [ws.id, JSON.stringify([{ field: 'bot_started', value: Number(q.id) }])]);

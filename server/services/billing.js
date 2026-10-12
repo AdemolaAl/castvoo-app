@@ -10,6 +10,11 @@
  *   any time for the days left of the period, then renewed with the plan in the same wallet payment. Fewer seats
  *   start at the next renewal (pending_extra_seats), never below the seats in use. The Free plan and a plan that
  *   drops to Free have no extra seats. The setup helper never uses a seat.
+ * - Subscriber packs (the top plan, Scale, only; billing.sub_pack_* settings: +50,000 bot subscribers for $29 a month,
+ *   up to 8): bought like extra seats (prorated for the days left, then renewed with the plan in the same payment);
+ *   fewer packs start at the next renewal (pending_subscriber_packs) and never delete anything. A move to another
+ *   plan or to Free ends them. The team can set packs or a custom subscriber limit per workspace (custom deals).
+ *   Pack payments are commissionable exactly like plan and seat payments.
  * - If the wallet is short at renewal, the workspace moves to the Free plan (nothing is deleted); a top-up that
  *   covers the plan starts it again.
  * - One commission per plan payment (AUD-1): the Castvoo referral OR the VooSquare affiliate, never both. The first
@@ -59,18 +64,20 @@ async function effectivePlan(ws) {
  * lead_questions, an invite step needs referral, a check step needs join_check). Over a count limit the server answers a
  * friendly 402; meters (bot subscribers, lead answers) get LIMIT_GRACE_PCT extra first.
  * A custom plan made in the admin panel gets the limits of the built-in plan it looks like (see botPlanOf).
+ * max_repeat_series: repeating messages running at a time (services/repeats.js); Scale's fair-use 100 is a real cap there.
  */
 const BOT_TYPES = ['welcome', 'join_check', 'lead_magnet', 'menu', 'broadcast', 'lead_questions', 'referral'];
 const BOT_GRACE_PCT = 10;
 const BOT_PLANS = {
   free: { max_bots: 2, bot_types: ['welcome', 'join_check', 'lead_magnet', 'menu'], max_bot_subscribers: 100, bot_steps: 1, menu_buttons: 4,
-    lead_answers_per_month: 0, lead_questions_per_form: 0, lead_export: 'none', referral_bots: 0, branding: true, concurrent_sessions_per_seat: 2 },
+    lead_answers_per_month: 0, lead_questions_per_form: 0, lead_export: 'none', referral_bots: 0, branding: true, concurrent_sessions_per_seat: 2, max_repeat_series: 0 },
   starter: { max_bots: 5, bot_types: ['welcome', 'join_check', 'lead_magnet', 'menu', 'broadcast', 'lead_questions'], max_bot_subscribers: 5000, bot_steps: 5, menu_buttons: 8,
-    lead_answers_per_month: 1000, lead_questions_per_form: 5, lead_export: 'csv', referral_bots: 0, branding: false, concurrent_sessions_per_seat: 2 },
+    lead_answers_per_month: 1000, lead_questions_per_form: 5, lead_export: 'csv', referral_bots: 0, branding: false, concurrent_sessions_per_seat: 2, max_repeat_series: 3 },
   growth: { max_bots: 15, bot_types: BOT_TYPES.slice(), max_bot_subscribers: 25000, bot_steps: 20, menu_buttons: 12,
-    lead_answers_per_month: 10000, lead_questions_per_form: 15, lead_export: 'csv', referral_bots: 2, branding: false, concurrent_sessions_per_seat: 2 },
+    lead_answers_per_month: 10000, lead_questions_per_form: 15, lead_export: 'csv', referral_bots: 2, branding: false, concurrent_sessions_per_seat: 2, max_repeat_series: 20 },
   scale: { max_bots: -1, max_bots_fair_use: 100, bot_types: BOT_TYPES.slice(), max_bot_subscribers: 100000, bot_steps: -1, menu_buttons: -1,
-    lead_answers_per_month: 100000, lead_questions_per_form: -1, lead_export: 'csv', referral_bots: -1, referral_bots_fair_use: 20, branding: false, concurrent_sessions_per_seat: 3 },
+    lead_answers_per_month: 100000, lead_questions_per_form: -1, lead_export: 'csv', referral_bots: -1, referral_bots_fair_use: 20, branding: false, concurrent_sessions_per_seat: 3,
+    max_repeat_series: -1, max_repeat_series_fair_use: 100 },
 };
 const BOT_TRIAL = { lead_answers_per_month: 300 };
 const BOT_PLAN_ORDER = ['free', 'starter', 'growth', 'scale'];
@@ -107,10 +114,21 @@ async function limits(ws) {
   if (isLegacy(ws) && ws.legacy_ai_writes > ai) ai = ws.legacy_ai_writes;
   const ab = features.includes('ab_welcome_4') ? 4 : features.includes('ab_welcome_2') ? 2 : 1;
   const extra = extraSeatsNow(ws, plan);
+  // Bot subscribers: the plan's number + subscriber packs (Scale), or the team's custom limit for this workspace.
+  const pc = await packConf();
+  const packs = packsNow(ws, plan);
+  const custom = customLimitOf(ws, plan);
+  const addSubs = (n) => (custom != null ? custom : Number(n) === UNLIMITED ? UNLIMITED : Number(n) + packs * pc.size);
+  const bots = botLimitsFor(plan, inTrial);
+  bots.plan_max_bot_subscribers = bots.max_bot_subscribers;
+  bots.max_bot_subscribers = addSubs(bots.max_bot_subscribers);
   return {
     plan,
     connections: plan.connections,
-    subscribers: plan.subscribers,
+    subscribers: addSubs(plan.subscribers),
+    plan_subscribers: Number(plan.subscribers),
+    subscriber_packs: custom != null ? 0 : packs,
+    custom_subscriber_limit: custom,
     seats: Number(plan.seats) + extra,
     plan_seats: Number(plan.seats),
     extra_seats: extra,
@@ -124,7 +142,7 @@ async function limits(ws) {
     features,
     ab_variants: ab,
     legacy: isLegacy(ws),
-    bots: botLimitsFor(plan, inTrial),
+    bots,
   };
 }
 
@@ -331,9 +349,26 @@ async function assertCanSend(ws) {
   if (trialOver(ws)) throw httpError(402, 'Your free trial has ended. Pick a plan to keep sending.', 'trial_over');
   await requirePlanFeature(ws, 'broadcasts');
   const [l, u] = [await limits(ws), await usage(ws.id)];
-  if (u.subscribers > l.subscribers) {
-    throw httpError(402, `You have ${u.subscribers.toLocaleString('en-US')} bot subscribers and your plan allows ${l.subscribers.toLocaleString('en-US')}. Upgrade to keep sending. Nothing is deleted.`, 'limit_subscribers');
-  }
+  // Over the limit + 10% grace: broadcasts pause (bots keep answering, new subscribers are saved, nothing is deleted).
+  const cap = withGrace(Number(l.subscribers));
+  if (cap !== UNLIMITED && u.subscribers > cap) throw await subscriberLimitError(ws, l, u.subscribers, Number(l.subscribers));
+}
+
+/**
+ * The friendly 402 (code limit_subscribers) over the bot subscriber limit. On the top plan (Scale) it offers a
+ * subscriber pack (data.packs: size, price, prorated price now) instead of a dead end; above the most packs (or with
+ * a custom limit) it says "talk to us". Other plans are asked to upgrade.
+ */
+async function subscriberLimitError(ws, l, used, limit) {
+  const info = await packsInfo(ws, l);
+  const n = (x) => Number(x).toLocaleString('en-US');
+  const head = `You have ${n(used)} bot subscribers and your ${l.plan.name} plan allows ${n(limit)}.`;
+  const tail = 'Nothing is deleted, and your bots keep answering and saving new subscribers.';
+  let ask;
+  if (info.can_buy && info.current < info.max) ask = `Add ${n(info.size)} subscribers for ${fmtUSD(info.price_month_cents)}/month to broadcast again.`;
+  else if (info.top_plan) ask = `Need more than ${n(info.max_total)}? Talk to us for a custom plan.`;
+  else ask = info.top_plan_name ? `Upgrade to broadcast again (${info.top_plan_name} includes ${n(info.top_plan_subscribers)} and can add more).` : 'Upgrade to broadcast again.';
+  return httpError(402, `${head} ${ask} ${tail}`, 'limit_subscribers', { used, limit, packs: info, talk_to_us: !info.can_buy || info.current >= info.max });
 }
 
 /**
@@ -576,9 +611,12 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
     // Extra team seats renew with the plan, in the same payment (the lower number the owner asked for, if any).
     const unit = await seatPrice(cycle);
     const seats = unit > 0 ? seatsNext(ws) : 0;
-    const price = planPrice + seats * unit;
+    // Subscriber packs renew the same way, only on the top plan (a move to another plan ends them).
+    const packUnit = await packPrice(cycle);
+    const packs = packUnit > 0 && isTopPlan(plan) ? Math.min(packsNext(ws), (await packConf()).max) : 0;
+    const price = planPrice + seats * unit + packs * packUnit;
     const ref = `plan-${wsId}-${Date.now()}`;
-    const paid = await takePayment(c, wsId, price, `${plan.name} plan · ${cycle === 'year' ? 'yearly' : 'monthly'}${seats ? ` + ${plural(seats, 'extra seat')}` : ''}`, ref);
+    const paid = await takePayment(c, wsId, price, `${plan.name} plan · ${cycle === 'year' ? 'yearly' : 'monthly'}${seats ? ` + ${plural(seats, 'extra seat')}` : ''}${packs ? ` + ${plural(packs, 'subscriber pack')}` : ''}`, ref);
     if (!paid) return { short: true, price };
     const start = new Date();
     const end = addDays(start, periodDays(cycle));
@@ -587,8 +625,8 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
       dropped_from = null, dropped_cycle = null, dropped_at = null,
       legacy_plan_code = case when plan_code = $2 and plan_status = 'active' then legacy_plan_code else null end,
       coupon_months_left = greatest(0, coupon_months_left - $5), coupon_id = case when coupon_months_left - $5 <= 0 then null else coupon_id end,
-      extra_seats = $6, pending_extra_seats = null
-      where id = $1`, [wsId, plan.code, cycle, end, couponUsed ? 1 : 0, seats]);
+      extra_seats = $6, pending_extra_seats = null, subscriber_packs = $7, pending_subscriber_packs = null
+      where id = $1`, [wsId, plan.code, cycle, end, couponUsed ? 1 : 0, seats, packs]);
     // AUD-8: a move to a smaller plan switches off the live flows beyond its limit (kept, paused_by_plan).
     const flowsOff = await trimFlows(c, wsId, plan, ws.keep_flow_ids);
     // Bots: the same for Chat bots the smaller plan can't run (types, limits, live bots, referral bots).
@@ -598,7 +636,7 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
     // VooSquare: spend (cash part, net of fees) + plan_started / plan_renewed, queued in this same transaction.
     // No spend when the Castvoo referral was paid: plan_started / plan_renewed carry no commission.
     await voosquare.planPaid(c, { wsId, txId: paid.txId, plan, cycle, priceCents: price, cashCents: voo ? base : 0, first: !ws.paid_ever, at: start });
-    return { ok: true, price, planPrice, seats, seatUnit: unit, start, end, commission, ref, wsName: ws.name, ownerId: ws.owner_user_id, flowsOff };
+    return { ok: true, price, planPrice, seats, seatUnit: unit, packs, packUnit, start, end, commission, ref, wsName: ws.name, ownerId: ws.owner_user_id, flowsOff };
   });
   if (result.skipped) return result;
   if (result.short) throw httpError(402, `Your wallet needs ${fmtUSD(result.price)} for this plan. Top up and try again.`, 'wallet_short', { needed: result.price / 100 });
@@ -608,6 +646,7 @@ async function activate(wsId, planCode, cycle, { reason = 'renewal', expect = nu
   await email.send('payment_receipt', owner, {
     plan_name: plan.name, amount: fmtUSD(result.price), period_start: fmtDate(result.start), period_end: fmtDate(result.end),
     extra_seats: result.seats ? `${plural(result.seats, 'seat')} × ${fmtUSD(result.seatUnit)} = ${fmtUSD(result.seats * result.seatUnit)}` : 'None',
+    subscriber_packs: result.packs ? `${plural(result.packs, 'pack')} × ${fmtUSD(result.packUnit)} = ${fmtUSD(result.packs * result.packUnit)} (+${(result.packs * (await packConf()).size).toLocaleString('en-US')} bot subscribers)` : 'None',
     receipt_id: result.ref, wallet_balance: fmtUSD(Number(wsNow.wallet_cents) + Number(wsNow.bonus_cents)), billing_url: require('../config').appUrl + '/#app/wallet',
   });
   if (result.commission && !result.commission.held) {
@@ -648,8 +687,10 @@ async function seatsTaken(wsId, c = null) {
 async function renewalCost(ws, plan, cycle) {
   const unit = await seatPrice(cycle);
   const seats = unit > 0 && !isFreePlan(plan) ? seatsNext(ws) : 0;
+  const packUnit = await packPrice(cycle);
+  const packs = packUnit > 0 && isTopPlan(plan) ? Math.min(packsNext(ws), (await packConf()).max) : 0;
   const planCents = priceOf(plan, cycle);
-  return { plan: planCents, seats: seats * unit, seat_count: seats, unit, total: planCents + seats * unit };
+  return { plan: planCents, seats: seats * unit, seat_count: seats, unit, packs: packs * packUnit, pack_count: packs, pack_unit: packUnit, total: planCents + seats * unit + packs * packUnit };
 }
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + 's'}`;
@@ -710,6 +751,135 @@ async function setExtraSeats(wsId, target) {
   return { ok: true, extra_seats: result.extra_seats, pending: result.pending, charged: result.charged || 0 };
 }
 
+/* ---------- Subscriber packs (Scale) ---------- */
+
+const PACK_DEFAULTS = { size: 50000, price_cents: 2900, max: 8 };
+/** Pack size, monthly price (cents, 0 = not sold) and the most packs one workspace can buy (Admin → Settings → Billing). */
+async function packConf() {
+  const b = (await settings.get('billing')) || {};
+  const num = (v, d) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? d : Number(v));
+  return {
+    size: Math.max(1, Math.round(num(b.sub_pack_size, PACK_DEFAULTS.size))),
+    price_cents: Math.max(0, Math.round(num(b.sub_pack_price_cents, PACK_DEFAULTS.price_cents))),
+    max: Math.max(0, Math.min(100, Math.round(num(b.sub_pack_max, PACK_DEFAULTS.max)))),
+  };
+}
+/** Price of one pack for a billing cycle, in cents (0 = not sold). Yearly = 12 months. */
+async function packPrice(cycle = 'month') {
+  const m = (await packConf()).price_cents;
+  return cycle === 'year' ? m * 12 : m;
+}
+/** The top plan: Scale, or a custom admin plan with Scale's bot limits. Packs are sold on it only. */
+const isTopPlan = (plan) => !!plan && !isFreePlan(plan) && botPlanOf(plan) === BOT_PLANS.scale;
+/** Packs that count right now: only on an active top plan (not the trial, not Free). */
+function packsNow(ws, plan) {
+  if (!ws || ws.plan_status !== 'active' || trialOver(ws) || !isTopPlan(plan)) return 0;
+  return Math.max(0, Number(ws.subscriber_packs) || 0);
+}
+/** Packs the next renewal pays for (the lower number the owner asked for, if any). */
+const packsNext = (ws) => Math.max(0, Number(ws.pending_subscriber_packs != null ? ws.pending_subscriber_packs : ws.subscriber_packs) || 0);
+/** The team's custom bot subscriber limit for this workspace (a custom deal), or null. Never on the Free plan. */
+function customLimitOf(ws, plan) {
+  const n = Number(ws && ws.custom_subscriber_limit);
+  return n > 0 && !isFreePlan(plan) ? Math.round(n) : null;
+}
+
+/** Subscriber packs for the dashboard, the 402 and the support agents: price, what renews, and whether this workspace can buy them now. */
+async function packsInfo(ws, l = null) {
+  l = l || (await limits(ws));
+  const pc = await packConf();
+  const cycle = ws.billing_cycle || 'month';
+  const unit = await packPrice(cycle);
+  const top = isTopPlan(l.plan);
+  const active = ws.plan_status === 'active' && !trialOver(ws);
+  const custom = l.custom_subscriber_limit;
+  const paid = active && top;
+  const can = paid && pc.price_cents > 0 && pc.max > 0 && custom == null;
+  const left = paid && ws.period_end ? Math.max(0, new Date(ws.period_end).getTime() - Date.now()) / (periodDays(cycle) * DAY) : 0;
+  const cur = paid ? Math.max(0, Number(ws.subscriber_packs) || 0) : 0;
+  const next = paid ? packsNext(ws) : 0;
+  const tops = (await settings.plans({ activeOnly: true })).filter(isTopPlan).sort((a, b) => Number(a.price_month_cents) - Number(b.price_month_cents));
+  const topPlan = top ? l.plan : tops[0] || null;
+  const topSubs = topPlan ? Number(topPlan.subscribers) : 0;
+  return {
+    on_sale: pc.price_cents > 0 && pc.max > 0, size: pc.size, max: pc.max, cycle,
+    price_month: pc.price_cents / 100, price_month_cents: pc.price_cents, price: unit / 100,
+    can_buy: can,
+    reason: can ? null : !top ? 'not_top_plan' : ws.plan_status === 'trial' ? 'trial' : !active ? 'inactive' : custom != null ? 'custom' : 'off',
+    top_plan: top, top_plan_name: topPlan ? topPlan.name : null, top_plan_subscribers: topSubs,
+    current: cur, next, pending: paid && ws.pending_subscriber_packs != null ? Number(ws.pending_subscriber_packs) : null,
+    period_left: Math.round(left * 10000) / 10000, period_end: paid ? ws.period_end : null,
+    // One more pack now, for the days left of the period (what the one-tap "Add 50,000 subscribers" button charges).
+    one_now: can ? Math.round(unit * Math.min(1, left)) / 100 : null,
+    renews: next * unit / 100,
+    plan_subscribers: l.plan_subscribers, subscribers: l.subscribers, custom_limit: custom,
+    max_total: topSubs + pc.max * pc.size,
+  };
+}
+
+/**
+ * The owner (or a helper allowed to manage billing) sets how many subscriber packs the workspace has (`target`, 0 to
+ * the most packs). Works like setExtraSeats:
+ *  - more than now: the new packs are paid now from the wallet for the rest of the period (prorated) and renew with the
+ *    plan. A short wallet answers 402 wallet_short.
+ *  - fewer: nothing is refunded; the lower number applies at the next renewal (pending_subscriber_packs). Nothing is
+ *    ever deleted: over the new limit, broadcasts pause and bots keep working.
+ *  - the same: cancels a lower number asked for earlier.
+ * Top plan (Scale) only: other plans answer 402 packs_scale_only ("upgrade to Scale first"). A workspace with a custom
+ * limit answers 409 custom_limit. Returns { ok, packs, pending, charged }.
+ */
+async function setSubscriberPacks(wsId, target) {
+  const pc = await packConf();
+  const want = Number(target);
+  if (!Number.isInteger(want) || want < 0 || want > pc.max) {
+    throw badRequest(`Pick between 0 and ${pc.max} subscriber packs. Need more than that? Talk to us for a custom plan.`);
+  }
+  const result = await db.tx(async (c) => {
+    const ws = (await c.query('select * from workspaces where id = $1 for update', [wsId])).rows[0];
+    const plan = await settings.plan(ws.plan_code);
+    const scale = (await settings.plans({ activeOnly: true })).filter(isTopPlan).sort((a, b) => Number(a.price_month_cents) - Number(b.price_month_cents))[0];
+    const scaleName = scale ? scale.name : 'Scale';
+    if (!isTopPlan(plan)) throw httpError(402, `Subscriber packs are for the ${scaleName} plan. Upgrade to ${scaleName} first${scale ? `: it includes ${Number(scale.subscribers).toLocaleString('en-US')} bot subscribers` : ''}.`, 'packs_scale_only', { plan: scale ? scale.code : null });
+    if (ws.plan_status === 'trial') throw httpError(402, `Subscriber packs can be added once your paid ${scaleName} plan starts.`, 'packs_scale_only', { plan: scale ? scale.code : null });
+    if (ws.plan_status !== 'active' || trialOver(ws)) throw httpError(402, 'Your plan is not active. Top up and start your plan first, then add subscriber packs.', 'packs_scale_only', { plan: scale ? scale.code : null });
+    if (customLimitOf(ws, plan) != null) throw httpError(409, 'Your workspace has a custom subscriber limit from our team. Talk to us to change it.', 'custom_limit');
+    const unit = await packPrice(ws.billing_cycle);
+    const cur = Math.max(0, Number(ws.subscriber_packs) || 0);
+    if (!unit && want > cur) throw httpError(403, 'Subscriber packs are not available right now. Talk to us for a custom plan.', 'packs_off');
+    if (want > cur) {
+      const add = want - cur;
+      const left = Math.max(0, new Date(ws.period_end).getTime() - Date.now()) / (periodDays(ws.billing_cycle) * DAY);
+      const charge = Math.max(0, Math.round(add * unit * Math.min(1, left)));
+      const ref = `packs-${wsId}-${Date.now()}`;
+      const paid = await takePayment(c, wsId, charge, `${plural(add, 'subscriber pack')} (+${(add * pc.size).toLocaleString('en-US')} bot subscribers, rest of this period)`, ref);
+      if (!paid) throw httpError(402, `Your wallet needs ${fmtUSD(charge)} for ${plural(add, 'subscriber pack')}. Top up and try again.`, 'wallet_short', { needed: charge / 100 });
+      await c.query('update workspaces set subscriber_packs = $2, pending_subscriber_packs = null where id = $1', [wsId, want]);
+      // Commissionable like plan and seat payments: the Castvoo referral or the VooSquare affiliate (AUD-1).
+      const { voo, base } = await settleCommission(c, ws, paid, ref, ws.billing_cycle);
+      if (voo) await voosquare.packsPaid(c, { wsId, txId: paid.txId, plan, packs: add, cashCents: base, at: new Date() });
+      return { ok: true, packs: want, pending: null, charged: charge, added: add, ref, unit, size: pc.size, periodEnd: ws.period_end, ownerId: ws.owner_user_id, cycle: ws.billing_cycle };
+    }
+    if (want < cur) {
+      await c.query('update workspaces set pending_subscriber_packs = $2 where id = $1', [wsId, want]);
+      return { ok: true, packs: cur, pending: want, charged: 0, periodEnd: ws.period_end };
+    }
+    await c.query('update workspaces set pending_subscriber_packs = null where id = $1', [wsId]);
+    return { ok: true, packs: cur, pending: null, charged: 0 };
+  });
+  if (result.added) {
+    const owner = await db.one('select * from users where id = $1', [result.ownerId]);
+    const wsNow = await db.one('select wallet_cents, bonus_cents from workspaces where id = $1', [wsId]);
+    const l = await limits(await db.one('select * from workspaces where id = $1', [wsId]));
+    await email.send('packs_receipt', owner, {
+      packs_added: `${plural(result.added, 'subscriber pack')} (+${(result.added * result.size).toLocaleString('en-US')} bot subscribers)`,
+      subscriber_limit: Number(l.subscribers).toLocaleString('en-US'), amount: fmtUSD(result.charged),
+      pack_price: `${fmtUSD(result.unit)} a ${result.cycle === 'year' ? 'year' : 'month'} each`, period_end: fmtDate(result.periodEnd),
+      receipt_id: result.ref, wallet_balance: fmtUSD(Number(wsNow.wallet_cents) + Number(wsNow.bonus_cents)), billing_url: require('../config').appUrl + '/#app/wallet',
+    });
+  }
+  return { ok: true, packs: result.packs, pending: result.pending, charged: result.charged || 0 };
+}
+
 /**
  * Drop a workspace to the Free plan: the trial ended unpaid, a plan ended, or the wallet could not cover a renewal.
  * Nothing is deleted. The first live Welcome Flow keeps welcoming (as the Free welcome, with the Castvoo line);
@@ -724,7 +894,8 @@ async function dropToFree(wsId, { expect = null, remember = null, rememberCycle 
     if (!ws || (expect && !expect(ws))) return { skipped: true };
     await c.query(`update workspaces set plan_code = $2, plan_status = 'active', billing_cycle = 'month', period_end = null, trial_ends_at = null,
       cancel_at_period_end = false, pending_plan_code = null, pending_cycle = null, ai_used = 0, ai_period_start = now(), reminded_at = null,
-      dropped_from = $3, dropped_cycle = $4, dropped_at = now(), extra_seats = 0, pending_extra_seats = null where id = $1`, [wsId, free.code, remember, rememberCycle]);
+      dropped_from = $3, dropped_cycle = $4, dropped_at = now(), extra_seats = 0, pending_extra_seats = null,
+      subscriber_packs = 0, pending_subscriber_packs = null where id = $1`, [wsId, free.code, remember, rememberCycle]);
     const off = await trimFlows(c, wsId, free, ws.keep_flow_ids);
     if (!(free.features || []).includes('drips')) await c.query("update sequences set active = false, paused_by_plan = true where workspace_id = $1 and trigger_type not in ('join_request','bot_start') and active", [wsId]);
     await trimBots(c, wsId, free);
@@ -844,16 +1015,19 @@ async function planState(ws) {
     plan_code: l.plan.code, plan_name: l.plan.name, status: ws.plan_status, cycle: ws.billing_cycle, free: isFreePlan(l.plan),
     trial_ends_at: ws.trial_ends_at, period_end: ws.period_end, cancel_at_period_end: ws.cancel_at_period_end, ai_refill_at: aiRefillAt(ws),
     pending_plan_code: ws.pending_plan_code, dropped_from: ws.dropped_from, coupon: coupon && ws.coupon_months_left > 0 ? { ...coupon, months_left: ws.coupon_months_left } : null,
-    limits: { connections: l.connections, subscribers: l.subscribers, ai_writes: l.ai_writes, seats: l.seats, plan_seats: l.plan_seats, extra_seats: l.extra_seats, join_requests: l.join_requests, flows: l.flows, flow_steps: l.flow_steps, ab_variants: l.ab_variants, bots: l.bots },
+    limits: { connections: l.connections, subscribers: l.subscribers, plan_subscribers: l.plan_subscribers, subscriber_packs: l.subscriber_packs, custom_subscriber_limit: l.custom_subscriber_limit,
+      subscriber_grace: withGrace(Number(l.subscribers)), ai_writes: l.ai_writes, seats: l.seats, plan_seats: l.plan_seats, extra_seats: l.extra_seats, join_requests: l.join_requests, flows: l.flows, flow_steps: l.flow_steps, ab_variants: l.ab_variants, bots: l.bots,
+      repeats: l.bots.max_repeat_series ?? 0, repeats_fair_use: l.bots.max_repeat_series_fair_use || null },
     seats: await seatsInfo(ws, l),
+    packs: await packsInfo(ws, l),
     usage: { connections: u.connections, bots: u.bots, subscribers: u.subscribers, ai_writes: u.ai_used, seats: u.seats, join_requests: meter.used, flows: u.flows, active_flows: u.active_flows },
     features: [...featureSet(l)], branding: l.branding, welcome_only: !l.features.includes('broadcasts') && !l.legacy,
     join: meter,
     suggest_yearly: yearlySave > 0 ? { save: yearlySave / 100 } : null,
     plans: plans.map((p) => ({ code: p.code, name: p.name, price_month: p.price_month_cents / 100, price_year: p.price_year_cents / 100, connections: p.connections, subscribers: p.subscribers, ai_writes: p.ai_writes, seats: p.seats, popular: p.popular,
       join_requests: p.join_requests, flows: p.flows, flow_steps: p.flow_steps, branding: p.branding, features: p.features || [], cas_builds: p.cas_builds ?? 0,
-      bots: { max: botPlanOf(p).max_bots, menu_buttons: botPlanOf(p).menu_buttons } })),
+      bots: { max: botPlanOf(p).max_bots, menu_buttons: botPlanOf(p).menu_buttons }, repeats: botPlanOf(p).max_repeat_series ?? 0 })),
   };
 }
 
-module.exports = { trimBots, BOT_PLANS, BOT_TYPES, BOT_GRACE_PCT, botPlanOf, botLimitsFor, withGrace, requireBotType, liveBots, liveReferralBots, assertBotSlots, answersMeter, sessionsPerSeat, planForBots, seatPrice, seatsNext, seatsTaken, seatsInfo, setExtraSeats, renewalCost, extraSeatsNow, UNLIMITED, LEGACY_FEATURES, featureSet, meterBump, meterEnsure, referralSettings, attributionOf, selfReferralSignal, mailbox, feeShare, settleCommission, trimFlows, aiRefillAt, effectivePlan, limits, hasFeature, requirePlanFeature, planFor, joinMeter, meterStart, isFreePlan, dropToFree, usage, assertCanSend, assertCanConnect, useAi, refundAi, activate, upgradeNow, planState, takePayment, payCommission, priceOf, periodDays };
+module.exports = { packConf, packPrice, isTopPlan, packsNow, packsNext, packsInfo, setSubscriberPacks, subscriberLimitError, customLimitOf, trimBots, BOT_PLANS, BOT_TYPES, BOT_GRACE_PCT, botPlanOf, botLimitsFor, withGrace, requireBotType, liveBots, liveReferralBots, assertBotSlots, answersMeter, sessionsPerSeat, planForBots, seatPrice, seatsNext, seatsTaken, seatsInfo, setExtraSeats, renewalCost, extraSeatsNow, UNLIMITED, LEGACY_FEATURES, featureSet, meterBump, meterEnsure, referralSettings, attributionOf, selfReferralSignal, mailbox, feeShare, settleCommission, trimFlows, aiRefillAt, effectivePlan, limits, hasFeature, requirePlanFeature, planFor, joinMeter, meterStart, isFreePlan, dropToFree, usage, assertCanSend, assertCanConnect, useAi, refundAi, activate, upgradeNow, planState, takePayment, payCommission, priceOf, periodDays };

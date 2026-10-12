@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Sends one message (text, photo or video, with buttons) to one Telegram chat.
+ * Sends one message (text, photo, video, GIF, voice note or round video, with buttons) to one Telegram chat.
  * Used by the queue worker (broadcasts and follow-ups) and by join-request welcomes.
  */
 
@@ -58,17 +58,43 @@ async function mediaInput(media, botKey) {
   return { value: null, file: { path: media.path, filename: media.filename, mime: media.mime } };
 }
 
+/** Telegram method and file field per media kind. */
+const METHOD = {
+  photo: ['sendPhoto', 'photo'], video: ['sendVideo', 'video'], animation: ['sendAnimation', 'animation'],
+  voice: ['sendVoice', 'voice'], video_note: ['sendVideoNote', 'video_note'],
+};
 function fileIdFrom(result, kind) {
   if (kind === 'photo' && Array.isArray(result.photo)) return result.photo[result.photo.length - 1].file_id;
   if (kind === 'video' && result.video) return result.video.file_id;
   if (kind === 'animation' && (result.animation || result.document)) return (result.animation || result.document).file_id;
+  if (kind === 'voice' && (result.voice || result.audio || result.document)) return (result.voice || result.audio || result.document).file_id;
+  if (kind === 'video_note' && (result.video_note || result.video)) return (result.video_note || result.video).file_id;
   return null;
 }
 
+/** Send one media message, uploading the file only the first time for this bot (then Telegram's file_id). */
+async function sendMedia(media, params, opts) {
+  const [method, field] = METHOD[media.kind] || METHOD.photo;
+  const lockKey = media.id + ':' + opts.botKey;
+  while (uploading.has(lockKey)) await uploading.get(lockKey).catch(() => {});
+  const inp = await mediaInput(media, opts.botKey);
+  if (inp.value) return tg.call(opts.token, method, { ...params, [field]: inp.value });
+  const p = (async () => {
+    const result = await tg.call(opts.token, method, params, { field, ...inp.file });
+    const fid = fileIdFrom(result, media.kind);
+    if (fid) await db.query('insert into media_file_ids(media_id, bot_key, file_id) values ($1,$2,$3) on conflict do nothing', [media.id, opts.botKey, fid]);
+    return result;
+  })();
+  uploading.set(lockKey, p);
+  try { return await p; } finally { uploading.delete(lockKey); }
+}
+
 /**
- * msg: { body, media_id, buttons }  opts: { token, botKey, chatId, subscriberId, includeStop, firstName, footerHtml, startButton, extraRows, replyMarkup }
+ * msg: { body, media_id, buttons }  opts: { token, botKey, chatId, subscriberId, includeStop, firstName, footerHtml, startButton, extraRows, replyMarkup, sentFirst, onFirst }
  * {name} in the text becomes opts.firstName (or "there" when there is none, e.g. channel posts).
  * footerHtml is added after the text as it is (the Free plan's "Free welcome bot by Castvoo.com" line).
+ * Voice notes carry the text as their caption (it may be empty). A round video (video_note) can't have a caption, so
+ * the text (with the buttons) follows as a second message; the result then has extra_message_id (deliveries.message_id2).
  * Returns Telegram's Message object. Throws TelegramError.
  */
 async function sendOne(msg, opts) {
@@ -77,27 +103,36 @@ async function sendOne(msg, opts) {
   const html = tg.personalize(tg.toHtml(msg.body), opts.firstName) + (opts.footerHtml || '');
   if (msg.media_id) {
     const media = await db.one('select * from media where id = $1', [msg.media_id]);
+    if (media && media.kind === 'video_note') {
+      const hasText = !!String(msg.body || '').trim() || !!opts.footerHtml;
+      const params = { chat_id: opts.chatId };
+      // No text: the buttons can sit under the round video itself.
+      if (!hasText && reply_markup) params.reply_markup = reply_markup;
+      // Part progress (opts.sentFirst / opts.onFirst): when only the text failed and is retried, the round video
+      // that already arrived is never sent again.
+      let first;
+      if (opts.sentFirst) first = { message_id: Number(opts.sentFirst), chat: { id: opts.chatId } };
+      else {
+        first = await sendMedia(media, params, opts);
+        if (hasText && opts.onFirst) await opts.onFirst(first.message_id);
+      }
+      if (!hasText) return first;
+      const second = await sendText(html, msg, { ...opts, reply_markup });
+      return { ...first, extra_message_id: second.message_id };
+    }
     if (media) {
-      const method = media.kind === 'video' ? 'sendVideo' : media.kind === 'animation' ? 'sendAnimation' : 'sendPhoto';
-      const field = media.kind === 'video' ? 'video' : media.kind === 'animation' ? 'animation' : 'photo';
-      const params = { chat_id: opts.chatId, caption: html, parse_mode: 'HTML', reply_markup };
+      const params = { chat_id: opts.chatId, parse_mode: 'HTML', reply_markup };
+      if (html.trim() || media.kind !== 'voice') params.caption = html;
       if (media.kind === 'video') params.supports_streaming = true;
-      // Only the first send of a file uploads it; everyone after reuses Telegram's file_id.
-      const lockKey = media.id + ':' + opts.botKey;
-      while (uploading.has(lockKey)) await uploading.get(lockKey).catch(() => {});
-      const inp = await mediaInput(media, opts.botKey);
-      if (inp.value) return tg.call(opts.token, method, { ...params, [field]: inp.value });
-      const p = (async () => {
-        const result = await tg.call(opts.token, method, params, { field, ...inp.file });
-        const fid = fileIdFrom(result, media.kind);
-        if (fid) await db.query('insert into media_file_ids(media_id, bot_key, file_id) values ($1,$2,$3) on conflict do nothing', [media.id, opts.botKey, fid]);
-        return result;
-      })();
-      uploading.set(lockKey, p);
-      try { return await p; } finally { uploading.delete(lockKey); }
+      if (media.kind === 'voice' && media.duration_sec) params.duration = media.duration_sec;
+      return sendMedia(media, params, opts);
     }
   }
-  const params = { chat_id: opts.chatId, text: html, parse_mode: 'HTML', reply_markup };
+  return sendText(html, msg, { ...opts, reply_markup });
+}
+
+async function sendText(html, msg, opts) {
+  const params = { chat_id: opts.chatId, text: html, parse_mode: 'HTML', reply_markup: opts.reply_markup };
   // ENG-20: the Free line's castvoo.com link must not become a big preview card: preview the message's own first
   // link, or none. (link_preview_options replaces the deprecated disable_web_page_preview.)
   if (opts.footerHtml) {

@@ -48,8 +48,12 @@ async function contentFor(cache, d) {
   if (cache.has(k)) return cache.get(k);
   let v = null;
   if (d.broadcast_id) {
-    const b = await db.one('select body, media_id, buttons, include_stop, status from broadcasts where id = $1', [d.broadcast_id]);
-    if (b) v = { body: b.body, media_id: b.media_id, buttons: b.buttons || [], include_stop: b.include_stop, cancelled: b.status === 'cancelled' };
+    const b = await db.one(`select b.body, b.media_id, b.buttons, b.include_stop, b.status, b.pin, b.pin_notify, b.unpin_after_hours, b.delete_after_hours, m.kind as media_kind
+      from broadcasts b left join media m on m.id = b.media_id where b.id = $1`, [d.broadcast_id]);
+    if (b) {
+      v = { body: b.body, media_id: b.media_id, media_kind: b.media_kind, buttons: b.buttons || [], include_stop: b.include_stop, cancelled: b.status === 'cancelled',
+        auto: { pin: !!b.pin, notify: !!b.pin_notify, unpin: b.unpin_after_hours || null, del: b.delete_after_hours || null } };
+    }
   } else if (d.step_id) {
     const s = await db.one(`select s.id, s.body, s.media_id, s.position, s.sequence_id, s.step_type, s.config, q.trigger_type, q.start_button, q.approve_mode, q.start_label, b.username as bot_username,
         (select min(position) from sequence_steps x where x.sequence_id = s.sequence_id) as first
@@ -86,9 +90,30 @@ async function unclaim(ids) {
 const paused = async () => !!(await settings.features()).maintenance;
 
 async function finish(d, fields) {
-  await db.query('update deliveries set status = $2, message_id = coalesce($3, message_id), error = $4, sent_at = now(), attempts = attempts + 1 where id = $1',
-    [d.id, fields.status, fields.message_id || null, fields.error || null]);
+  await db.query('update deliveries set status = $2, message_id = coalesce($3, message_id), message_id2 = coalesce($5, message_id2), error = $4, sent_at = now(), attempts = attempts + 1 where id = $1',
+    [d.id, fields.status, fields.message_id || null, fields.error || null, fields.message_id2 || null]);
 }
+
+/**
+ * Auto-pin, auto-unpin and auto-delete of a broadcast message that was just sent (services/broadcasts.js checkExtras):
+ * queued now for this message, so each person's times count from their own message. extra.auto marks them (one of
+ * each per message, deliveries_auto_once), extra.notify = pin with a notification. Never fails the send.
+ */
+async function followUps(d, content, ids) {
+  const a = content.auto;
+  if (!a || !d.broadcast_id || !(a.pin || a.del)) return;
+  const rows = [];
+  if (a.pin) rows.push(['pin', 0, { auto: 1, notify: a.notify ? 1 : 0 }]);
+  if (a.pin && a.unpin) rows.push(['unpin', a.unpin * 3600, { auto: 1 }]);
+  if (a.del) rows.push(['delete', a.del * 3600, { auto: 1 }]);
+  for (const [action, secs, extra] of rows) {
+    await db.query(`insert into deliveries(workspace_id, sender_key, action, broadcast_id, subscriber_id, chat_id, message_id, message_id2, priority, due_at, extra)
+      values ($1,$2,$3,$4,$5,$6,$7,$8, 4, now() + make_interval(secs => $9), $10) on conflict do nothing`,
+    [d.workspace_id, d.sender_key, action, d.broadcast_id, d.subscriber_id, d.chat_id, ids.message_id, ids.message_id2 || null, secs, JSON.stringify(extra)]).catch((e) => log.warn('auto pin/delete not queued', { id: d.id, err: e.message }));
+  }
+}
+/** Telegram lets bots delete messages for 48 hours; an auto-delete that waited longer (a long pause) is skipped. */
+const DELETE_WINDOW_MS = 47.9 * 3600000;
 
 /**
  * Send one delivery. A "quick" Welcome Flow step (join_request_id) goes to someone who asked to join and has not
@@ -106,7 +131,8 @@ async function deliver(token, key, d, cache) {
 
 async function deliverOne(token, key, d, cache) {
   const content = await contentFor(cache, d);
-  if (!content || content.cancelled) return finish(d, { status: 'skipped', error: 'Message no longer exists' });
+  // A cancelled broadcast sends nothing more, but the auto-delete / pin / unpin of the messages it already sent go on.
+  if (!content || (content.cancelled && (d.action === 'send' || d.action === 'edit'))) return finish(d, { status: 'skipped', error: 'Message no longer exists' });
   const quick = !!d.join_request_id && d.sub_status === 'joinreq';
   if (d.subscriber_id && d.action === 'send' && d.sub_status && d.sub_status !== 'active' && !quick) return finish(d, { status: 'skipped', error: 'Subscriber stopped or blocked' });
   const isPrivate = !!d.subscriber_id;
@@ -119,25 +145,42 @@ async function deliverOne(token, key, d, cache) {
         parts = await require('../services/bots').deliveryParts(content, d, conn || {});
         msg = parts.msg;
       }
-      const m = await send.sendOne(msg, { token, botKey: key, chatId: d.chat_id, subscriberId: isPrivate ? d.subscriber_id : null, includeStop: isPrivate && content.include_stop && !parts.replyMarkup, firstName: isPrivate ? d.sub_name : null, startButton: content.startButton || null, footerHtml: parts.footerHtml || '', extraRows: parts.extraRows || null, replyMarkup: parts.replyMarkup || null });
-      return finish(d, { status: 'sent', message_id: m.message_id });
+      const m = await send.sendOne(msg, { token, botKey: key, chatId: d.chat_id, subscriberId: isPrivate ? d.subscriber_id : null, includeStop: isPrivate && content.include_stop && !parts.replyMarkup, firstName: isPrivate ? d.sub_name : null, startButton: content.startButton || null, footerHtml: parts.footerHtml || '', extraRows: parts.extraRows || null, replyMarkup: parts.replyMarkup || null,
+        // Round video + text: the round video's id is saved as soon as it is sent; a retry sends only the text.
+        sentFirst: d.message_id || null, onFirst: (id) => db.query('update deliveries set message_id = $2 where id = $1', [d.id, id]) });
+      await finish(d, { status: 'sent', message_id: m.message_id, message_id2: m.extra_message_id || null });
+      return followUps(d, content, { message_id: m.message_id, message_id2: m.extra_message_id || null });
     }
     if (d.action === 'edit') {
       const reply_markup = send.keyboard(content.buttons, { subscriberId: isPrivate ? d.subscriber_id : null, includeStop: isPrivate && content.include_stop });
       const html = tg.personalize(tg.toHtml(content.body), isPrivate ? d.sub_name : null);
-      if (content.media_id) await tg.call(token, 'editMessageCaption', { chat_id: d.chat_id, message_id: d.message_id, caption: html, parse_mode: 'HTML', reply_markup });
+      if (content.media_kind === 'video_note') {
+        // A round video has no caption: its text is the message sent right after it (message_id2).
+        if (d.message_id2 && String(content.body || '').trim()) await tg.call(token, 'editMessageText', { chat_id: d.chat_id, message_id: d.message_id2, text: html, parse_mode: 'HTML', reply_markup });
+      } else if (content.media_id) await tg.call(token, 'editMessageCaption', { chat_id: d.chat_id, message_id: d.message_id, caption: html, parse_mode: 'HTML', reply_markup });
       else await tg.call(token, 'editMessageText', { chat_id: d.chat_id, message_id: d.message_id, text: html, parse_mode: 'HTML', reply_markup });
       return finish(d, { status: 'sent' });
     }
-    if (d.action === 'delete') { await tg.call(token, 'deleteMessage', { chat_id: d.chat_id, message_id: d.message_id }); return finish(d, { status: 'sent' }); }
-    if (d.action === 'pin') { await tg.call(token, 'pinChatMessage', { chat_id: d.chat_id, message_id: d.message_id, disable_notification: true }); return finish(d, { status: 'sent' }); }
+    if (d.action === 'delete') {
+      if (d.extra && d.extra.auto && Date.now() - new Date(d.created_at).getTime() > DELETE_WINDOW_MS) return finish(d, { status: 'skipped', error: 'Too late to delete: Telegram lets bots delete messages for 48 hours' });
+      await tg.call(token, 'deleteMessage', { chat_id: d.chat_id, message_id: d.message_id });
+      if (d.message_id2) await tg.call(token, 'deleteMessage', { chat_id: d.chat_id, message_id: d.message_id2 }).catch(() => {});
+      return finish(d, { status: 'sent' });
+    }
+    if (d.action === 'pin') {
+      await tg.call(token, 'pinChatMessage', { chat_id: d.chat_id, message_id: d.message_id2 || d.message_id, disable_notification: !(d.extra && d.extra.notify) });
+      return finish(d, { status: 'sent' });
+    }
+    if (d.action === 'unpin') { await tg.call(token, 'unpinChatMessage', { chat_id: d.chat_id, message_id: d.message_id2 || d.message_id }); return finish(d, { status: 'sent' }); }
   } catch (e) {
     const desc = String(e.description || e.message || '');
     if (e.code === 429) {
       await db.query("update deliveries set status = 'queued', sent_at = null, due_at = now() + make_interval(secs => $2) where id = $1", [d.id, Math.max(1, e.retryAfter || 5)]);
       return { pause: Math.max(1, e.retryAfter || 5) };
     }
-    if (/message is not modified|message to delete not found|message to pin not found/i.test(desc)) return finish(d, { status: 'sent' });
+    if (/message is not modified|message to delete not found|message to pin not found|message to unpin not found/i.test(desc)) return finish(d, { status: 'sent' });
+    if (d.action === 'delete' && /can't be deleted|cannot be deleted/i.test(desc)) return finish(d, { status: 'failed', error: 'Telegram did not let the bot delete it (older than 48 hours, or no delete rights)' });
+    if ((d.action === 'pin' || d.action === 'unpin') && /not enough rights|CHAT_ADMIN_REQUIRED|rights/i.test(desc)) return finish(d, { status: 'failed', error: 'The bot is missing the right to pin messages here' });
     if (e.code === 403 && quick) {
       // The window closed (or they cancelled the request): not a block. Their later steps wait for Start.
       return finish(d, { status: 'failed', error: 'Telegram\'s 5-minute window ended before they tapped Start' });
@@ -194,6 +237,9 @@ async function runKey(key) {
       const batch = await claimBatch(key);
       if (!batch.length) return;
       const inflight = new Set();
+      // Messages to the same chat go one after another, in queue order: a round video + its text (two Telegram calls)
+      // or a first-time file upload must not let the next step overtake it (round video, voice note, THEN the text).
+      const lastForChat = new Map();
       let pauseUntil = 0;
       let i = 0;
       let lost = false;
@@ -202,11 +248,22 @@ async function runKey(key) {
         if (stopped) break;
         if (Date.now() < pauseUntil) break;
         if (!(await keepLease())) { lost = true; break; }
-        const p = deliver(token, key, d, cache).then((res) => { if (res && res.pause) pauseUntil = Math.max(pauseUntil, Date.now() + res.pause * 1000); })
+        const prev = lastForChat.get(String(d.chat_id));
+        const one = async () => {
+          if (prev) {
+            await prev;
+            // A 429 or a stop while it waited: put it back for the next round instead of sending into the pause.
+            if (stopped || Date.now() < pauseUntil) { await unclaim([d.id]); return; }
+          }
+          const res = await deliver(token, key, d, cache);
+          if (res && res.pause) pauseUntil = Math.max(pauseUntil, Date.now() + res.pause * 1000);
+        };
+        const p = one()
           .catch(async (e) => {
             log.error('deliver crashed', { id: d.id, err: e });
             await unclaim([d.id]).catch(() => {});
           }).finally(() => inflight.delete(p));
+        lastForChat.set(String(d.chat_id), p);
         inflight.add(p);
         if (inflight.size >= perSec * 2) await Promise.race(inflight);
         await new Promise((r) => setTimeout(r, gap));

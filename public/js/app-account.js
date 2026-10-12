@@ -442,6 +442,7 @@ PAGES.help = {
       });
       if (d.typing) h += '<div class="cmsg a typing last">' + supAva({ avatar: d.typing.avatar, author_name: d.typing.name }) + '<div class="cb"><span class="tg-typing in"><i></i><i></i><i></i></span></div><span class="tlabel">' + esc(d.typing.name) + ' is typing…</span></div>';
       L.innerHTML = h;
+      if (typeof chatMarkOld === 'function') chatMarkOld(L, '.cmsg'); // bubbles already shown do not rise in again
       paintCas(L);
       const stick = atBottom || !draw.done;
       if (stick) {
@@ -452,6 +453,13 @@ PAGES.help = {
       draw.done = true;
     };
     status(); draw(true);
+    // "Talk to us" (#app/help?topic=custom, from the subscriber packs row and sheet): a ready message to send or change.
+    if (q.topic === 'custom') {
+      history.replaceState(null, '', '#app/help');
+      const PK = (APP.state && APP.state.plan && APP.state.plan.packs) || {};
+      const t = $('#hpQ');
+      if (t && !t.value) { t.value = 'Hi! I\'d like to talk about a custom plan. I need ' + (PK.max_total ? 'more than ' + fmt(PK.max_total) : 'more') + ' bot subscribers. My audience is about ___ people.'; t.focus(); }
+    }
     $('#hpL').onclick = (e) => { if (typeof supLinkClick === 'function' && supLinkClick(e)) return; const b = e.target.closest('[data-lb]'); if (b) openLightbox(b.dataset.lb); };
     let fastUntil = d.typing ? Date.now() + 60000 : 0;
     let busy = false;

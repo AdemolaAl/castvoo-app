@@ -19,7 +19,8 @@ module.exports = [
   /* =========================== Getting started =========================== */
   { key: 'what-castvoo-is', title: 'What Castvoo is', body: `Castvoo sends Telegram messages for businesses and creators. It connects to a Telegram bot, channel or group and lets you:
 - welcome everyone who asks to join your channel or group, let them in and follow up later (Welcome Flows)
-- send a message now, later, or at the next 9am in the workspace time zone (the owner sets it in Settings to where their audience lives; Castvoo does not know each subscriber's own time zone)
+- send a message now, later, or at the next 9am in the workspace time zone (the owner sets it in Settings to where their audience lives; Castvoo does not know each subscriber's own time zone), or repeat it every day, on weekdays or on chosen days, with rotating versions
+- send photos, videos, GIFs, voice notes and round videos, and auto-delete or auto-pin messages
 - set up auto follow-ups that send themselves after someone starts the bot, uses a start link, or gets a tag
 - send to an audience (part of your bot subscribers)
 - add buttons with tracked links and see who clicked
@@ -34,7 +35,7 @@ Castvoo is made by Zedapex in Lagos. It is independent and not affiliated with T
 5. Teach Cas your business: Ask Cas → Train Cas (two minutes), so its writing sounds like you.
 Video help: the Guides page in the dashboard menu has 10 short voiced videos (about a minute each) that show these steps in the real dashboard. The castvoo.com website also has a 40-second setup animation (the "Watch the 40-second setup" button).` },
 
-  { key: 'video-guides', title: 'Video guides (the Guides page)', body: `The dashboard menu has a Guides page with 13 short video tutorials. Each one shows the real dashboard step by step, with a voice-over and captions, and lasts about 70 to 105 seconds:
+  { key: 'video-guides', title: 'Video guides (the Guides page)', body: `The dashboard menu has a Guides page with 14 short video tutorials. Each one shows the real dashboard step by step, with a voice-over and captions, and lasts about 70 to 105 seconds:
 1. Connect your Telegram bot (guide id connect-bot; making a bot with @BotFather and pasting its token)
 2. Add a channel or group (add-channel; linking your Telegram, then connecting in one tap)
 3. Build a welcome bot with Cas (cas-builder; a Welcome bot for people who ask to join your channel: tap a goal like "Offer VIP 💎", your topic and your link, "✨ Just build it for me", see it play, send a test to your Telegram, switch it on; change anything later by typing. It was filmed before the 🤖 Bots menu: today you start it with 🤖 Bots → New bot → 👋 Welcome bot)
@@ -43,11 +44,12 @@ Video help: the Guides page in the dashboard menu has 10 short voiced videos (ab
 6. Build a bot yourself (bots-yourself; New bot → 💬 Chat bot → the "Free gift from my ad" template: change the words, the gift link, a second button, when the next message comes, delete a message, the special step "❓ Ask a question" with an Email answer, move it up, ▶ Preview the whole bot with a typed answer, 📲 Send a test to my Telegram, save, switch it on, Copy the link)
 7. Leads, invites & broadcasts (bots-leads-invites; a questions bot's Leads tab and Download CSV (Starter plan and up), an invite-friends bot with its Invites leaderboard (Growth plan and up; only people new to the bot count), and 📣 Broadcast to these people, which opens Send a message with the audience "Started <bot name>")
 8. Send a broadcast (send-broadcast; {name}, buttons and scheduling)
-9. Auto follow-ups (auto-follow-ups; messages your bot sends by itself, on a timer)
-10. Audiences & start links (audiences-start-links; which ad brought each subscriber, then message just them)
-11. Wallet, plans & the Free plan (wallet-plans; top up, pick a plan, what happens on Free)
-12. Earn with referrals & get help (referrals-help; your link, monthly earnings, and 24/7 support chat)
-13. Invite a setup helper (setup-helper; let your media buyer or a friend set things up with their own login, no password sharing)
+9. Repeat, voice notes & round videos (repeat-voice; Send a message → 🔁 Repeat: Weekdays at 9:00 AM ending on a date, the next-send chips, "Add a version" for 3 rotating messages (In order or Random), 🎙️ Voice: hold the microphone to record a voice note, ⭕ Round: your front camera or upload a short clip, More options: delete after 24 hours and pin it; then the repeating message's card (next send, pause, history) and the Calendar)
+10. Auto follow-ups (auto-follow-ups; messages your bot sends by itself, on a timer)
+11. Audiences & start links (audiences-start-links; which ad brought each subscriber, then message just them)
+12. Wallet, plans & the Free plan (wallet-plans; top up, pick a plan, what happens on Free)
+13. Earn with referrals & get help (referrals-help; your link, monthly earnings, and 24/7 support chat)
+14. Invite a setup helper (setup-helper; let your media buyer or a friend set things up with their own login, no password sharing)
 Pages with a guide also show a "Watch the guide" button at the top (for example Channels & bots, Send a message, Wallet). 🤖 Bots shows five: "Welcome bot with Cas", "Welcome bot yourself", "Chat bot with Cas", "Chat bot yourself" and "Leads & invites". The Welcome bot chooser has small "▶ Watch how" links for the two welcome guides, and Cas Builder's "Watch the guide" button plays Build any bot with Cas. The castvoo.com homepage ("See it work") plays Build a welcome bot with Cas, Build a welcome bot yourself, Connect your Telegram bot and Send a broadcast. The setup helper guide is on the Setup helper card in Settings → Team and on the "Get help setting up" cards. The player has play/pause, speed (0.75× to 1.75×), captions on or off (CC) and full screen. Watched guides get a tick; the ticks are saved in that browser only. The Help page has a "Watch the video guides" link too. Support can send any of these as a card that plays the guide right away (share_link guide:<id>).` },
 
   { key: 'bots-channels-groups', title: 'Bots, channels and groups: the difference', body: `- Bot: people press Start on your bot. Castvoo can message each person one by one, so audiences, follow-ups, {name} and per-person click tracking work.
@@ -95,7 +97,7 @@ Linking lets you add channels and groups in one tap and receive test messages. O
 "This Telegram account is already linked to another Castvoo login": log in to that other account, or unlink it there first.` },
 
   /* =========================== Sending =========================== */
-  { key: 'sending', title: 'Sending a message', body: `Send a message → choose where it goes → choose who gets it (bots only) → write it → add a photo or video if you want → add buttons → choose Send now, Schedule or 9am local time → Send.
+  { key: 'sending', title: 'Sending a message', body: `Send a message → choose where it goes → choose who gets it (bots only) → write it → add a photo, video, voice note or round video if you want → add buttons → choose Send now, Schedule, 9am local time or Repeat → Send. "More options" has auto-delete and pin.
 Before sending you see how many people it will reach and roughly how long it takes.
 Send a test first: the test goes to your own Telegram (link Telegram in Settings). If it says "Open @yourbot in Telegram and press Start once, then try the test again", open your bot and press Start, then test again.
 Formatting: *bold* with stars, _italic_ with underscores.` },
@@ -110,12 +112,21 @@ Names are cut to 20 characters. Works in broadcasts and auto follow-ups. Do not 
 The workspace time zone is set by the owner in Settings → Workspace → Time zone. Set it to where most of your audience lives. Castvoo does not detect each subscriber's own time zone.
 Scheduled messages can be cancelled from the message list before they go out. If the plan is paused when a scheduled message is due, it is not sent (it shows as failed) and you can send it again after topping up.` },
 
-  { key: 'media-limits', title: 'Photos, videos and length limits', body: `- Text message: up to 4,096 characters ("Telegram allows 4,096 characters per message").
-- With a photo or video, the caption can be up to 1,024 characters ("With a photo or video, Telegram allows 1,024 characters"). Shorten it or remove the photo.
-- Photos up to 10 MB: JPG, PNG, GIF, WEBP. Videos up to 50 MB: MP4, MOV.
+  { key: 'media-limits', title: 'Photos, videos, voice notes, round videos and length limits', body: `- Text message: up to 4,096 characters ("Telegram allows 4,096 characters per message").
+- With a photo, video, GIF or voice note, the text (caption) can be up to 1,024 characters ("With a photo or video, Telegram allows 1,024 characters" / "With a voice note, Telegram allows 1,024 characters"). Shorten it or remove the file.
+- A round video has no caption in Telegram, so its text (up to 4,096 characters) and buttons come as a second message right after the round video. With no text, the buttons sit under the round video.
+- Photos up to 10 MB: JPG, PNG, GIF, WEBP. Videos up to 50 MB: MP4, MOV. Voice notes up to 20 MB: OGG, OPUS, MP3, M4A, AAC, WAV or WEBM. Round videos up to 50 MB: MP4, MOV or WEBM (cut to 60 seconds).
 - "Use a JPG, PNG, WEBP, GIF, MP4 or MOV file" / "That file does not match its type": export the file again in one of those formats.
-- "Your workspace has no room for more photos and videos right now": files not used in any message are cleared after 3 days. Reuse a file you uploaded, or try again later.
+- "Your workspace has no room for more photos and videos right now": files not used in any message are cleared after 3 days. Voice notes and round videos count too. Reuse a file you uploaded, or try again later.
 - {name} counts as 20 characters when checking length.` },
+
+  { key: 'voice-round-video', title: 'Voice notes and round videos', body: `In Send a message (and in bot and follow-up messages, and repeating messages) the media box has three tabs: 🖼️ Photo or video, 🎙️ Voice note and ⭕ Round video.
+- Voice note: press and hold "Hold to record" (or tap it once to start and again to stop), see the timer and the moving bars, play it back, then "Use this" or "Record again". Or upload an audio file (MP3, M4A, OGG, WAV, AAC, WEBM, up to 20 MB). Castvoo turns it into a Telegram voice message (the kind with a waveform). The message text becomes its caption (optional, up to 1,024 characters).
+- Round video: tap "Record a round video", the front camera opens in a circle, record up to 60 seconds, watch it, then use it or record again. Or upload a video (MP4, MOV or WEBM, up to 50 MB): Castvoo crops it to a square from the middle and cuts it at 60 seconds. Telegram shows it as a round video bubble.
+- Round videos can't have a caption or text in Telegram: if the message has text or buttons, the round video goes first and the text with the buttons follows right after as its own message. Editing a sent message changes that text; deleting removes both.
+- Recording needs the browser's permission for the microphone or camera. If the browser can't record (or permission was refused), the upload button is shown instead. On iPhone use Safari 14.5 or newer.
+- "We couldn't turn that recording into a voice note" / "...into a round video": record again or try another file. "Voice/round video conversion isn't set up on this server yet": an OGG voice file or a square MP4 still works; tell support so the team can fix it.
+- The Free plan welcome can only have 1 photo; voice notes and round videos are on paid plans.` },
 
   { key: 'buttons-links', title: 'Buttons and click tracking', body: `Each message can have up to 6 buttons. Each button opens a web link. Castvoo turns the link into a short tracked link, so you see how many people clicked and, for bot messages, exactly who clicked. For channel and group posts you see click totals only. See clicks under Clicks and in each message's report.
 Every bot broadcast also gets a "Stop these messages" button by default. People who tap it, or type /stop, stop receiving broadcasts. This keeps spam reports and bans away. You can switch it off per message, but we recommend keeping it.` },
@@ -151,7 +162,25 @@ Tags can use letters, numbers, _ and -, up to 64 characters, no spaces ("Use onl
 Telegram only lets bots delete messages for 48 hours after sending, so Delete is greyed out after that ("Telegram only lets bots delete messages for 48 hours after sending").
 "This message is still going out. You can edit it as soon as it has finished sending.": wait until sending is finished.
 "Only sent messages can be pinned" / "Only sent messages can be deleted from Telegram": drafts and scheduled messages are cancelled instead.
-Drafts-only and Can-send members may need the owner for edit, pin and delete ("Ask the owner to edit sent messages").` },
+Drafts-only and Can-send members may need the owner for edit, pin and delete ("Ask the owner to edit sent messages").
+To have it done automatically, use "Delete this message after…" and "Pin it" when you write the message (see the auto-delete and auto-pin article).` },
+
+  { key: 'auto-delete-pin', title: 'Auto-delete and auto-pin', body: `When you write a message (or a repeating message), open "More options":
+- "Delete this message after…": 1, 2, 6, 12, 24 or 47 hours ("almost 2 days"), or your own number of hours up to 47. Each person's copy is deleted that long after it reached them. Telegram lets bots delete messages only for 48 hours, so 47 hours is the most ("Telegram lets bots delete messages for up to 48 hours, so pick 47 hours or less"). In a channel or group the bot needs to stay admin. The message report shows "Deleted N".
+- "Pin it": in each person's chat with your bot (bot broadcasts) or at the top of your channel or group. "Notify members" on: Telegram sends a notification about the pin; off (the default): pinned quietly. "Unpin after…": from 1 hour to 7 days. The report shows how many were pinned and unpinned.
+- Pinning in a channel needs @CastvooBot's admin right "Edit messages of others"; in a group "Pin messages". Castvoo checks this when you save: "@CastvooBot can't pin in "News" yet. In Telegram, open the channel → Administrators → @CastvooBot and turn on ..." Turn it on, then save again.
+- If a pin fails later (the right was removed), the message itself is still delivered; the report counts it under problems.` },
+
+  { key: 'repeating-messages', title: 'Repeating messages and rotating versions', body: `Send a message → "Repeat this message" (or tap 🔁 Repeating on the page) sends the same message again and again by itself:
+- How often: Every day, Weekdays (Mon–Fri), Chosen days (tap the day chips) or Every week (pick the day). At a time of day in the workspace time zone (Settings → Workspace → Time zone).
+- Ends: Never, On a date (the last day it goes out), or After N sends.
+- Each send is a normal message in "Your messages" with its own report (delivered, clicks), audience and the "Stop these messages" button. At most one send per day per repeating message.
+- Rotating versions: "Add a version" (2 to 30). Each send uses the next version, "In order" or "Random" (random never repeats a version until all were used). The card shows which version goes next.
+- The card shows "Next: Tue 9:00 AM", how many times it was sent and the history. Pause, Resume, Edit and Stop at any time. Resuming carries on at the next time: sends missed while paused are not sent late (no flood). The calendar shows the coming sends for about 30 days.
+- If the plan can't send at that time (paused, trial ended, over the bot subscriber limit) the send is skipped and the card says why; it continues by itself once the plan can send again.
+- Repeating messages are on paid plans (Starter and up); how many can run at the same time depends on the plan (see the live plan list). Paused and stopped ones don't count.
+- A teammate whose messages need approval: the repeating message waits for the owner to approve it.
+- Auto-delete and auto-pin work for every send (see that article).` },
 
   { key: 'speed-delivery', title: 'Sending speed and delivery', body: `Castvoo sends about 25 messages per second per bot (Telegram allows about 30), so 10,000 people take about 7 minutes and 100,000 about an hour. A channel or group post is one message, so it goes out at once.
 Several broadcasts from the same bot queue one after another. Follow-up messages go out in between.
@@ -170,7 +199,7 @@ Drafts-only members can write but not send ("Your role can write drafts. Ask the
   /* =========================== Troubleshooting playbooks =========================== */
   { key: 'tb-bot-not-sending', title: 'Playbook: bot not sending', body: `Check in this order:
 1. Which plan is it on? The Free plan has no broadcasts or follow-ups ("Broadcasts are on the Starter plan and up"). A workspace moves to Free when the trial ends without a paid plan, when a cancelled plan's period ends, or when the wallet can't pay a renewal. Fix: Wallet → Top up and pick a plan; a plan that moved to Free because the wallet was short starts again by itself once a top-up covers it. Older workspaces can also show "Your plan is paused. Top up your wallet and pick a plan to start sending again".
-2. Over the subscriber limit? "You have N bot subscribers and your plan allows M. Upgrade to keep sending. Nothing is deleted."
+2. Over the subscriber limit (plus 10% extra)? "You have N bot subscribers and your plan allows M. ..." Bots keep answering and nothing is deleted; only broadcasts pause. Fix: upgrade, or on Scale add a subscriber pack (see "Bot subscriber limit and subscriber packs").
 3. Does the bot show "Needs attention"? Paste a fresh token from @BotFather.
 4. Is the webhook still pointing at Castvoo (another tool can take over a bot)? Support can repair it.
 5. Did people press Start? Bots can only message people who started them. Share t.me/yourbot.
@@ -215,7 +244,7 @@ Drafts-only members can write but not send ("Your role can write drafts. Ask the
 6. Money left your bank but the provider says not paid: the provider usually reverses it within a few days. Support hands it to the payments team with the reference.` },
 
   { key: 'tb-limits', title: 'Playbook: limits and "upgrade" messages', body: `- Connections: "Your plan allows N connections. Upgrade to add more." Remove one or upgrade.
-- Subscribers: above the limit sending pauses; nothing is deleted. Upgrade, or remove blocked/old bots.
+- Subscribers: above the limit (plus 10% extra) broadcasts pause; bots keep working and nothing is deleted. Upgrade; on Scale add a subscriber pack in Wallet and plan; above the most packs, talk to us for a custom plan (see "Bot subscriber limit and subscriber packs").
 - Seats: "You have N seats and all are in use" when inviting. Remove a member or cancel an invite, add extra seats in Settings → Team (paid plans), or upgrade.
 - AI writes: "Cas has used all N AI writes for this period. They refill on <date>." There is never an extra charge. The Free plan has no AI writes.
 - Join requests a month: see "Join requests per month". Over the limit, people are still let in but welcomes pause.
@@ -443,6 +472,16 @@ A workspace also moves to Free when the trial ends without a paid plan, when a p
   { key: 'join-meter', title: 'Join requests per month', body: `Each plan includes a number of join requests a month (see the live plan list; the trial has its own amount). A join request is one person asking to join a channel or group that has a live Welcome Flow. The count resets on the 1st of each month (UTC); during the trial it counts the whole trial.
 You get an email at 80% and at 100%, and the dashboard shows the meter, for example "312 / 500 free joins this month".
 After the limit plus 10% extra, people are still let in automatically, so your channel keeps growing. But your welcome and follow-up messages pause until next month or until you upgrade. The dashboard shows how many people joined without your welcome. Flows set to "I decide" still wait for you.` },
+
+  { key: 'subscriber-packs', title: 'Bot subscriber limit and subscriber packs', body: `Only bot subscribers count toward the plan's subscriber limit: people who started your bots and did not stop or block them. Channel and group members never count and are unlimited (a channel post is one message).
+What happens over the limit: you get 10% extra first. Above the limit plus 10%: your bots keep working and answering, new people who start your bots are still saved as subscribers, Welcome bots keep welcoming, and nothing is deleted. Only broadcasts to bot subscribers pause, with a friendly message, until there is room again (more room, or fewer subscribers). Drafts can still be saved.
+Subscriber packs (Scale plan only): each pack adds more bot subscribers for a monthly price, up to a set number of packs. The pack size, price and most packs are in the live plan list. Add them in Wallet and plan → Subscriber packs (a stepper with the live price), or tap "Add ... subscribers" in the message you see when the limit is reached (one tap, the price for the rest of this period is shown on the button). Support link key: subscriber_packs.
+- Buying: the packs are paid now from the wallet for the days left of the current period (for example half a month left = half the price), then they renew together with the plan in the same wallet payment. Adding packs sends a receipt. If the wallet is short, the dashboard offers a top-up ("Your wallet needs $X for N subscriber packs").
+- Fewer packs: lower the number any time; nothing is refunded and the lower number starts at the next renewal. Nothing is ever deleted; if you are then over the limit, broadcasts pause as above.
+- If the wallet can't pay the plan plus its packs and seats at renewal, the workspace moves to Free as usual (nothing is deleted). A move to another plan or to Free ends the packs.
+- Starter and Growth: packs are not sold there. Upgrade to Scale first ("Subscriber packs are for the Scale plan. Upgrade to Scale first").
+- Not during the free trial ("Subscriber packs can be added once your paid Scale plan starts").
+Talk to us (custom plan): for more than the biggest plan plus the most packs allow, or for any custom deal, the customer taps "Talk to us": it opens this support chat with a ready message, and there is also the support email. Support hands custom deals to a person on the team (they never promise a price). The team can set packs or a custom subscriber limit for a workspace ("Your workspace has a custom subscriber limit from our team. Talk to us to change it."). Support link key: talk_to_us.` },
 
   { key: 'bots', title: 'Bots: Welcome bots and Chat bots', body: `The 🤖 Bots page (it replaced "Welcome Flows" in the menu; nothing was lost, old Welcome Flows are the Welcome bots there) has two kinds of bot, built in the same builder:
 - 👋 Welcome bot: starts when someone asks to join your channel or group (everything in "Welcome Flows" below).

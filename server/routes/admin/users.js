@@ -104,9 +104,16 @@ module.exports = (r) => {
     const periodEnd = b.period_end !== undefined ? date(b.period_end, 'Period end') : ws.period_end;
     if (status === 'trial' && !trialEnds) throw badRequest('A trial needs an end date.');
     if (status === 'active' && !periodEnd) throw badRequest('An active plan needs a period end date.');
-    await db.query('update workspaces set plan_code = $2, plan_status = $3, trial_ends_at = $4, period_end = $5, reminded_at = null where id = $1', [id, plan.code, status, trialEnds, periodEnd]);
+    // Custom deals: subscriber packs (renew with the plan from the wallet; Scale only) and a custom bot subscriber limit
+    // (blank or 0 = none; it replaces the plan + packs number, never on the Free plan). Nothing is charged here.
+    const pc = await require('../../services/billing').packConf();
+    const packs = b.subscriber_packs === undefined || b.subscriber_packs === '' || b.subscriber_packs === null ? Number(ws.subscriber_packs) || 0 : int(b.subscriber_packs, 'Subscriber packs', { min: 0, max: Math.max(pc.max, 100) });
+    const custom = b.custom_subscriber_limit === undefined ? ws.custom_subscriber_limit
+      : b.custom_subscriber_limit === '' || b.custom_subscriber_limit === null || Number(b.custom_subscriber_limit) === 0 ? null : int(b.custom_subscriber_limit, 'Custom subscriber limit', { min: 1, max: 100000000 });
+    await db.query(`update workspaces set plan_code = $2, plan_status = $3, trial_ends_at = $4, period_end = $5, reminded_at = null, subscriber_packs = $6, custom_subscriber_limit = $7,
+      pending_subscriber_packs = case when $6 = subscriber_packs then pending_subscriber_packs else null end where id = $1`, [id, plan.code, status, trialEnds, periodEnd, packs, custom]);
     if (b.reset_ai) await db.query('update workspaces set ai_used = 0 where id = $1', [id]);
-    await audit(ctx, 'workspace.plan', 'workspace:' + id, { from: { plan: ws.plan_code, status: ws.plan_status }, to: { plan: plan.code, status, trialEnds, periodEnd }, note: b.note || '' });
+    await audit(ctx, 'workspace.plan', 'workspace:' + id, { from: { plan: ws.plan_code, status: ws.plan_status, subscriber_packs: ws.subscriber_packs, custom_subscriber_limit: ws.custom_subscriber_limit }, to: { plan: plan.code, status, trialEnds, periodEnd, subscriber_packs: packs, custom_subscriber_limit: custom }, note: b.note || '' });
     return { ok: true };
   }, { staff: 'users.edit' });
 

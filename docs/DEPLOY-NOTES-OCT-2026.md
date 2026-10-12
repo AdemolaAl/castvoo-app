@@ -18,7 +18,7 @@ The upgrade keeps all data. Follow these steps in order. Tick each one.
 4. **Add `VOO_SERVICE_KEY`.** Make it with `openssl rand -hex 32`. It must be different from `VOO_API_KEY`.
    Send it to whoever runs VooSquare: the VooSquare staff sync (`/api/voosquare/staff`) must now send this key.
    Until they change it, staff sync answers 401. The summary and the support desk keep working with `VOO_API_KEY`.
-5. The external-link warning page is disabled by default. Leave `LINK_WARN_NEW_DAYS` unset or set it to `0`.
+5. Optional: `LINK_WARN_NEW_DAYS=7`. That is already the default, so you can leave it out.
 6. Check these did **not** change:
    - `NODE_ENV=production`
    - `APP_URL` starts with `https://`
@@ -90,3 +90,45 @@ Everything before this release was tested against fake services. These must be d
 
 - New migration: `027_referral_5_15.sql` (runs automatically on start). Referral tiers become 5% / 10% / 15% (1 / 5 / 20 paying referrals); any saved rate or cap above 15% is set to 15% (monthly and yearly cap both 15%). Past earnings are not changed. Admin → Settings → Referral no longer accepts more than 15%.
 - The "referrals-help" guide video still SAYS "ten / twenty / thirty percent" in the voiceover (the caption file was updated). Re-record that video before announcing.
+
+## Subscriber packs for Scale (Oct 12, 2026)
+
+- New migration: `029_subscriber_packs.sql` (runs automatically on start, safe to run twice). Adds `workspaces.subscriber_packs`, `pending_subscriber_packs`, `custom_subscriber_limit`, and the `billing` settings `sub_pack_size` 50000, `sub_pack_price_cents` 2900, `sub_pack_max` 8 (saved keys are kept). No new env vars.
+- Scale customers can add +50,000 bot subscribers for $29/month (1 to 8 packs) in Wallet and plan, or in one tap from the over-limit message. Above 500,000: "Talk to us" (support chat with a ready message, plus the support email).
+- The bot subscriber limit now has the same 10% grace in Send a message as in the Bots page (it was strict there before).
+- New email template `packs_receipt`; the plan receipt has a "Subscriber packs" line.
+- Admin: Settings → Money → Billing has the pack size, price and most packs; Users → workspace → "Change plan or dates" can set packs or a custom subscriber limit for custom deals.
+- The pricing card of Scale shows "Bigger audience? Add 50,000 subscribers for $29/month, or talk to us for a custom plan." from the live settings (no change to plan bullets in Admin needed).
+
+## Repeating messages, voice notes & round videos, auto-delete, auto-pin (Oct 12, 2026)
+
+- New migration: `030_repeat_media_pin.sql` (runs automatically on start, safe to run twice). Adds `repeat_series`,
+  `repeat_versions`, `media_conversions`, the media kinds `voice` and `video_note`, `media.duration_sec`, the broadcast
+  columns `series_id`, `run_date`, `version_pos`, `delete_after_hours`, `pin`, `pin_notify`, `unpin_after_hours`, the
+  delivery action `unpin` and `deliveries.message_id2`.
+- **ffmpeg (the one deploy step).** Voice notes are converted to OGG/Opus and round videos to square H.264 MP4 with ffmpeg.
+  Railway builds Castvoo from the **Dockerfile** (`railway.json` → `"builder": "DOCKERFILE"`), so Nixpacks settings
+  (`nixpacks.toml`, `NIXPACKS_PKGS`) are ignored. The Dockerfile now installs it:
+  `RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*`
+  Nothing to set in Railway. The image grows by about 100 MB and the first build takes a minute longer.
+  - Only if you ever switch the service to Nixpacks: add `nixpacks.toml` with `[phases.setup]` and `aptPkgs = ["ffmpeg"]`,
+    or set the variable `NIXPACKS_PKGS=ffmpeg`.
+  - `FFMPEG_PATH` (optional) points to another ffmpeg; empty = `ffmpeg` on the PATH.
+  - Check after deploy: the logs show `ffmpeg ready` with its version, and **Admin → System** shows
+    "Voice notes & round videos: ffmpeg ready". If it says "ffmpeg not found", customers can still upload an OGG voice
+    file or a square MP4 (60 s or less); anything else gets "Voice/round video conversion isn't set up on this server yet".
+- **Camera and microphone.** The `Permissions-Policy` header now allows `camera=(self), microphone=(self)` (it blocked
+  both before), so the dashboard can record voice notes and round videos. Browsers only allow recording on https.
+- Repeating messages run from the broadcast job (every 5 s). Each run is a normal broadcast. A run more than 3 hours late
+  (server down, maintenance) is skipped, never sent late. Admin → Features → "Repeating messages" switches them off
+  (runs are skipped while off). Plan limits: Free 0, Starter 3, Growth 20 (and the trial), Scale unlimited with a cap of
+  100 (fair use).
+- Auto-delete is 1 to 47 hours (Telegram lets bots delete for 48 hours). Pinning in a channel needs @CastvooBot's admin
+  right "Edit messages of others" (groups: "Pin messages"), checked when saving.
+- Before announcing, one live Telegram test: record a voice note on an iPhone (Safari) and on Android (Chrome), record a
+  round video, send both to your own bot (Send me a test), a repeating message every day for 2 days, a channel post with
+  "Pin it" + "Unpin after 1 hour", and a bot broadcast with "Delete after 1 hour".
+- Supervisor review (docs/SUPERVISOR-VERDICT-OCT12.md): deploy the commit with that file (fixes SV-1 to SV-7, no new
+  migration or env var). Voice notes are now cut at 60 minutes; more than 8 conversions waiting answer "try again in a
+  minute". In the live test, also press Cancel on a "Delete after 1 hour" bot broadcast while it goes out and check the
+  copies that arrived are still deleted.

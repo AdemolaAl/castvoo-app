@@ -31,6 +31,7 @@ module.exports = (r) => {
   r.get('/api/broadcasts', async (ctx) => {
     const rows = await db.many(`select b.id, b.title, b.body, b.status, b.send_mode, b.send_at, b.total, b.sent, b.failed, b.created_at, b.started_at, b.finished_at,
         b.media_id, b.buttons, b.include_stop, b.segment_id, b.connection_id, c.kind, c.title as conn_title, c.username as conn_username, s.name as segment_name,
+        b.series_id, b.version_pos, b.delete_after_hours, b.pin, (select m.kind from media m where m.id = b.media_id) as media_kind,
         (select count(*)::int from clicks k join links l on l.code = k.code where l.broadcast_id = b.id) as clicks,
         (select count(distinct k.subscriber_id)::int from clicks k join links l on l.code = k.code where l.broadcast_id = b.id) as clickers,
         -- "9am local time" broadcasts have no send_at: their deliveries are queued for each time zone's 9am. The calendar uses these.
@@ -68,7 +69,16 @@ module.exports = (r) => {
     const links = await db.many('select l.code, l.label, l.url, (select count(*)::int from clicks k where k.code = l.code) as clicks from links l where l.broadcast_id = $1 order by l.position, l.created_at', [b.id]);
     const errors = await db.many("select error, count(*)::int n from deliveries where broadcast_id = $1 and status in ('failed','blocked') group by 1 order by 2 desc limit 5", [b.id]);
     const queued = await db.one("select count(*)::int n, min(due_at) as next from deliveries where broadcast_id = $1 and status = 'queued' and action = 'send'", [b.id]);
-    return { broadcast: b, links, errors, queued: queued.n, next_due: queued.next };
+    // Auto-delete / auto-pin progress ("Deleted 120", "Pinned 118 · unpins at ...").
+    const auto = await db.one(`select count(*) filter (where action = 'delete' and status = 'sent')::int deleted, count(*) filter (where action = 'delete' and status = 'queued')::int to_delete,
+        min(due_at) filter (where action = 'delete' and status = 'queued') as delete_next,
+        count(*) filter (where action = 'pin' and status = 'sent')::int pinned, count(*) filter (where action = 'unpin' and status = 'sent')::int unpinned,
+        min(due_at) filter (where action = 'unpin' and status = 'queued') as unpin_next,
+        count(*) filter (where action in ('pin','unpin','delete') and status in ('failed','skipped'))::int auto_failed
+      from deliveries where broadcast_id = $1 and action in ('delete','pin','unpin')`, [b.id]);
+    const media = b.media_id ? await db.one('select id, kind, filename, size_bytes, duration_sec from media where id = $1', [b.media_id]) : null;
+    const series = b.series_id ? await db.one('select id, title, status from repeat_series where id = $1 and workspace_id = $2', [b.series_id, ctx.workspace.id]) : null;
+    return { broadcast: b, links, errors, queued: queued.n, next_due: queued.next, auto, media, series };
   }, { auth: 'workspace' });
 
   r.post('/api/broadcasts', async (ctx) => {
@@ -114,12 +124,15 @@ module.exports = (r) => {
     if (!asDraft && (ctx.member.role === 'drafter' || helperWaits || (ws.require_approval && ctx.member.role !== 'owner'))) status = 'pending_approval';
     if (!asDraft && status !== 'pending_approval') await billing.assertCanSend(ws);
 
-    const title = str(b.title, 'Title', { max: 80, required: false }) || msg.body.replace(/[*_]/g, '').split('\n').find((l) => l.trim()).trim().slice(0, 60);
+    const extras = await B.checkExtras(conn, b);
+    const title = str(b.title, 'Title', { max: 80, required: false }) || B.titleFrom(msg.body, msg.media_kind);
     const includeStop = conn.kind === 'bot' ? b.include_stop !== false : false;
     const row = await db.tx(async (c) => {
-      const br = (await c.query(`insert into broadcasts(workspace_id, connection_id, segment_id, title, body, media_id, buttons, include_stop, send_mode, send_at, status, created_by)
-        values ($1,$2,$3,$4,$5,$6,'[]',$7,$8,$9,$10,$11) returning *`,
-      [ws.id, conn.id, segmentId, title, msg.body, msg.media_id, includeStop, mode, sendAt, status === 'sending' ? 'scheduled' : status, ctx.user.id])).rows[0];
+      const br = (await c.query(`insert into broadcasts(workspace_id, connection_id, segment_id, title, body, media_id, buttons, include_stop, send_mode, send_at, status, created_by,
+          delete_after_hours, pin, pin_notify, unpin_after_hours)
+        values ($1,$2,$3,$4,$5,$6,'[]',$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *`,
+      [ws.id, conn.id, segmentId, title, msg.body, msg.media_id, includeStop, mode, sendAt, status === 'sending' ? 'scheduled' : status, ctx.user.id,
+        extras.delete_after_hours, extras.pin, extras.pin_notify, extras.unpin_after_hours])).rows[0];
       const btns = await B.makeLinks(c, ws.id, msg.buttons, { broadcastId: br.id });
       await c.query('update broadcasts set buttons = $2 where id = $1', [br.id, JSON.stringify(btns)]);
       return { ...br, buttons: btns };
@@ -162,7 +175,9 @@ module.exports = (r) => {
     if ((ctx.member.role === 'drafter' || noHelperSend(ctx)) && !['draft', 'pending_approval'].includes(b.status)) throw forbidden('Ask the owner to cancel this message.');
     await db.tx(async (c) => {
       await c.query("update broadcasts set status = 'cancelled', finished_at = now() where id = $1", [b.id]);
-      await c.query("update deliveries set status = 'skipped', error = 'Cancelled' where broadcast_id = $1 and status = 'queued'", [b.id]);
+      // Only the sends that haven't gone out: the auto-delete / unpin of messages that already reached people still
+      // happen ("Delete after 1 hour" must not be lost, and a pinned message must not stay pinned forever).
+      await c.query("update deliveries set status = 'skipped', error = 'Cancelled' where broadcast_id = $1 and status = 'queued' and action = 'send'", [b.id]);
     });
     return { ok: true };
   }, { auth: 'workspace' });
@@ -173,12 +188,16 @@ module.exports = (r) => {
     if ((ctx.member.role === 'drafter' || noHelperSend(ctx)) && !['draft', 'pending_approval'].includes(b.status)) throw forbidden('Ask the owner to edit sent messages.');
     // Editing halfway through would leave some people with the old text and some with the new one.
     if (b.status === 'sending') throw badRequest('This message is still going out. You can edit it as soon as it has finished sending.', 'still_sending');
-    const body = str(ctx.body.body, 'Message', { min: 1, max: 20000, trim: false }).replace(/\r\n/g, '\n'); // real limit checked below
+    const media = b.media_id ? await db.one('select kind from media where id = $1', [b.media_id]) : null;
+    const optional = !!media && B.TEXT_OPTIONAL.includes(media.kind);
+    const body = (optional && !ctx.body.body ? '' : str(ctx.body.body, 'Message', { min: 1, max: 20000, trim: false })).replace(/\r\n/g, '\n'); // real limit checked below
     const tgl = require('../services/telegram');
     const len = tgl.visibleLength(body);
-    if (b.media_id && len > tgl.LIMITS.caption) throw badRequest('With a photo or video, Telegram allows 1,024 characters.');
+    if (media && len > B.textLimit(media.kind)) throw badRequest(media.kind === 'voice' ? 'With a voice note, Telegram allows 1,024 characters.' : 'With a photo or video, Telegram allows 1,024 characters.');
     if (len > tgl.LIMITS.text) throw badRequest('Telegram allows 4,096 characters per message.');
-    if (!body.trim()) throw badRequest('Write a message first.');
+    if (!body.trim() && !optional) throw badRequest('Write a message first.');
+    // A round video sent without text has no text message to edit.
+    if (b.status === 'sent' && media && media.kind === 'video_note' && !String(b.body || '').trim() && body.trim()) throw badRequest('This round video went out without text, so there is no text to edit in Telegram. Send a new message instead.');
     await db.query('update broadcasts set body = $2 where id = $1', [b.id, body]);
     if (b.status === 'sent') {
       const n = await B.queueAction({ ...b, body }, 'edit');

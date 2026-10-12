@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Deleting uploaded photos and videos (and top-up proof screenshots, support chat images) from disk.
+ * Deleting uploaded photos, videos, voice notes and round videos (and top-up proof screenshots, support chat images) from disk.
  * Call this BEFORE deleting the media rows (it reads their paths), when a workspace's data
  * is purged after the retention period or an account is deleted. Without it the files stayed
  * on the volume forever after the rows were gone.
@@ -37,6 +37,7 @@ async function removeUnused(days = 3, limit = 500) {
   const rows = await db.many(`select m.id, m.path from media m where m.created_at < now() - make_interval(days => $1)
       and not exists (select 1 from broadcasts b where b.media_id = m.id)
       and not exists (select 1 from sequence_steps s where s.media_id = m.id)
+      and not exists (select 1 from repeat_versions v where v.media_id = m.id)
     order by m.id limit $2`, [days, limit]);
   const root = path.resolve(config.uploadDir) + path.sep;
   for (const r of rows) {

@@ -55,6 +55,8 @@ async function main() {
   require('./lib/geoip').init();
   // The Guides page videos must be deployed with the app (they are large, so a partial upload can leave them out).
   require('./lib/guide-videos').warnIfMissing(log);
+  // ffmpeg for voice notes and round videos (logs one warning when it is missing; Admin → System shows it too).
+  require('./services/media-convert').detect().then((s) => { if (s.ok) log.info('ffmpeg ready', { version: s.version }); }).catch(() => {});
 
   const { createServer } = require('./app');
   const server = createServer();

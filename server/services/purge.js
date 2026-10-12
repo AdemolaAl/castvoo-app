@@ -16,6 +16,8 @@ async function purgeRows(c, wsIds, { userId = null, members = false } = {}) {
   if (!wsIds.length && !userId) return;
   const q = (sql) => c.query(sql, [wsIds]);
   await q('delete from join_requests where workspace_id = any($1)');
+  await q('delete from repeat_series where workspace_id = any($1)'); // repeating messages and their versions (texts)
+  await q('delete from media_conversions where workspace_id = any($1)');
   await q('delete from sequence_runs where subscriber_id in (select s.id from subscribers s join connections k on k.id = s.connection_id where k.workspace_id = any($1))');
   await q('delete from clicks where workspace_id = any($1)');
   await q('delete from links where workspace_id = any($1)');

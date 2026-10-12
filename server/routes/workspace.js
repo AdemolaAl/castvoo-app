@@ -380,6 +380,24 @@ module.exports = (r) => {
     return { ok: true, message: `${plan.name} (${cycle === 'year' ? 'yearly' : 'monthly'}) starts at your next renewal.` };
   }, { auth: 'workspace' });
 
+  /**
+   * Subscriber packs (Scale only): { packs: N } is the number of packs wanted (0 to the most, 8 by default). More =
+   * paid now for the rest of the period from the wallet; fewer = from the next renewal (nothing is deleted).
+   * Owner, or a setup helper the owner allows to manage billing (ws.billing).
+   */
+  r.post('/api/app/plan/packs', async (ctx) => {
+    canBilling(ctx);
+    const want = int(ctx.body.packs, 'Subscriber packs', { min: 0, max: 100 });
+    const before = Number(ctx.workspace.subscriber_packs) || 0;
+    const r2 = await billing.setSubscriberPacks(ctx.workspace.id, want);
+    await require('../services/audit').audit(ctx, 'workspace.subscriber_packs', 'workspace:' + ctx.workspace.id, { before, want, charged_cents: r2.charged, pending: r2.pending });
+    const info = await billing.packsInfo(await db.one('select * from workspaces where id = $1', [ctx.workspace.id]));
+    const msg = r2.charged ? `Done! You can now have up to ${Number(info.subscribers).toLocaleString('en-US')} bot subscribers. ${fmtUSD(r2.charged)} was paid from your wallet for the rest of this period.`
+      : r2.pending != null ? `You'll have ${r2.pending} subscriber pack${r2.pending === 1 ? '' : 's'} from your next renewal. Nothing is deleted and nothing more is charged.`
+        : want > before ? `Done! You can now have up to ${Number(info.subscribers).toLocaleString('en-US')} bot subscribers.` : 'Your subscriber packs stay as they are.';
+    return { ok: true, message: msg, charged: r2.charged / 100, packs: info };
+  }, { auth: 'workspace', rate: [30, 600] });
+
   r.post('/api/app/plan/cancel', async (ctx) => {
     ownerOnly(ctx);
     await db.query('update workspaces set cancel_at_period_end = $2 where id = $1', [ctx.workspace.id, ctx.body.resume ? false : true]);

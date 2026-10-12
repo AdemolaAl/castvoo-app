@@ -23,7 +23,7 @@ function dripFromApi(q) {
   return {
     id: q.id, name: q.name, connection_id: q.connection_id, trigger_type: q.trigger_type, trigger_value: q.trigger_value || '',
     join_connection_id: q.join_chat ? q.join_chat.id : '', approve_join: q.approve_join !== false, active: !!q.active, people: q.people, in_progress: q.in_progress,
-    steps: q.steps.map((s) => { const [v, u] = splitDelay(s.delay_seconds != null ? s.delay_seconds : (s.delay_minutes || 0) * 60); return { delay_value: v, delay_unit: u, body: s.body, media: s.media_id ? { id: s.media_id } : null, buttons: (s.buttons || []).map((b) => ({ label: b.label, url: b.url })), sent: s.sent, clicks: s.clicks }; }),
+    steps: q.steps.map((s) => { const [v, u] = splitDelay(s.delay_seconds != null ? s.delay_seconds : (s.delay_minutes || 0) * 60); return { delay_value: v, delay_unit: u, body: s.body, media: s.media_id ? { id: s.media_id, kind: s.media_kind || 'photo', duration_sec: s.media_duration || null } : null, buttons: (s.buttons || []).map((b) => ({ label: b.label, url: b.url })), sent: s.sent, clicks: s.clicks }; }),
   };
 }
 
@@ -130,8 +130,8 @@ function checkDrip(E) {
   }
   if (total > 365 * 86400) return 'Waits can add up to 365 days at most.';
   for (const [i, s] of E.steps.entries()) {
-    if (!s.body.trim()) return 'Message ' + (i + 1) + ' is empty.';
-    const lim = s.media ? 1024 : 4096;
+    if (!s.body.trim() && !(s.media && (s.media.kind === 'voice' || s.media.kind === 'video_note'))) return 'Message ' + (i + 1) + ' is empty.';
+    const lim = s.media && s.media.kind !== 'video_note' ? 1024 : 4096;
     if (visibleLength(s.body) > lim) return 'Message ' + (i + 1) + ' is too long for Telegram (' + fmt(lim) + ' characters' + (s.media ? ' with a photo or video' : '') + ').';
     const b = checkButtons(s.buttons); if (b) return 'Message ' + (i + 1) + ': ' + b;
   }
@@ -154,10 +154,11 @@ function drawCanvas(bots, chats, editable) {
     '</div>';
   const steps = E.steps.map((s, i) => '<div class="conn"><span>' + delayText(s.delay_value, s.delay_unit) + '</span></div>' +
     '<div class="node" data-step="' + i + '"><div class="nh"><b>Message ' + (i + 1) + '</b><div class="nhr"><div class="delay"><span class="hint">' + (i === 0 ? 'Send after' : 'Wait') + '</span><input type="number" min="0" max="999" inputmode="numeric" value="' + (Number(s.delay_value) || 0) + '" data-dv="' + i + '" aria-label="Wait time"' + dis + '><select data-du="' + i + '" aria-label="Unit"' + dis + '>' + Object.keys(UNIT_NAMES).map((u) => '<option value="' + u + '"' + (s.delay_unit === u ? ' selected' : '') + '>' + UNIT_NAMES[u][Number(s.delay_value) === 1 ? 0 : 1] + '</option>').join('') + '</select>' + (editable ? '<button type="button" class="wf-now' + (Number(s.delay_value) ? '' : ' on') + '" data-dnow="' + i + '">⚡ Right away</button>' : '') + '</div>' + (editable && E.steps.length > 1 ? '<button type="button" class="x" data-del="' + i + '" aria-label="Delete message ' + (i + 1) + '"><svg width="15" height="15"><use href="#i-trash"/></svg></button>' : '') + '</div></div>' +
-    (s.media ? '<div class="nmed">' + (s.media.url ? (s.media.kind === 'video' ? '<video src="' + esc(s.media.url) + '" muted playsinline></video>' : '<img src="' + esc(s.media.url) + '" alt="">') : '<img class="mimg" src="' + esc(mediaUrl(s.media.id)) + '" alt="">') + (editable ? '<button type="button" class="x" data-dmx="' + i + '" aria-label="Remove photo or video">×</button>' : '') + '</div>' : '') +
-    '<textarea class="inp" rows="4" data-body="' + i + '" placeholder="Write message ' + (i + 1) + '…"' + dis + '>' + esc(s.body) + '</textarea><div class="cc" data-cc="' + i + '">' + counterHtml(s.body, !!s.media) + '</div>' +
+    (s.media ? '<div class="nmed' + (s.media.kind === 'voice' ? ' au-nv' : s.media.kind === 'video_note' ? ' au-nr' : '') + '">' + (s.media.kind === 'voice' || s.media.kind === 'video_note' ? mediaThumb(s.media) : s.media.url ? (s.media.kind === 'video' ? '<video src="' + esc(s.media.url) + '" muted playsinline></video>' : '<img src="' + esc(s.media.url) + '" alt="">') : '<img class="mimg" src="' + esc(mediaUrl(s.media.id)) + '" alt="">') + (editable ? '<button type="button" class="x" data-dmx="' + i + '" aria-label="Remove the file">×</button>' : '') + '</div>' : '') +
+    (s.media && s.media.kind === 'video_note' && (String(s.body || '').trim() || s.buttons.length) ? '<p class="au-ntip">⭕ Round videos can\'t have text in Telegram, so this text and its buttons arrive right after the video.</p>' : '') +
+    '<textarea class="inp" rows="4" data-body="' + i + '" placeholder="Write message ' + (i + 1) + '…"' + dis + '>' + esc(s.body) + '</textarea><div class="cc" data-cc="' + i + '">' + counterHtml(s.body, s.media || false) + '</div>' +
     '<div class="btnl" data-btns="' + i + '">' + btnRows(s.buttons) + '</div>' +
-    (editable ? '<div class="nacts"><button type="button" class="addm" data-dma="' + i + '"' + (CFG.features.media === false ? ' hidden' : '') + '>📎 ' + (s.media ? 'Replace' : 'Add') + ' photo or video</button>' + (s.buttons.length < 6 ? '<button type="button" class="addm" data-dba="' + i + '">🔘 Add a button</button>' : '') + '<button type="button" class="addm" data-dname="' + i + '" title="Each person sees their own first name">👤 Add their name</button></div>' : '') +
+    (editable ? '<div class="nacts"><button type="button" class="addm" data-dma="' + i + '"' + (CFG.features.media === false ? ' hidden' : '') + '>📎 ' + (s.media ? 'Replace the file' : 'Add a photo, video or voice') + '</button>' + (s.buttons.length < 6 ? '<button type="button" class="addm" data-dba="' + i + '">🔘 Add a button</button>' : '') + '<button type="button" class="addm" data-dname="' + i + '" title="Each person sees their own first name">👤 Add their name</button></div>' : '') +
     '<div class="nup" data-upl="' + i + '"></div>' +
     (E.id ? '<div class="stats"><span>📨 ' + fmt(s.sent) + ' sent</span><span>🔘 ' + fmt(s.clicks) + ' clicks</span></div>' : '') + '</div>').join('');
   $('#dCv').innerHTML = trig + steps + (editable && E.steps.length < 20 ? '<div class="conn"><span>Then</span></div><button type="button" class="btn b-ghost sm" id="dAdd">' + icon('plus') + 'Add a message</button>' : '');
@@ -176,7 +177,7 @@ function drawCanvas(bots, chats, editable) {
   cv.oninput = (e) => {
     const t = e.target;
     if (t.id === 'dTv') { E.trigger_value = t.value.trim(); mark(); }
-    if (t.dataset.body != null) { const i = +t.dataset.body; E.steps[i].body = t.value; const c = $('[data-cc="' + i + '"]', cv); c.innerHTML = counterHtml(t.value, !!E.steps[i].media); c.classList.toggle('bad', visibleLength(t.value) > (E.steps[i].media ? 1024 : 4096)); mark(); }
+    if (t.dataset.body != null) { const i = +t.dataset.body; E.steps[i].body = t.value; const c = $('[data-cc="' + i + '"]', cv); c.innerHTML = counterHtml(t.value, E.steps[i].media || false); c.classList.toggle('bad', visibleLength(t.value) > (E.steps[i].media && E.steps[i].media.kind !== 'video_note' ? 1024 : 4096)); mark(); }
     const bl = t.closest('[data-btns]');
     if (bl) { const i = +bl.dataset.btns; if (t.dataset.bl != null) E.steps[i].buttons[t.dataset.bl].label = t.value; if (t.dataset.bu != null) E.steps[i].buttons[t.dataset.bu].url = t.value; mark(); }
   };
@@ -194,9 +195,9 @@ function drawCanvas(bots, chats, editable) {
     const mx = t.closest('[data-dmx]'); if (mx) { E.steps[+mx.dataset.dmx].media = null; mark(); drawCanvas(bots, chats, editable); return; }
     const ma = t.closest('[data-dma]'); if (ma) {
       const i = +ma.dataset.dma;
-      const fin = document.createElement('input'); fin.type = 'file'; fin.accept = 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime';
-      fin.onchange = async () => { const f = fin.files[0]; if (!f) return; const m = await pickAndUpload(f, $('[data-upl="' + i + '"]', cv)); if (m) { E.steps[i].media = m; mark(); } drawCanvas(bots, chats, editable); };
-      fin.click();
+      const m = await pickMedia({ box: $('[data-upl="' + i + '"]', cv) });
+      if (m) { E.steps[i].media = m; mark(); }
+      drawCanvas(bots, chats, editable);
       return;
     }
     if (t.closest('#dAdd')) { E.steps.push(blankStep(false)); mark(); drawCanvas(bots, chats, editable); const ta = $$('#dCv [data-body]').pop(); if (ta) ta.focus(); }

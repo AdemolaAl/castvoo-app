@@ -20,7 +20,7 @@ const VIDEOS = [...guides.matchAll(/\{ id: '([a-z-]+)', title:/g)].map((m) => m[
 
 describe('guide videos play with sound', () => {
   it('every video has an AAC audio track', () => {
-    assert.equal(VIDEOS.length, 13);
+    assert.equal(VIDEOS.length, 14);
     for (const id of VIDEOS) {
       const buf = fs.readFileSync(path.join(PUB, 'videos', id + '.mp4'));
       assert.ok(buf.includes(Buffer.from('soun')), id + ' has a sound track');

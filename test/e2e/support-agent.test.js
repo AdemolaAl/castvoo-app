@@ -476,7 +476,7 @@ describe('every guide id and deep link the agent can send exists', () => {
     const kb = require(path.join(ROOT, 'server/knowledge-defaults'));
     const vg = kb.find((k) => k.key === 'video-guides').body;
     const named = [...vg.matchAll(/^\d+\. [^(\n]+\((?:guide id )?([a-z0-9-]+)[;)]/gm)].map((m) => m[1]);
-    assert.equal(named.length, 13, JSON.stringify(named));
+    assert.equal(named.length, 14, JSON.stringify(named));
     for (const g of named) assert.ok(real.has(g), 'knowledge names guide ' + g);
     for (const m of kb.map((k) => k.body).join('\n').matchAll(/guide:([a-z0-9-]+)/g)) if (m[1] !== '<id>') assert.ok(real.has(m[1]), m[1]);
   });
@@ -489,7 +489,7 @@ describe('every guide id and deep link the agent can send exists', () => {
       const page = m[1] || 'overview';
       assert.ok(pages.has(page), `${key}: no page "${page}"`);
       if (m[2]) {
-        const where = { flows: 'app-flows.js', wallet: 'app-money.js', settings: 'app-account.js' }[page];
+        const where = { broadcast: 'app-send.js', flows: 'app-flows.js', wallet: 'app-money.js', settings: 'app-account.js', help: 'app-account.js' }[page];
         assert.ok(where && read('public/js/' + where).includes('q.' + m[2]), `${key}: ${where} does not read q.${m[2]}`);
       }
     }

@@ -4,7 +4,7 @@
  * the team's own manual methods like bank transfer), payment return check, and the Earn (referrals) page.
  * API: GET /api/wallet, POST /api/wallet/topup, /api/wallet/check, /api/wallet/crypto-txid,
  *      GET /api/wallet/manual/:ref, POST /api/wallet/manual/:ref/screenshot, /api/wallet/manual/:ref/submit,
- *      GET/POST /api/app/plan, /api/app/plan/cancel, /api/app/coupon, GET /api/referrals, /use, /withdraw
+ *      GET/POST /api/app/plan, /api/app/plan/cancel, /api/app/plan/packs, /api/app/coupon, GET /api/referrals, /use, /withdraw
  */
 
 const TX_ICON = { topup: ['↓', '#E2F6EE'], bonus: ['🎁', '#FCF2DE'], plan: ['↑', '#F0F3FA'], refund: ['↩', '#E5F4FC'], referral_credit: ['🎁', '#EFEBFF'], adjustment: ['±', '#F0F3FA'], cas_credits: ['💬', '#EAF0FF'] };
@@ -23,20 +23,33 @@ PAGES.wallet = {
     if (q.ref) { checkPayment(q.ref); history.replaceState(null, '', '#app/wallet'); }
     const [w, p] = await Promise.all([GET('/api/wallet'), GET('/api/app/plan')]);
     if (!alive()) return;
-    // Deep links from the support chat: #app/wallet?topup=1 opens the top-up window, ?plans=1 the plans sheet.
-    if (q.topup || q.plans) { history.replaceState(null, '', '#app/wallet'); later(250, () => { if (!alive()) return; if (q.topup && CFG.features.topups !== false) openTopup(); else if (q.plans) planSheet(p); }); }
+    // Deep links from the support chat: #app/wallet?topup=1 opens the top-up window, ?plans=1 the plans sheet,
+    // ?packs=1 the Subscriber packs row (Scale) or, on other plans, the "more subscribers" upgrade sheet.
+    if (q.topup || q.plans || q.packs) {
+      history.replaceState(null, '', '#app/wallet');
+      later(250, () => {
+        if (!alive()) return;
+        if (q.topup && CFG.features.topups !== false) openTopup();
+        else if (q.plans) planSheet(p);
+        else if (q.packs) { const b = $('#pkBox'); if (b) { b.scrollIntoView({ behavior: 'smooth', block: 'center' }); b.classList.add('flash'); } else openUpgrade({ title: 'Reach more bot subscribers', limit: 'subscribers', plan: p }); }
+      });
+    }
     APP.state.plan = p; APP.state.wallet = { cash: w.cash, bonus: w.bonus, total: w.total }; shellUI();
     const planOnly = planPrice(p);
     // Extra team seats renew with the plan, in the same wallet payment.
     const SX = p.seats || {};
     const seatsRenew = p.status === 'active' && !p.free ? Number(SX.renews) || 0 : 0;
-    const price = planOnly != null ? planOnly + seatsRenew : null;
+    // Subscriber packs (Scale) renew with the plan too.
+    const PK = p.packs || {};
+    const packsRenew = p.status === 'active' && !p.free && PK.top_plan ? Number(PK.renews) || 0 : 0;
+    const extrasRenew = seatsRenew + packsRenew;
+    const price = planOnly != null ? planOnly + extrasRenew : null;
     const pend = (p.plans || []).find((x) => x.code === p.pending_plan_code);
     const status = p.free ? ['Free plan', 'p-blue'] : ({ trial: ['Free trial', 'p-blue'], active: ['Active', 'p-ok'], paused: ['Paused', 'p-bad'], cancelled: ['No plan', 'p-grey'] }[p.status] || [p.status, 'p-grey']);
     let renew = '';
     if (p.free) renew = 'You are on the Free plan: your welcome bot keeps running. ' + (p.dropped_from ? 'Top up and your ' + esc(((p.plans || []).find((x) => x.code === p.dropped_from) || {}).name || 'old') + ' plan starts again by itself.' : 'Pick a plan for follow-ups, broadcasts and Cas.');
     else if (p.status === 'trial') renew = 'Trial ends ' + fmtDate(p.trial_ends_at, false) + '. ' + (pend ? pend.name + ' then starts, paid from your wallet.' : 'Pick a plan to keep going after that.');
-    else if (p.status === 'active') renew = p.cancel_at_period_end ? esc(p.plan_name) + ' ends on ' + fmtDate(p.period_end, false) + '. It won\'t renew.' : esc(p.plan_name) + (SX.next ? ' and ' + plural(SX.next, 'extra seat') : '') + ' renew' + (SX.next ? '' : 's') + ' on ' + fmtDate(p.period_end, false) + (price != null ? ' for ' + usd(price) : '') + ', paid from your wallet.';
+    else if (p.status === 'active') renew = p.cancel_at_period_end ? esc(p.plan_name) + ' ends on ' + fmtDate(p.period_end, false) + '. It won\'t renew.' : [esc(p.plan_name), SX.next ? plural(SX.next, 'extra seat') : '', packsRenew ? plural(PK.next, 'subscriber pack') : ''].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' and $1') + ' renew' + (SX.next || packsRenew ? '' : 's') + ' on ' + fmtDate(p.period_end, false) + (price != null ? ' for ' + usd(price) : '') + ', paid from your wallet.';
     else if (p.status === 'paused') renew = 'Sending is paused because the wallet was short. Top up and it restarts by itself.';
     else renew = 'You don\'t have an active plan. Choose one to start sending again.';
     const short = p.status === 'active' && !p.cancel_at_period_end && price != null && w.total < price;
@@ -49,7 +62,9 @@ PAGES.wallet = {
       '<div class="dg"><div class="box c7"><div class="bh"><h3>Wallet activity</h3><span class="hint">Newest first</span></div><div>' + (rows.length ? rows.map((t) => { const ic = TX_ICON[t.kind] || ['•', '#F0F3FA']; const pos = t.amount > 0; return '<div class="txr"><span class="ti" style="background:' + ic[1] + ';color:' + (pos ? 'var(--ok)' : 'var(--mut)') + ';font-weight:800">' + ic[0] + '</span><div class="tx"><b>' + esc(t.note || TX_NAME[t.kind] || t.kind) + '</b><small>' + fmtDate(t.created_at) + (t.method ? ' · ' + esc(t.method) : '') + '</small></div><span class="am" style="color:' + (pos ? 'var(--ok)' : 'var(--ink)') + '">' + (pos ? '+' : '−') + money(Math.abs(t.amount)) + '</span></div>'; }).join('') : emptyBox({ plain: 1, emoji: '👛', title: 'No wallet activity yet', text: 'Top-ups and plan payments show up here.' })) + '</div></div>' +
       '<div class="box c5" id="planBox"><div class="bh"><h3>Your plan</h3><span class="pill ' + status[1] + '">' + status[0] + '</span></div><b style="font-size:24px;letter-spacing:-.04em">' + esc(p.plan_name) + (planOnly != null && p.status !== 'trial' && !p.free ? ' · ' + usd(planOnly) + '/' + (p.cycle === 'year' ? 'year' : 'month') : '') + '</b>' +
       (p.status === 'active' && !p.free && (SX.extra || SX.next) ? '<div class="seatln"><span>' + icon('users') + '<b>' + plural(SX.extra, 'extra team seat') + '</b>' + (SX.pending != null ? ' · ' + SX.pending + ' from your next renewal' : '') + '</span><span class="tnum">' + usd(seatsRenew) + '/' + (p.cycle === 'year' ? 'year' : 'month') + '</span></div>' +
-        (p.status === 'active' && price != null ? '<p class="muted" style="font-size:13.5px;margin:0">Next renewal: plan ' + usd(planOnly) + ' + seats ' + usd(seatsRenew) + ' = <b style="color:var(--ink)">' + usd(price) + '</b></p>' : '') : '') +
+        (p.status === 'active' && price != null && !packsRenew ? '<p class="muted" style="font-size:13.5px;margin:0">Next renewal: plan ' + usd(planOnly) + ' + seats ' + usd(seatsRenew) + ' = <b style="color:var(--ink)">' + usd(price) + '</b></p>' : '') : '') +
+      packsBox(p) +
+      (packsRenew && price != null ? '<p class="muted" style="font-size:13.5px;margin:0">Next renewal: plan ' + usd(planOnly) + (seatsRenew ? ' + seats ' + usd(seatsRenew) : '') + ' + packs ' + usd(packsRenew) + ' = <b style="color:var(--ink)">' + usd(price) + '</b></p>' : '') +
       (pend ? '<p class="muted" style="font-size:14px">Changes to <b>' + esc(pend.name) + '</b> ' + (p.status === 'trial' ? 'when your trial ends' : 'at your next renewal') + '.</p>' : '') +
       (p.coupon ? '<p class="muted" style="font-size:14px">Coupon ' + esc(p.coupon.code) + ': ' + p.coupon.percent + '% off the next ' + plural(p.coupon.months_left, 'payment') + '.</p>' : '') +
       '<div class="usage">' + usageRows(p).map((r) => { const unl = r[2] < 0; const pct = unl ? 0 : r[2] ? Math.min(100, r[1] / r[2] * 100) : 0; return '<div><div class="ush"><span>' + r[0] + '</span><span class="muted">' + (r[3] || (unl ? fmt(r[1]) + ' · no limit' : fmt(r[1]) + ' / ' + fmt(r[2]))) + '</span></div>' + (r[3] ? '' : '<div class="prog2' + (pct >= 80 ? ' hot' : '') + '"><i style="width:' + pct + '%"></i></div>') + '</div>'; }).join('') + '</div>' +
@@ -63,6 +78,7 @@ PAGES.wallet = {
       '<p class="hint">Unused top-ups can be refunded within ' + fmt(CFG.billing.refund_days || 14) + ' days. See the <a href="/legal/refunds" target="_blank" rel="noopener">refund policy</a>.</p></div></div>';
     countTo($('#wB'), w.total, 900, money);
     const pc = $('#pChange'); if (pc) pc.onclick = () => planSheet(p);
+    wirePacks(el, p);
     $('#planBox').addEventListener('click', (e) => {
       const u = e.target.closest('[data-upg]'); if (!u) return;
       if (u.dataset.upg === 'yearly') { planSheet({ ...p, cycle: 'year' }, 'year'); return; }
@@ -159,7 +175,7 @@ function usageRows(p) {
   if (L.join_requests != null) rows.push([p.free ? 'Free joins this month' : 'Join requests this month', U.join_requests || 0, L.join_requests]);
   rows.push(['Telegram connections', U.connections, L.connections, p.welcome_only ? fmt(U.connections - (U.bots || 0)) + ' / ' + fmt(L.connections) + ' + welcome bot' : '']);
   if (L.flows != null) rows.push(['Welcome Flows', U.flows || 0, L.flows]);
-  rows.push(['Bot subscribers', U.subscribers, L.subscribers, L.subscribers === 0 ? 'On Starter and up' : '']);
+  rows.push([L.subscriber_packs ? 'Bot subscribers (' + fmt(L.plan_subscribers) + ' + ' + plural(L.subscriber_packs, 'pack') + ')' : L.custom_subscriber_limit ? 'Bot subscribers (custom limit)' : 'Bot subscribers', U.subscribers, L.subscribers, L.subscribers === 0 ? 'On Starter and up' : '']);
   rows.push(['AI writes this month', U.ai_writes, L.ai_writes, L.ai_writes === 0 ? 'On Starter and up' : '']);
   if (L.seats > 1 || !p.free) rows.push([L.extra_seats ? 'Team seats (' + fmt(L.plan_seats) + ' + ' + fmt(L.extra_seats) + ' extra)' : 'Team seats', U.seats, L.seats]);
   return rows;
@@ -171,6 +187,9 @@ function usageRows(p) {
  */
 function openUpgrade(o = {}) {
   const st = o.plan && o.plan.plans ? o.plan : (APP.state && APP.state.plan) || {};
+  // Over the bot subscriber limit on the top plan (Scale): offer a subscriber pack, or "talk to us" above the most packs.
+  const PKo = o.packs || st.packs;
+  if (o.limit === 'subscribers' && PKo && PKo.top_plan) { packOffer(o, PKo); return; }
   const all = (st.plans || []).filter((x) => x.price_month > 0).sort((a, b) => a.price_month - b.price_month);
   const cur = (st.plans || []).find((x) => x.code === st.plan_code) || { price_month: 0 };
   const L = st.limits || {};
@@ -182,6 +201,7 @@ function openUpgrade(o = {}) {
     const LB = L.bots || {};
     if (o.limit === 'bots' && x.bots && !(x.bots.max < 0 || x.bots.max > (LB.max_bots ?? 0))) return false;
     if (o.limit === 'bot_buttons' && x.bots && !(x.bots.menu_buttons < 0 || x.bots.menu_buttons > (LB.menu_buttons ?? 0))) return false;
+    if (o.limit === 'subscribers' && !(x.subscribers < 0 || x.subscribers > (L.subscribers ?? 0))) return false;
     return st.status === 'trial' || x.price_month > (cur.price_month || 0);
   };
   const list = all.filter(better).slice(0, 2);
@@ -204,6 +224,7 @@ function openUpgrade(o = {}) {
     (list.length ? '<div class="upg">' + list.map((x, i) => '<div class="upgc' + (i === 0 ? ' on' : '') + '"><div class="upgh"><b>' + esc(x.name) + '</b>' + (x.popular ? '<span class="pill p-blue">Popular</span>' : '') + '<span class="upgp">' + usd(x.price_month) + '<small>/month</small></span></div><ul>' + facts(x).map((f) => '<li>' + icon('check') + esc(f) + '</li>').join('') + '</ul>' +
       (owner ? '<button type="button" class="btn ' + (i === 0 ? 'b-blue' : 'b-ghost') + ' sm full" data-pick="' + esc(x.code) + '">Choose ' + esc(x.name) + '</button>' : '') + '</div>').join('') + '</div>'
       : '<div class="note2"><span>ℹ️</span><span>You are on the biggest plan. For more, talk to us in Help.</span></div>') +
+    (o.limit === 'subscribers' && PKo && PKo.on_sale && PKo.top_plan_name ? '<p class="hint">On ' + esc(PKo.top_plan_name) + ' you can also add ' + fmt(PKo.size) + ' subscribers for ' + usd(PKo.price_month) + '/month at any time.</p>' : '') +
     (owner ? '' : '<p class="hint">Only the workspace owner can change the plan.</p>') +
     '<p class="ferr" id="upE" hidden></p><button type="button" class="btn b-ghost sm" id="upAll">Compare all plans</button>');
   $('#upAll', h).onclick = () => { closeModal(); appGo('wallet'); };
@@ -212,6 +233,107 @@ function openUpgrade(o = {}) {
     try { const r = await POST('/api/app/plan', { plan: b.dataset.pick, cycle: 'month' }); closeModal(); toast(r.message || 'Done.'); confetti(); await refreshState(); renderPage(APP.page, APP.q, { keepScroll: true }); }
     catch (ex) { btnBusy(b, false); if (ex.code === 'wallet_short') { closeModal(); toast(ex.message, { kind: 'err', action: { label: 'Top up', onClick: () => openTopup((ex.data && ex.data.needed) || undefined) } }); return; } const e2 = $('#upE', h); e2.textContent = ex.message; e2.hidden = false; }
   }; });
+}
+
+/* ---------- Subscriber packs (Scale) ----------
+ * More bot subscribers on the top plan: each pack adds packs.size subscribers for packs.price_month a month, up to
+ * packs.max. More packs are paid now for the rest of the period (prorated), then renew with the plan; fewer start at
+ * the next renewal and never delete anything. Above the most packs (or a custom deal): "Talk to us".
+ * API: GET /api/app/plan (packs), POST /api/app/plan/packs { packs }.
+ */
+const pkMoney = (v) => '$' + (Math.round(Number(v) * 100) / 100).toFixed(2);
+/* "Talk to us": opens the support chat with a ready message (and the email link sits next to it). */
+function talkToUs() { closeModal(); appGo('help', { topic: 'custom' }); }
+function talkLinks(PK) {
+  const mail = (CFG.support && CFG.support.email) || 'support@castvoo.com';
+  const subj = encodeURIComponent('Custom plan: more than ' + fmt(PK.max_total || 0) + ' bot subscribers');
+  return '<div class="pk-talk"><span>Need more than ' + fmt(PK.max_total || 0) + '? <b>Talk to us</b> for a custom plan.</span><span class="pk-tb">' +
+    '<button type="button" class="btn b-ghost xs" data-talk>' + icon('chat') + 'Chat with us</button>' +
+    '<a class="btn b-ghost xs" href="mailto:' + esc(mail) + '?subject=' + subj + '">' + icon('mail') + 'Email</a></span></div>';
+}
+function packsBox(p) {
+  const PK = p.packs;
+  if (!PK || !PK.top_plan || p.status !== 'active' || p.free) return '';
+  if (PK.custom_limit) return '<div class="seatbx off" id="pkBox"><span class="sri">' + icon('users') + '</span><div style="flex:1;min-width:0"><b>Custom subscriber limit</b><small>Your workspace can have up to ' + fmt(PK.custom_limit) + ' bot subscribers (a custom plan from our team).</small></div></div>' + talkLinks(PK);
+  if (!PK.on_sale) return talkLinks(PK);
+  const unitTxt = usd(PK.price) + (PK.cycle === 'year' ? '/year' : '/month');
+  return '<div class="seatbx" id="pkBox"><div class="seat-top"><div style="min-width:0"><b>Subscriber packs</b><small>+' + fmt(PK.size) + ' bot subscribers each · ' + esc(unitTxt) + ' · paid with your plan</small></div>' +
+    (canBilling() ? '<div class="stepper" role="group" aria-label="Subscriber packs"><button type="button" data-pk="-1" aria-label="One pack fewer">' + icon('minus') + '</button><output id="pkN" aria-live="polite">' + PK.next + '</output><button type="button" data-pk="1" aria-label="One more pack">' + icon('plus') + '</button></div>' : '<b class="tnum">' + PK.current + '</b>') + '</div>' +
+    '<p class="seat-q" id="pkQ"></p><p class="ferr" id="pkErr" role="alert" hidden></p>' +
+    '<button type="button" class="btn b-blue sm" id="pkGo" hidden></button>' + talkLinks(PK) + '</div>';
+}
+function wirePacks(el, p) {
+  const PK = p.packs, box = $('#pkBox', el);
+  $$('[data-talk]', el).forEach((b) => { b.onclick = talkToUs; });
+  if (!PK || !box || !$('#pkN', box)) return;
+  let n = PK.next;
+  const per = PK.cycle === 'year' ? 'a year' : 'a month';
+  const total = (k) => fmt((PK.plan_subscribers || 0) + k * PK.size);
+  const draw = () => {
+    $('#pkN', box).textContent = n;
+    const q = $('#pkQ', box), go = $('#pkGo', box), err = $('#pkErr', box);
+    err.hidden = true;
+    $('[data-pk="-1"]', box).disabled = n <= 0;
+    $('[data-pk="1"]', box).disabled = n >= PK.max;
+    go.hidden = false; go.disabled = false;
+    if (n > PK.current) {
+      const add = n - PK.current;
+      const now = add * PK.price * Math.min(1, PK.period_left || 0);
+      q.innerHTML = 'Add <b>' + plural(add, 'pack') + '</b> (up to <b>' + total(n) + '</b> bot subscribers): <b>' + pkMoney(now) + '</b> now for the rest of this period, then <b>' + pkMoney(n * PK.price) + ' ' + per + '</b> with your plan.';
+      go.textContent = 'Add ' + fmt(add * PK.size) + ' subscribers · ' + pkMoney(now);
+    } else if (PK.pending != null && n === PK.pending) {
+      q.innerHTML = 'From your next renewal' + (PK.period_end ? ' (' + esc(fmtDate(PK.period_end, false)) + ')' : '') + ' you\'ll have <b>' + plural(n, 'pack') + '</b>. Nothing is deleted.';
+      go.hidden = true;
+    } else if (n < PK.current) {
+      q.innerHTML = 'From your next renewal' + (PK.period_end ? ' (' + esc(fmtDate(PK.period_end, false)) + ')' : '') + ' you\'ll have <b>' + plural(n, 'pack') + '</b> (up to ' + total(n) + ' bot subscribers). Nothing is refunded or deleted; if you have more subscribers than that, broadcasts pause and your bots keep working.';
+      go.textContent = 'Lower to ' + n + ' from next renewal';
+    } else if (PK.pending != null) {
+      q.innerHTML = 'You asked for ' + plural(PK.pending, 'pack') + ' from your next renewal. Keep <b>' + plural(n, 'pack') + '</b> instead?';
+      go.textContent = 'Keep ' + plural(n, 'pack');
+    } else {
+      q.innerHTML = n ? 'You can have up to <b>' + total(n) + '</b> bot subscribers. ' + plural(n, 'pack') + ' renew with your plan for <b>' + pkMoney(n * PK.price) + ' ' + per + '</b>.' : 'Growing fast? Add ' + fmt(PK.size) + ' bot subscribers for ' + pkMoney(PK.price) + ' ' + per + ', any time.';
+      go.hidden = true;
+    }
+  };
+  box.addEventListener('click', (e) => { const b = e.target.closest('[data-pk]'); if (!b) return; n = Math.max(0, Math.min(PK.max, n + Number(b.dataset.pk))); draw(); });
+  $('#pkGo', box).onclick = (e) => buyPacks(e.currentTarget, n, $('#pkErr', box));
+  draw();
+}
+/* Save the number of packs; on success refresh the page, on a short wallet offer a top-up. */
+async function buyPacks(btn, n, err) {
+  await busy(btn, 'Saving…', async () => {
+    try {
+      const r = await POST('/api/app/plan/packs', { packs: n });
+      closeModal(); toast(r.message); if (r.charged) confetti();
+      await refreshState(); renderPage(APP.page || 'wallet', APP.q || {}, { keepScroll: true });
+    } catch (ex) {
+      if (!err) { apiErr(ex); return; }
+      err.hidden = false;
+      if (ex.code === 'wallet_short') {
+        err.innerHTML = esc(ex.message) + ' <button type="button" class="lnk" data-pktop>Top up</button>';
+        $('[data-pktop]', err).onclick = () => { closeModal(); openTopup(Math.max(10, Math.ceil(Number(ex.data && ex.data.needed) || 10))); };
+      } else err.textContent = apiErr(ex, { silent: true });
+    }
+  });
+}
+/* The sheet a Scale customer sees at the subscriber limit: one tap to add a pack (prorated price shown), or "talk to us". */
+function packOffer(o, PK) {
+  const owner = canBilling();
+  const room = PK.can_buy && PK.current < PK.max;
+  const per = PK.cycle === 'year' ? '/year' : '/month';
+  const h = sheet(esc(o.title || (room ? 'Reach more people' : 'Let\'s make you a custom plan')), '<span class="spk">' + icon('users') + '</span>',
+    (o.text ? '<p class="muted" style="font-size:15px">' + esc(o.text) + '</p>' : '') +
+    (room ? '<div class="upg"><div class="upgc on"><div class="upgh"><b>Subscriber pack</b><span class="upgp">' + usd(PK.price) + '<small>' + per + '</small></span></div><ul>' +
+      '<li>' + icon('check') + '+' + fmt(PK.size) + ' bot subscribers (up to ' + fmt((PK.plan_subscribers || 0) + (PK.current + 1) * PK.size) + ')</li>' +
+      '<li>' + icon('check') + 'Broadcasts start again right away</li>' +
+      '<li>' + icon('check') + pkMoney(PK.one_now || 0) + ' now for the rest of this period, then renews with your plan</li>' +
+      '<li>' + icon('check') + 'Lower it any time. Nothing is ever deleted</li></ul>' +
+      (owner ? '<button type="button" class="btn b-blue sm full" data-pkadd>Add ' + fmt(PK.size) + ' subscribers · ' + usd(PK.price_month) + '/month</button>' : '<p class="hint">Only the workspace owner can add packs.</p>') + '</div></div>' : '') +
+    talkLinks(PK) +
+    '<p class="ferr" id="pkE" hidden></p>' + (room ? '<button type="button" class="btn b-ghost sm" id="pkMore">Choose how many packs</button>' : ''));
+  const add = $('[data-pkadd]', h); if (add) add.onclick = (e) => buyPacks(e.currentTarget, PK.current + 1, $('#pkE', h));
+  const more = $('#pkMore', h); if (more) more.onclick = () => { closeModal(); appGo('wallet', { packs: 1 }); };
+  $$('[data-talk]', h).forEach((b) => { b.onclick = talkToUs; });
 }
 
 /* ---------- Top-up sheet ---------- */

@@ -170,7 +170,7 @@ All PASS at both widths. There were **0 page errors** and **no horizontal scroll
 |---|---|
 | Welcome Flows builder | From scratch: welcome, then 4 × (wait + message), so 9 blocks. Waits of 1–4 hours, labelled "hour" / "hours". A "Join VIP" link button was added. Saved with status 200: 5 steps with delays 0/60/120/180/240 minutes, and the button is stored as a tracked link. (`flows-builder`, `flows-saved`) |
 | Free plan branding line | A real join request on a Free flow sent "Hi Bo, welcome! ⚡ Free welcome bot by Castvoo.com" (with the `/r/` link). (`free-flows`) |
-| AI support chat | The "24/7 customer support" label, cartoon faces (8 images), a non-clickable "Powered by Replyvoo" label, an image upload (1 attachment saved), and an AI reply shown with the agent's name. (`help-chat`) |
+| AI support chat | The "24/7 customer support" label, cartoon faces (8 images), a "Powered by Replyvoo" link to replyvoo.com in a new tab, an image upload (1 attachment saved), and an AI reply shown with the agent's name. (`help-chat`) |
 | Guides videos page | 8 video guides; the player opens and the video streams (206); it closes when you leave the page. (`guides`, `guide-player`) |
 | No Google login | No "google" text on the website, login, signup, settings or admin (fonts excluded); `/auth/google` returns 404. (`login`, `signup`) |
 | Admin adds a payment method | Admin → Countries & payments → Add: created `gtbank_transfer_*` as an active bank method. (`admin-add-method-form`, `admin-methods`) |
@@ -240,7 +240,7 @@ The same steps, in more detail, are in `docs/DEPLOY-NOTES-OCT-2026.md`.
 2. Download a PostgreSQL backup (Postgres → Backups → Backup now) and turn on daily backups. Turn on backups for the volume too.
 3. **The volume marker needs nothing from you.** The new version writes it by itself. Do **not** set `ALLOW_NO_VOLUME`.
 4. Add a new variable **`VOO_SERVICE_KEY`**. Make it with `openssl rand -hex 32`, and make it different from `VOO_API_KEY`. Send it to VooSquare for the staff sync.
-5. The external-link warning page is disabled by default; leave `LINK_WARN_NEW_DAYS` unset or set it to `0`.
+5. Optional: `LINK_WARN_NEW_DAYS=7` (already the default).
 6. Do not change `APP_SECRET`. Keep `NODE_ENV=production`, and keep `APP_URL` starting with https://.
 
 **Deploy, then check straight away**

@@ -33,9 +33,17 @@ async function publicConfig() {
   const s = all.settings;
   const integ = config.integrations();
   const f = all.features;
+  // Subscriber packs (Scale): the pricing card of the top plan gets one line about them (or "talk to us" when not sold).
+  const billing = require('../services/billing');
+  const pack = { size: Number(s.billing.sub_pack_size ?? 50000), price: Number(s.billing.sub_pack_price_cents ?? 2900) / 100, max: Number(s.billing.sub_pack_max ?? 8) };
+  const packOn = pack.price > 0 && pack.max > 0 && pack.size > 0;
+  const usdTxt = (v) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  const packLine = packOn ? `Bigger audience? Add ${pack.size.toLocaleString('en-US')} subscribers for ${usdTxt(pack.price)}/month, or talk to us for a custom plan.` : 'Bigger audience? Talk to us for a custom plan.';
   const plans = all.plans.filter((p) => p.active).map((p) => ({
     code: p.code, name: p.name, tagline: p.tagline, price_month: p.price_month_cents / 100, price_year: p.price_year_cents / 100,
-    connections: p.connections, subscribers: p.subscribers, ai_writes: p.ai_writes, seats: p.seats, bullets: p.bullets, popular: p.popular,
+    connections: p.connections, subscribers: p.subscribers, ai_writes: p.ai_writes, seats: p.seats, popular: p.popular,
+    bullets: billing.isTopPlan(p) ? [...(p.bullets || []).filter((x) => !/^Bigger audience\?/.test(String(x))), packLine] : p.bullets,
+    subscriber_packs: billing.isTopPlan(p) && packOn ? pack : null,
     join_requests: p.join_requests, flows: p.flows, flow_steps: p.flow_steps, branding: !!p.branding, features: p.features || [], cas_builds: p.cas_builds ?? 0,
     // Bots on this plan (services/billing.js BOT_PLANS): how many can be live and which bot types it may build.
     bots: (() => { const b = require('../services/billing').botPlanOf(p); return { max: b.max_bots, types: b.bot_types.slice() }; })(),
@@ -60,7 +68,9 @@ async function publicConfig() {
     referral: { rates: s.referral.rates, tier2_min: s.referral.tier2_min, tier3_min: s.referral.tier3_min, min_withdraw: s.referral.min_withdraw_cents / 100, settle_days: s.referral.settle_days },
     billing: { min_topup: s.billing.min_topup_cents / 100, max_topup: s.billing.max_topup_cents / 100, refund_days: s.billing.refund_days,
       // Extra team seats on paid plans, per seat per month (0 = not sold). Yearly plans pay 12 months.
-      seat_price: Math.max(0, Number(s.billing.seat_price_cents ?? 500)) / 100 },
+      seat_price: Math.max(0, Number(s.billing.seat_price_cents ?? 500)) / 100,
+      // Subscriber packs on the top plan (Scale): null when not sold.
+      subscriber_pack: packOn ? pack : null },
     // Cas Builder's optional credit pack (null when not sold) and the fair-use amount on unlimited plans.
     cas_builder: (() => { const c = { ...require('../services/cas-builder').DEFAULTS, ...(s.cas_builder || {}) }; return { pack: Number(c.credit_pack_price_cents) > 0 && Number(c.credit_pack_builds) > 0 ? { builds: Number(c.credit_pack_builds), price: Number(c.credit_pack_price_cents) / 100 } : null, fair_use: Number(c.fair_use_monthly) || 0 }; })(),
     topup_bonuses: f.topups ? bonuses : [],

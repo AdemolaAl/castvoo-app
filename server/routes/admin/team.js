@@ -85,7 +85,14 @@ module.exports = (r) => {
       catch (e) { platformBot = { error: e.message }; }
     }
     const mem = process.memoryUsage();
+    // Voice notes and round videos (services/media-convert.js): is ffmpeg there, and how many conversions failed lately.
+    const conv = require('../../services/media-convert');
+    const ff = await conv.detect();
+    const convFailed = await db.one("select count(*)::int n from media_conversions where not ok and created_at > now() - interval '1 day'");
+    const media_tools = { ffmpeg: ff.ok, version: ff.version, path: ff.path, failed_24h: convFailed.n,
+      note: ff.ok ? 'Voice notes and round videos are converted automatically.' : conv.NOT_SET_UP + ' Only OGG voice files and square MP4 round videos are accepted. See docs/DEPLOY-NOTES-OCT-2026.md (install ffmpeg or set FFMPEG_PATH).' };
     return {
+      media_tools,
       queue, leases, outbox, failed_24h: failed, db: { size: dbsize.size, version: version.version.split(' ').slice(0, 2).join(' ') }, broken_connections: errorsByConn,
       platform_bot: platformBot, integrations: config.integrations(), problems: config.problems(),
       process: { uptime_min: Math.round(process.uptime() / 60), memory_mb: Math.round(mem.rss / 1048576), node: process.version, workers: config.runWorkers },

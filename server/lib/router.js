@@ -80,7 +80,8 @@ function securityHeaders(res, isHttps) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // Camera and microphone only for Castvoo's own pages: recording voice notes and round videos in the dashboard.
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=()');
   if (isHttps) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 }
 

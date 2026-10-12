@@ -14,7 +14,7 @@
  * To change a video: replace its 3 files and bump GUIDE_V so browsers fetch the new ones.
  */
 
-const GUIDE_V = 4;
+const GUIDE_V = 5;
 const VGUIDES = [
   { id: 'connect-bot', title: 'Connect your Telegram bot', text: 'Make a bot with @BotFather and connect it in a minute.', dur: 75, pages: ['bots'] },
   { id: 'add-channel', title: 'Add a channel or group', text: 'Link your Telegram, then connect a channel or group in one tap.', dur: 74, pages: ['bots'] },
@@ -26,6 +26,7 @@ const VGUIDES = [
   { id: 'bots-yourself', title: 'Build a bot yourself', link: 'Chat bot yourself', text: 'Start from a template, change the words, add buttons and a question, preview it, test it on your Telegram, switch it on.', dur: 103, pages: ['flows'] },
   { id: 'bots-leads-invites', title: 'Leads, invites & broadcasts', link: 'Leads & invites', text: 'See every answer and download a CSV, reward people who invite friends, and message everyone who started your bot.', dur: 69, pages: ['flows'] },
   { id: 'send-broadcast', title: 'Send a broadcast', text: 'A personal message with {name}, buttons and scheduling.', dur: 79, pages: ['broadcast', 'calendar'] },
+  { id: 'repeat-voice', title: 'Repeat, voice notes & round videos', link: 'Repeat & voice', text: 'Repeat a message on weekdays at 9 AM, rotate versions, add a voice note or round video, auto-delete and pin.', dur: 80, pages: ['broadcast', 'calendar'] },
   { id: 'auto-follow-ups', title: 'Auto follow-ups', text: 'Messages your bot sends by itself, on a timer.', dur: 72, pages: ['drips'] },
   { id: 'audiences-start-links', title: 'Audiences & start links', text: 'See which ad brought each subscriber, then message just them.', dur: 71, pages: ['audiences', 'subscribers', 'clicks'] },
   { id: 'wallet-plans', title: 'Wallet, plans & the Free plan', text: 'Top up, pick a plan, and what happens on Free.', dur: 84, pages: ['wallet'] },

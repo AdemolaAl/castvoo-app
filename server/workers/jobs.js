@@ -17,8 +17,9 @@ const soon = require('./soon');
 
 const APP = () => config.appUrl;
 
-/** Scheduled broadcasts that are due → queue them. Finished broadcasts → mark sent. */
+/** Repeating messages that are due → their run's broadcast (services/repeats.js). Scheduled broadcasts that are due → queue them. Finished broadcasts → mark sent. */
 async function broadcastsTick() {
+  await require('../services/repeats').tick().catch((e) => log.warn('repeating messages', { err: e.message }));
   const due = await db.many("select * from broadcasts where status = 'scheduled' and (send_at is null or send_at <= now()) order by id limit 20");
   for (const b of due) {
     // Maintenance, or broadcasts switched off in admin: try again in 5 minutes.
@@ -390,6 +391,7 @@ async function cleanupTick() {
   await db.query("delete from join_requests where status <> 'pending' and requested_at < now() - interval '400 days'");
   await db.query("delete from join_meter where since < now() - interval '400 days'");
   await require('../services/media-files').removeUnused(3).catch((e) => log.warn('unused media cleanup failed', { err: e.message }));
+  await db.query("delete from media_conversions where created_at < now() - interval '30 days'");
   await require('../services/support-images').removeUnsent(24).catch((e) => log.warn('unsent support images cleanup failed', { err: e.message }));
   await connections.refreshCounts(1000);
 }

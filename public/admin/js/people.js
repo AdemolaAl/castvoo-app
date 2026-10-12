@@ -160,6 +160,7 @@
               <dt>Paid until</dt><dd>${w.period_end ? html`${date(w.period_end)} <span class="mut small">(${ago(w.period_end)})</span>` : '—'}</dd>
               <dt>Wallet</dt><dd><span class="money">${usdc(w.wallet_cents, { cents: true })}</span> cash + <span class="money">${usdc(w.bonus_cents, { cents: true })}</span> bonus</dd>
               <dt>Extra team seats</dt><dd>${num(w.extra_seats || 0)}${w.pending_extra_seats != null ? html` <span class="bd warn">${num(w.pending_extra_seats)} from next renewal</span>` : ''} <span class="mut small">(plan ${num(p.seats || 0)} + extra = ${num((p.seats || 0) + (w.extra_seats || 0))})</span></dd>
+              <dt>Bot subscribers</dt><dd>${w.custom_subscriber_limit ? html`<span class="bd blue">Custom limit ${num(w.custom_subscriber_limit)}</span>` : html`plan ${num(p.subscribers || 0)}${Number(w.subscriber_packs) ? html` + ${num(w.subscriber_packs)} subscriber pack${Number(w.subscriber_packs) === 1 ? '' : 's'}` : ''}`}${w.pending_subscriber_packs != null ? html` <span class="bd warn">${num(w.pending_subscriber_packs)} packs from next renewal</span>` : ''}</dd>
               <dt>AI writes used</dt><dd>${num(w.ai_used)} since ${date(w.ai_period_start)}</dd>
               <dt>Time zone</dt><dd>${w.timezone}</dd>
               <dt>Workspace ID</dt><dd class="mono">${w.id}</dd>
@@ -285,11 +286,14 @@
         { name: 'plan_status', label: 'Status', type: 'select', value: w.plan_status, options: [{ value: 'trial', label: 'Free trial' }, { value: 'active', label: 'Paying (active)' }, { value: 'paused', label: 'Paused' }, { value: 'cancelled', label: 'Cancelled' }] },
         { name: 'trial_ends_at', label: 'Trial ends on', type: 'date', value: isoDay(w.trial_ends_at), hint: 'Needed when the status is Free trial.' },
         { name: 'period_end', label: 'Paid until', type: 'date', value: isoDay(w.period_end), hint: 'Needed when the status is Paying.' },
+        { name: 'subscriber_packs', label: 'Subscriber packs (Scale only)', type: 'number', min: 0, value: w.subscriber_packs || 0, hint: 'Each pack adds bot subscribers (Admin → Settings → Money) and renews with the plan from the wallet. Nothing is charged now.' },
+        { name: 'custom_subscriber_limit', label: 'Custom bot subscriber limit (custom deal)', type: 'number', min: 0, value: w.custom_subscriber_limit || '', placeholder: 'Blank = plan + packs', hint: 'Replaces the plan and packs number for this workspace. Not used on the Free plan. Blank or 0 removes it.' },
         { name: 'reset_ai', label: 'Also reset AI writes to zero', type: 'checkbox' },
         { name: 'note', label: 'Note for the audit log', placeholder: 'e.g. Comped a month after an outage' },
       ],
       onSubmit: async (v) => {
-        const body = { plan_code: v.plan_code, plan_status: v.plan_status, trial_ends_at: v.trial_ends_at ? new Date(v.trial_ends_at + 'T23:59:00').toISOString() : null, period_end: v.period_end ? new Date(v.period_end + 'T23:59:00').toISOString() : null, reset_ai: v.reset_ai, note: v.note };
+        const body = { plan_code: v.plan_code, plan_status: v.plan_status, trial_ends_at: v.trial_ends_at ? new Date(v.trial_ends_at + 'T23:59:00').toISOString() : null, period_end: v.period_end ? new Date(v.period_end + 'T23:59:00').toISOString() : null, reset_ai: v.reset_ai, note: v.note,
+          subscriber_packs: v.subscriber_packs === '' || v.subscriber_packs == null ? undefined : Number(v.subscriber_packs), custom_subscriber_limit: v.custom_subscriber_limit === '' || v.custom_subscriber_limit == null ? null : Number(v.custom_subscriber_limit) };
         await post(`/api/admin/workspaces/${w.id}/plan`, body);
         toast('Plan updated.'); CV.reload();
       },

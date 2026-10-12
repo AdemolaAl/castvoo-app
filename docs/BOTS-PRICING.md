@@ -134,13 +134,22 @@ Tone in the product: never call people cheats. Messages say: "This channel is ma
 | Limit hit | What happens |
 |---|---|
 | Active Bots | Can't switch on another. On downgrade the extras pause (kept), and the owner picks which stay on (oldest by default) |
-| Bot subscribers | New subscribers are still saved and the Bots still answer them. Broadcasts pause (current `limit_subscribers` behaviour) |
+| Bot subscribers | 10% grace. New subscribers are still saved and the Bots still answer them. Broadcasts pause (`limit_subscribers`). On Scale the 402 offers a subscriber pack (+50,000 for $29/month, up to 8 = 500,000); above that, "Talk to us" (custom plan) |
 | Leads / month | 10% grace, then the form still says thank you, but answers beyond the cap are hidden until the next month or an upgrade (kept, never deleted) |
 | Paid members | New sales pause. Renewals and removal on expiry always run (section 4) |
 | Referral / sales bot count | Can't add more. Existing ones keep running |
 | Cas builds | Build by hand (free), buy 20 for $5, or upgrade |
 
 Upsell moments: leads at 80%, "VIP is full" (show what Growth or Scale allows), trying to add a 3rd Bot on Free or a Referral bot on Starter, and a "This channel needs a seat" prompt.
+
+### Subscriber packs (Scale, approved Oct 2026)
+
+- Pack = **+50,000 bot subscribers for $29/month** (yearly: 12 × $29), **Scale only**, quantity **1 to 8** self-serve (500,000 total). Starter and Growth are told to upgrade to Scale first.
+- Charged from the wallet exactly like extra seats: prorated for the rest of the current period on purchase, then renewed with the plan in the same payment. Fewer packs start at the next renewal and never delete data. Wallet short at renewal: the workspace moves to Free like seats (packs end). Commission and VooSquare spend events: the same as seats (one commission per payment, 5 to 15%).
+- Limit math: Scale subscribers = 100,000 + 50,000 × packs, and `bots.max_bot_subscribers` likewise. Admin can set packs or a **custom subscriber limit** per workspace (Admin → Users → workspace) for custom deals.
+- Settings: `billing.sub_pack_size` 50000, `billing.sub_pack_price_cents` 2900 (0 = not sold), `billing.sub_pack_max` 8 (Admin → Settings → Billing). Migration `029_subscriber_packs.sql` adds `workspaces.subscriber_packs`, `pending_subscriber_packs`, `custom_subscriber_limit`.
+- Above 500,000 or for any custom deal: **"Need more than 500,000? Talk to us"** opens the support chat with a prefilled message, plus an email link. Pricing card line under Scale: "Bigger audience? Add 50,000 subscribers for $29/month, or talk to us for a custom plan."
+- Margin (rough estimate, same basis as section 8): 50,000 extra bot subscribers add about as much hosting as the Scale estimate below (a few dollars a month at full broadcast use), so $29 a pack keeps a high margin while costing far less than a second Scale plan.
 
 ## 8. Cost and margin check
 

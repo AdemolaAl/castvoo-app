@@ -14,8 +14,9 @@ let CFG = {
   features: { signups: true, login_email: true, broadcasts: true, drips: true, join_welcome: true, segments: true, media: true, local_time: true, start_links: true, ai: true, topups: true, crypto: true, referrals: true, withdrawals: true, support_chat: true, support_ai: true, site_chat: false, maintenance: false },
   content: {
     announcement_on: '0', announcement_text: '', announcement_link: '',
-    hero_title: 'Welcome. Broadcast. Follow up. *All on autopilot.*',
-    hero_subtitle: 'Greet everyone who asks to join, send broadcasts to all your subscribers, and build timed follow-up flows with buttons and links in a simple builder. Cas, the AI helper, writes the messages.',
+    // The same hero texts as index.html and server/seed.js: different defaults made the hero jump a line while loading.
+    hero_title: 'Broadcast, automate and build bots on Telegram. *All on autopilot.*',
+    hero_subtitle: 'Welcome everyone who joins, send one message to all your subscribers, and let follow-ups and bots work for you, even while you sleep.',
     hero_cta: 'Start my 7-day free trial',
     pricing_title: 'Simple prices. *Start free.*',
     pricing_subtitle: 'Free welcomes 500 join requests a month on one channel. Paid plans from $19 add follow-ups, broadcasts, tracked clicks and Cas. No setup fees.',
@@ -114,6 +115,12 @@ function apiErr(err, opts = {}) {
   const msg = err.message || 'Something went wrong. Please try again.';
   if (err.status === 401) return msg; // onLoggedOut already sent them to the login screen
   const where = MONEY_CODES[err.code] || (err.status === 402 ? 'wallet' : null);
+  // Over the bot subscriber limit: the sheet offers a subscriber pack in one tap on Scale ("talk to us" above the most
+  // packs), or the plans with more subscribers. Never a dead end.
+  if (err.code === 'limit_subscribers' && typeof openUpgrade === 'function' && APP.booted) {
+    openUpgrade({ title: 'Reach more bot subscribers', text: msg, limit: 'subscribers', packs: (err.data && err.data.packs) || null });
+    return msg;
+  }
   // "This is on a bigger plan": the upgrade sheet explains it and switches plan in one tap.
   if (where === 'upgrade' && typeof openUpgrade === 'function' && APP.booted) {
     openUpgrade({ title: 'Upgrade to use this', text: msg, feature: (err.data && err.data.feature) || null, limit: err.code === 'limit_flows' ? 'flows' : err.code === 'limit_flow_steps' ? 'flow_steps' : null });

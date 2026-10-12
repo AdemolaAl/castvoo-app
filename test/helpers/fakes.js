@@ -54,8 +54,11 @@ async function startFakes() {
     chatMember: null, // override for getChatMember result
     chatMemberError: null, // e.g. 'Bad Request: user not found': getChatMember about a person (not the bot itself) fails
     joinError: null, // e.g. 'Bad Request: HIDE_REQUESTER_MISSING' for approve/decline
+    pinError: null, // e.g. 'Bad Request: not enough rights to manage pinned messages in the chat' for pin/unpin
+    deleteError: null, // e.g. "Bad Request: message can't be deleted" for deleteMessage
     uploads: [], // { method, field, filename, size, file_id }
     fail5xx: 0,
+    failMethod: null,
     webhooks: new Map(), // token -> what setWebhook was given ({ url, secret_token, allowed_updates })
     webhookInfo: null, // override for getWebhookInfo: an object, or (token, saved) => object
     nextBotId: 700000000,
@@ -134,6 +137,8 @@ async function startFakes() {
     }
     if (field === 'photo') m.photo = [{ file_id: fileId + '_small', width: 90, height: 90 }, { file_id: fileId, width: 800, height: 800 }];
     else if (field === 'video') m.video = { file_id: fileId };
+    else if (field === 'voice') m.voice = { file_id: fileId, duration: Number(params.duration) || 1 };
+    else if (field === 'video_note') m.video_note = { file_id: fileId, length: 384, duration: 1 };
     else m.animation = { file_id: fileId };
     return m;
   }
@@ -145,6 +150,8 @@ async function startFakes() {
     const bot = tg.bots.get(token);
     if (tg.rate429.n > 0) { tg.rate429.n--; return tgErr(res, 429, `Too Many Requests: retry after ${tg.rate429.retryAfter}`, { retry_after: tg.rate429.retryAfter }); }
     if (tg.fail5xx > 0) { tg.fail5xx--; return tgErr(res, 502, 'Bad Gateway'); }
+    // failMethod: { method, n }: the next n calls of that one method answer 502 (e.g. only the text after a round video).
+    if (tg.failMethod && tg.failMethod.method === method && tg.failMethod.n > 0) { tg.failMethod.n--; return tgErr(res, 502, 'Bad Gateway'); }
     const chatId = params.chat_id !== undefined ? String(params.chat_id) : null;
     const sending = /^(send|edit|pin|delete)/.test(method);
     if (sending && chatId && tg.blocked.has(chatId)) return tgErr(res, 403, 'Forbidden: bot was blocked by the user');
@@ -159,8 +166,14 @@ async function startFakes() {
       case 'setWebhook': tg.webhooks.set(token, { url: params.url, secret_token: params.secret_token, allowed_updates: params.allowed_updates }); return tgOk(res, true);
       case 'deleteWebhook': tg.webhooks.delete(token); return tgOk(res, true);
       case 'sendChatAction': return tgOk(res, true); // a blocked chat (tg.block) answers 403 above, like a bot nobody started
+      case 'pinChatMessage': case 'unpinChatMessage':
+        if (tg.pinError) return tgErr(res, 400, tg.pinError);
+        return tgOk(res, true);
+      case 'deleteMessage':
+        if (tg.deleteError) return tgErr(res, 400, tg.deleteError);
+        return tgOk(res, true);
       case 'setMyCommands': case 'answerCallbackQuery':
-      case 'leaveChat': case 'pinChatMessage': case 'deleteMessage':
+      case 'leaveChat':
         return tgOk(res, true);
       case 'getWebhookInfo': {
         const saved = tg.webhooks.get(token);
@@ -182,9 +195,15 @@ async function startFakes() {
       case 'editMessageCaption':
         if (visibleHtmlLength(params.caption) > 1024) return tgErr(res, 400, 'Bad Request: message caption is too long');
         return tgOk(res, { message_id: Number(params.message_id), chat: { id: Number(chatId) }, caption: params.caption });
-      case 'sendPhoto': case 'sendVideo': case 'sendAnimation': {
+      case 'sendVideoNote': {
+        // Telegram: round videos have no caption (a caption is ignored); reply_markup is allowed.
+        if (params.caption !== undefined) return tgErr(res, 400, 'Bad Request: video notes can\'t have a caption (test fake)');
+        if (!files.video_note && !params.video_note) return tgErr(res, 400, 'Bad Request: there is no video_note in the request');
+        return tgOk(res, mediaResult(method, chatId, params, files, 'video_note'));
+      }
+      case 'sendPhoto': case 'sendVideo': case 'sendAnimation': case 'sendVoice': {
         if (visibleHtmlLength(params.caption) > 1024) return tgErr(res, 400, 'Bad Request: message caption is too long');
-        const field = method === 'sendPhoto' ? 'photo' : method === 'sendVideo' ? 'video' : 'animation';
+        const field = method === 'sendPhoto' ? 'photo' : method === 'sendVideo' ? 'video' : method === 'sendVoice' ? 'voice' : 'animation';
         if (!files[field] && !params[field]) return tgErr(res, 400, 'Bad Request: there is no ' + field + ' in the request');
         return tgOk(res, mediaResult(method, chatId, params, files, field));
       }

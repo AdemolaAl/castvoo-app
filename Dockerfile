@@ -1,9 +1,12 @@
-# Castvoo runs on plain Node.js 22 with no npm packages, so the image is tiny.
+# Castvoo runs on plain Node.js 22 with no npm packages (ffmpeg is the only system package it adds).
 FROM node:22-slim
 ENV NODE_ENV=production
 # Uploaded photos/videos live on the Railway volume mounted at /data.
 ENV UPLOAD_DIR=/data/uploads
 WORKDIR /app
+# ffmpeg turns recorded voice notes into OGG/Opus and round videos into square H.264 MP4 (services/media-convert.js).
+# Without it Castvoo still runs, but only accepts voice/round files that are already in the right format.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY package.json ./
 COPY server ./server
 # The Voo Connect kit (VooSquare login, affiliate hand-off, events), copied unchanged from VooSquare's sdk/voo-connect.

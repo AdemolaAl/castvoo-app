@@ -791,13 +791,14 @@ function wfCardHtml(E, i, o) {
     (o.editable ? '<span class="wf-tools">' + (first || inGroup ? '' : '<button type="button" data-up2="' + i + '" aria-label="Move up"' + (i <= 1 ? ' disabled' : '') + '>' + icon('up') + '</button><button type="button" data-dn="' + i + '" aria-label="Move down"' + (i >= n - 1 ? ' disabled' : '') + '>' + icon('down') + '</button>') +
       (first && !(bot && E.steps.length > 1) ? '' : '<button type="button" data-dup="' + i + '" aria-label="Copy">' + icon('copy') + '</button><button type="button" data-del="' + i + '" aria-label="Delete">' + icon('trash') + '</button>') + '</span>' : '') + '</div>' +
     (inGroup ? '<label class="fb-tb"><span>Answers the button</span><select data-tb="' + i + '"' + dis + '>' + (() => { const g = G[i].group; const own = g.owner != null ? g.owner : wfAnchorMsg(E, i); return ((E.steps[own] || {}).buttons || []).map((b) => '<option value="' + esc(b.id) + '"' + (b.id === s.trigger.button ? ' selected' : '') + '>' + esc(String(b.label || '').trim() || 'Untitled button') + '</option>').join(''); })() + '</select></label>' : '') +
-    (cur.media ? '<div class="nmed">' + (typeof mediaThumb === 'function' ? mediaThumb(cur.media) : '') + (o.editable ? '<button type="button" class="x" data-mx="' + i + '" aria-label="Remove photo or video">×</button>' : '') + '</div>' : '') +
+    (cur.media ? '<div class="nmed' + (cur.media.kind === 'voice' ? ' au-nv' : cur.media.kind === 'video_note' ? ' au-nr' : '') + '">' + (typeof mediaThumb === 'function' ? mediaThumb(cur.media) : '') + (o.editable ? '<button type="button" class="x" data-mx="' + i + '" aria-label="Remove the file">×</button>' : '') + '</div>' : '') +
+    (cur.media && cur.media.kind === 'video_note' && (String(cur.body || '').trim() || (cur.buttons || []).length) ? '<p class="au-ntip">⭕ Round videos can\'t have text in Telegram, so this text and its buttons arrive right after the video.</p>' : '') +
     '<textarea class="inp fb-ta" rows="3" data-body="' + i + '" placeholder="' + (kind === 'check_join' ? 'Ask them to join, like: Join our channel first 👇 then tap I\'ve joined.' : kind === 'ask' ? 'Your question, like: What is your email?' : kind === 'referral' ? 'Invite {goal} friends with your link: {invite_link}' : first ? 'Say hello! {name} becomes their first name.' : 'What would you like to say here?') + '"' + dis + '>' + esc(cur.body || '') + '</textarea>' +
     '<div class="cc" data-cc="' + i + '"></div>' +
     (special ? wfSpecialHtml(E, i, o) : '') +
     (startHtml || btns ? '<div class="fb-btns">' + startHtml + btns + '</div>' : '') +
     (o.editable ? '<div class="fb-acts">' + (special ? '' : '<button type="button" class="addm" data-ba="' + i + '">🔘 Add a button</button>') + (first && !startOn && !bot ? '<button type="button" class="addm" data-starton>👆 Add a Tap Start button' + (has('tap_to_start') ? '' : ' ' + wfLock('tap_to_start')) + '</button>' : '') +
-      '<button type="button" class="addm" data-ma="' + i + '">📎 ' + (cur.media ? 'Replace photo' : o.photoOnly ? 'Photo' : 'Photo or video') + '</button><button type="button" class="addm" data-nm="' + i + '">👤 Their name</button>' +
+      '<button type="button" class="addm" data-ma="' + i + '">📎 ' + (cur.media ? 'Replace' : o.photoOnly ? 'Photo' : 'Photo, video or voice') + '</button><button type="button" class="addm" data-nm="' + i + '">👤 Their name</button>' +
       (o.ai ? '<button type="button" class="addm aiw" data-aiw="' + i + '">✨ Write it with Cas' + (has('ai') ? '' : ' ' + wfLock('ai')) + '</button>' : '') +
       (special ? '' : '<button type="button" class="addm" data-sf="' + i + '">➡ Start another ' + (bot ? 'bot' : 'flow') + (has('start_another_flow') ? '' : ' ' + wfLock('start_another_flow')) + '</button>') + '</div><div class="nup" data-upl="' + i + '"></div>' : '') +
     (s.start_flow_id ? '<div class="fb-sf"><span>➡</span><span>Then <b>' + esc(sf ? sf.name : 'another flow') + '</b> starts for them, from its first message.</span>' + (o.editable ? '<button type="button" class="lnk" data-sfx="' + i + '">Remove</button>' : '') + '</div>' : '') +
@@ -1195,10 +1196,11 @@ function wfCheck(E, o = {}) {
     if (t === 'on_goal' && !wfGoalBefore(E, i)) return what + ' waits for an invite goal. Add an "Invite friends" step above it.';
     for (const [k, m] of [s].concat(s.variants || []).entries()) {
       const w2 = what + ((s.variants || []).length ? ' (version ' + String.fromCharCode(65 + k) + ')' : '');
-      if (!(m.body || '').trim()) return w2 + ' is empty. Write something in it.';
+      // A voice note or round video may go without text.
+      if (!(m.body || '').trim() && !(m.media && (m.media.kind === 'voice' || m.media.kind === 'video_note'))) return w2 + ' is empty. Write something in it.';
       const ph = wfPlaceholder(m.body);
       if (ph && !o.save) return w2 + ' still has example text: "' + ph + '". Swap it for your own words before you switch it on.';
-      const lim = (m.media ? 1024 : 4096) - (FL.data.plan.branding ? 34 : 0);
+      const lim = (m.media && m.media.kind !== 'video_note' ? 1024 : 4096) - (FL.data.plan.branding ? 34 : 0);
       if (visibleLength(wfLenText(E, i, m.body)) > lim) return w2 + ' is too long for Telegram (' + fmt(lim) + ' characters' + (wfKind(s) === 'referral' ? ', counting their invite link' : '') + ').';
       for (const b of m.buttons || []) {
         const l = String(b.label || '').trim();
@@ -1366,7 +1368,7 @@ function wfDrawStack(editable) {
   st.innerHTML = stepsHtml(E, { editable, sel: FL.sel, has: wfHas, stats, photoOnly: FL.data.plan.branding && !wfIsBot(E), ai: typeof aiOn === 'function' && aiOn(), open: FL.open, adding: FL.adding, btab: FL.btab, flows: FL.data.startable || [], tips, chats: FL.data.chats || [], joinAdmin: FL.joinAdmin || {} });
   const sum = $('#wfTipSum');
   if (sum) { sum.className = 'fb-tipsum' + (tips.length ? ' some' : ' ok'); sum.innerHTML = tips.length ? '💡 ' + esc(wfTipsSummary(tips)) : esc(wfTipsSummary(tips)); sum.disabled = !tips.length; }
-  $$('#wfStack [data-cc]').forEach((c) => { const i = +c.dataset.cc; const b = E.steps[i]; const cur = b.vsel ? b.variants[b.vsel - 1] : b; c.innerHTML = counterHtml(wfLenText(E, i, cur.body || ''), !!cur.media); });
+  $$('#wfStack [data-cc]').forEach((c) => { const i = +c.dataset.cc; const b = E.steps[i]; const cur = b.vsel ? b.variants[b.vsel - 1] : b; c.innerHTML = counterHtml(wfLenText(E, i, cur.body || ''), cur.media || false); });
   $$('#wfStack .fb-ta').forEach(wfGrow);
   $$('#wfStack img').forEach((im) => im.addEventListener('error', () => { const v = document.createElement('video'); v.src = im.src; v.muted = true; v.playsInline = true; im.replaceWith(v); }, { once: true }));
   const rule = $('#wfRule'); if (rule) rule.innerHTML = wfRuleHtml(E);
@@ -1666,7 +1668,7 @@ function wfWire(pane, alive, editable) {
     if (t.dataset.tv != null) { const sel = $('[data-tu="' + t.dataset.tv + '"]', st); if (sel) sel.innerHTML = wfUnitOptions(parseInt(t.value, 10) || 0, sel.value); }
     if (t.dataset.body != null) {
       const i = +t.dataset.body; const m = cur(i); m.body = t.value; wfMark(); wfGrow(t);
-      const c = $('[data-cc="' + i + '"]', st); if (c) { c.innerHTML = counterHtml(wfLenText(E, i, t.value), !!m.media); c.classList.toggle('bad', visibleLength(wfLenText(E, i, t.value)) > (m.media ? 1024 : 4096)); }
+      const c = $('[data-cc="' + i + '"]', st); if (c) { c.innerHTML = counterHtml(wfLenText(E, i, t.value), m.media || false); c.classList.toggle('bad', visibleLength(wfLenText(E, i, t.value)) > (m.media && m.media.kind !== 'video_note' ? 1024 : 4096)); }
       FL.sel = i; simSoon(); wfTipsSoon();
     }
     if (t.dataset.bl != null || t.dataset.bu != null) {
@@ -1857,9 +1859,10 @@ function wfWire(pane, alive, editable) {
     const mx = t.closest('[data-mx]'); if (mx) { cur(+mx.dataset.mx).media = null; wfMark(); redraw(); return; }
     const ma = t.closest('[data-ma]'); if (ma) {
       const i = +ma.dataset.ma;
-      const fin = document.createElement('input'); fin.type = 'file'; fin.accept = FL.data.plan.branding ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime';
-      fin.onchange = async () => { const f = fin.files[0]; if (!f) return; const m = await pickAndUpload(f, $('[data-upl="' + i + '"]', st)); if (m) { cur(i).media = m; wfMark(); } redraw(); };
-      fin.click(); return;
+      // Photo or video, voice note or round video (app-media.js). The Free plan welcome: 1 photo only.
+      const m = await pickMedia({ photoOnly: FL.data.plan.branding && !wfIsBot(E), box: $('[data-upl="' + i + '"]', st) });
+      if (m) { cur(i).media = m; wfMark(); }
+      redraw(); return;
     }
     const sf = t.closest('[data-sf]'); if (sf) { wfPickFlow(+sf.dataset.sf, redraw); return; }
     const sfx = t.closest('[data-sfx]'); if (sfx) { E.steps[+sfx.dataset.sfx].start_flow_id = null; wfMark(); redraw(); return; }

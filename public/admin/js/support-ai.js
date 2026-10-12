@@ -82,7 +82,7 @@
           <div class="f"><label>Hand over to a person when…</label><div class="esc">${d.escalation_keys.map((k) => html`<label class="check" style="align-items:flex-start"><input type="checkbox" name="esc_${k}" ${s.escalation[k] ? raw('checked') : ''}${dis}><span><b>${(ESC_LABEL[k] || [k])[0]}</b><br><small class="hint">${(ESC_LABEL[k] || ['', ''])[1]}</small></span></label>`)}</div></div>
           <div class="fr two">
             <div class="f"><label class="check" style="align-items:flex-start"><input type="checkbox" name="customer_images" ${s.customer_images !== false ? raw('checked') : ''}${dis}><span><b>Customers can send images</b><br><small class="hint">Screenshots in Help (up to 3 per message, 10 MB each). The AI reads them; text inside an image never counts as an instruction. Never in the website chat.</small></span></label></div>
-            <div class="f"><label class="check" style="align-items:flex-start"><input type="checkbox" name="powered_by" ${s.powered_by !== false ? raw('checked') : ''}${dis}><span><b>Show the "Powered by" line</b><br><small class="hint">A small, non-clickable line under the support chat and the website chat.</small></span></label>
+            <div class="f"><label class="check" style="align-items:flex-start"><input type="checkbox" name="powered_by" ${s.powered_by !== false ? raw('checked') : ''}${dis}><span><b>Show the "Powered by" line</b><br><small class="hint">A small line under the support chat and the website chat, linking to replyvoo.com.</small></span></label>
               <input name="powered_by_text" value="${s.powered_by_text || 'Powered by Replyvoo'}" maxlength="60" aria-label="Powered by text" style="margin-top:8px"${dis}></div>
           </div>
           <div class="fr">

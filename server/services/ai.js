@@ -73,10 +73,26 @@ function formatPlans(plans, t = {}, billing = null, cas = null) {
       + (p.branding ? '; welcomes end with "⚡ Free welcome bot by Castvoo.com"' : '');
   });
   return lines.join('\n')
-    + botsLines(plans)
+    + botsLines(plans) + repeatsLine(plans)
     + `\nEach plan includes everything in the plan before it.`
     + (t.days ? `\nFree trial: ${t.days} days of ${(plans.find((p) => p.code === t.plan) || {}).name || t.plan}, no card needed, ${n(t.ai_writes)} AI writes and ${n(t.join_requests ?? -1)} join requests during the trial. If no plan is paid when it ends, the workspace moves to the Free plan (not paused).` : '')
-    + seatLine(billing) + casPackLine(cas);
+    + seatLine(billing) + packLine(plans, billing) + casPackLine(cas);
+}
+/**
+ * Subscriber packs on the top plan (Admin → Settings → Billing sub_pack_*): one line for the live plan list, with what
+ * happens over the limit and "talk to us" above the most packs. Without packs on sale, only the over-limit rules.
+ */
+function packLine(plans, b) {
+  let isTop;
+  try { isTop = require('./billing').isTopPlan; } catch { return ''; }
+  const top = (plans || []).filter((p) => isTop(p)).sort((a, x) => Number(a.price_month_cents) - Number(x.price_month_cents))[0];
+  if (!top) return '';
+  const size = Number((b && b.sub_pack_size) ?? 50000), price = Number((b && b.sub_pack_price_cents) ?? 2900), max = Number((b && b.sub_pack_max) ?? 8);
+  const n = (v) => Number(v).toLocaleString('en-US');
+  const usd = (x) => '$' + (x / 100).toLocaleString('en-US', { minimumFractionDigits: x % 100 ? 2 : 0, maximumFractionDigits: 2 });
+  const over = `\nOver the bot subscriber limit (plus 10% extra): bots keep working and answering, new subscribers are still saved, channel and group members never count, only broadcasts to bot subscribers pause until there is room again; nothing is deleted.`;
+  if (!(price > 0 && max > 0 && size > 0)) return over + ` Above the ${top.name} plan: talk to us (Help chat or the support email) for a custom plan.`;
+  return over + `\nSubscriber packs (${top.name} plan only): +${n(size)} bot subscribers for ${usd(price)} a month per pack (yearly plans: ${usd(price * 12)} a year), up to ${max} packs (${n(Number(top.subscribers) + size * max)} bot subscribers in all), added in Wallet and plan → Subscriber packs (or the "Add ${n(size)} subscribers" button when the limit is reached) and paid from the wallet: the first payment covers the days left of the current period, then packs renew with the plan. Fewer packs start at the next renewal (nothing is deleted). Starter and Growth customers upgrade to ${top.name} first. Need more than ${n(Number(top.subscribers) + size * max)}, or a custom deal? Talk to us (Help chat or the support email) for a custom plan.`;
 }
 /** Bots limits per plan (billing.BOT_PLANS, chosen by plan code or features): live bots, bot types, lead answers... */
 function botsLines(plans) {
@@ -92,6 +108,17 @@ function botsLines(plans) {
       + `${b.concurrent_sessions_per_seat} logged-in devices per person` + (b.branding ? '; each bot\'s first message ends with "⚡ Free bot by Castvoo.com"' : '');
   });
   return rows.length ? '\nBots (🤖 Bots page):\n' + rows.join('\n') + '\nThe trial has the Growth bot limits with 300 lead answers. Lead answers get 10% extra; after that the bot still says thanks and the answers are kept hidden until next month or an upgrade.' : '';
+}
+/** Repeating messages a plan runs at a time (billing.js BOT_PLANS max_repeat_series): one line for the live plan list. */
+function repeatsLine(plans) {
+  let botPlanOf;
+  try { botPlanOf = require('./billing').botPlanOf; } catch { return ''; }
+  const parts = plans.map((p) => {
+    const b = botPlanOf(p);
+    const m = b.max_repeat_series ?? 0;
+    return `${p.name} ${m === -1 ? `unlimited (fair use ${b.max_repeat_series_fair_use || 100})` : m === 0 ? 'none' : m}`;
+  });
+  return parts.length ? `\nRepeating messages running at a time (Send a message → "Repeat this message"; paused ones don't count): ${parts.join('; ')}.` : '';
 }
 /** Cas credits (Admin → Cas AI → Cas Builder): one line, or nothing when not sold. */
 function casPackLine(c) {
@@ -229,8 +256,14 @@ async function workspaceFacts(ws) {
     db.many(`select s.source, count(*)::int n from subscribers s join connections c on c.id = s.connection_id where c.workspace_id = $1 and s.source is not null group by 1 order by 2 desc limit 8`, [ws.id]),
     db.one(`select count(*)::int n from subscribers s join connections c on c.id = s.connection_id where c.workspace_id = $1 and s.joined_at > now() - interval '7 days'`, [ws.id]),
   ]);
+  // The bot subscriber limit (plan + Scale subscriber packs, or the team's custom limit).
+  let allowed = '';
+  try {
+    const l = await billing.limits(ws);
+    allowed = ` of ${Number(l.subscribers).toLocaleString('en-US')} allowed` + (l.subscriber_packs ? ` (plan ${Number(l.plan_subscribers).toLocaleString('en-US')} + ${l.subscriber_packs} subscriber packs)` : '') + (l.custom_subscriber_limit ? ' (custom limit from the team)' : '');
+  } catch { /* plan missing: leave the limit out */ }
   return `# This workspace right now (real data)
-Plan: ${ws.plan_code} (${ws.plan_status}). Connections: ${u.connections}. Bot subscribers (count toward the plan): ${u.bot_subscribers}. Channel/group members (free, not counted): ${u.chat_members}. New subscribers in the last 7 days: ${last.n}.
+Plan: ${ws.plan_code} (${ws.plan_status}). Connections: ${u.connections}. Bot subscribers (count toward the plan): ${u.bot_subscribers}${allowed}. Channel/group members (free, not counted): ${u.chat_members}. New subscribers in the last 7 days: ${last.n}.
 Recent broadcasts (title · delivered · clicks · when):
 ${top.map((t) => `- ${t.title} · ${t.sent}/${t.total} · ${t.clicks} clicks · ${t.started_at ? new Date(t.started_at).toISOString().slice(0, 16).replace('T', ' ') : ''}`).join('\n') || '- none yet'}
 Where subscribers came from (start link tags): ${sources.map((s) => `${s.source} ${s.n}`).join(', ') || 'no tagged start links yet'}.

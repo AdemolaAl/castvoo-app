@@ -40,9 +40,20 @@ module.exports = (r) => {
 
   r.delete('/api/segments/:id', async (ctx) => {
     if (ctx.member.role === 'drafter') throw forbidden('Ask the owner to delete audiences.');
-    const row = await db.one('delete from segments where id = $1 and workspace_id = $2 returning id', [int(ctx.params.id, 'Audience'), ctx.workspace.id]);
+    const id = int(ctx.params.id, 'Audience');
+    // Repeating messages sent to this audience are paused first: the link is cleared when the audience goes (on delete
+    // set null), and their next runs would otherwise go to EVERY subscriber of the bot, day after day.
+    const row = await db.tx(async (c) => {
+      const s = (await c.query('select id, name from segments where id = $1 and workspace_id = $2 for update', [id, ctx.workspace.id])).rows[0];
+      if (!s) return null;
+      const paused = await c.query(`update repeat_series set status = 'paused', next_run_at = null, updated_at = now(),
+          last_error = $3 where segment_id = $1 and workspace_id = $2 and status in ('active', 'pending_approval') returning id`,
+      [s.id, ctx.workspace.id, `Paused: its audience "${String(s.name || '').slice(0, 60)}" was deleted. Edit it to pick who gets it, then resume.`]);
+      await c.query('delete from segments where id = $1', [s.id]);
+      return { id: s.id, paused_repeats: paused.rowCount };
+    });
     if (!row) throw notFound('That audience');
-    return { ok: true };
+    return { ok: true, paused_repeats: row.paused_repeats };
   }, { auth: 'workspace' });
 };
 

@@ -384,7 +384,11 @@ module.exports = (r) => {
         // AUD-6: a Free workspace with no login and no join requests for this long is inactive, and its data is deleted.
         inactive_free_days: v.inactive_free_days === undefined || v.inactive_free_days === '' ? (cur.inactive_free_days ?? 365) : int(v.inactive_free_days, 'Delete inactive Free workspaces after (days)', { min: 90, max: 3650 }),
         // Extra team seats on paid plans, per seat per month (yearly plans pay 12 months). 0 = not sold.
-        seat_price_cents: v.seat_price === undefined || v.seat_price === '' ? Number(cur.seat_price_cents ?? 500) : Math.min(money(v.seat_price, 'Extra team seat price'), 100000) };
+        seat_price_cents: v.seat_price === undefined || v.seat_price === '' ? Number(cur.seat_price_cents ?? 500) : Math.min(money(v.seat_price, 'Extra team seat price'), 100000),
+        // Subscriber packs on the top plan (Scale): bot subscribers per pack, price a month (0 = not sold), most packs.
+        sub_pack_size: v.sub_pack_size === undefined || v.sub_pack_size === '' ? Number(cur.sub_pack_size ?? 50000) : int(v.sub_pack_size, 'Subscribers in a pack', { min: 1000, max: 10000000 }),
+        sub_pack_price_cents: v.sub_pack_price === undefined || v.sub_pack_price === '' ? Number(cur.sub_pack_price_cents ?? 2900) : Math.min(money(v.sub_pack_price, 'Subscriber pack price'), 1000000),
+        sub_pack_max: v.sub_pack_max === undefined || v.sub_pack_max === '' ? Number(cur.sub_pack_max ?? 8) : int(v.sub_pack_max, 'Most subscriber packs per workspace', { min: 0, max: 100 }) };
     },
     referral: async (v) => {
       // AUD-1: one commission per payment, never more than 15% of the cash (minus processor fees), monthly or yearly (5 to 15% program).

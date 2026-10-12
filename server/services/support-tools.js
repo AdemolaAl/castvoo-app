@@ -164,7 +164,14 @@ async function diagnose(scope, { live = true } = {}) {
   // Plan and sending.
   try { await billing.assertCanSend(ws); } catch (e) { add('cannot_send', 'high', e.message, 'Top up the wallet and pick a plan; a plan that stopped because the wallet was short starts again by itself once a top-up covers it.', 'topup'); }
   const u = await billing.usage(ws.id);
-  if (l.subscribers !== billing.UNLIMITED && Number(l.subscribers) > 0 && u.bot_subscribers >= Number(l.subscribers)) add('subscriber_limit', 'high', `${u.bot_subscribers} bot subscribers, the plan allows ${l.subscribers}. Broadcasts pause above the limit (nothing is deleted).`, 'Upgrade to a bigger plan.', 'plans');
+  if (l.subscribers !== billing.UNLIMITED && Number(l.subscribers) > 0 && u.bot_subscribers >= Number(l.subscribers)) {
+    // On Scale the way out is a subscriber pack (or "talk to us" above the most packs), not a bigger plan.
+    const pk = await billing.packsInfo(ws, l);
+    const fix = pk.can_buy && pk.current < pk.max ? `Add a subscriber pack in Wallet and plan: +${pk.size.toLocaleString('en-US')} bot subscribers for $${pk.price_month}/month (about $${pk.one_now} now for the rest of this period).`
+      : pk.top_plan ? `Talk to us about a custom plan (more than ${pk.max_total.toLocaleString('en-US')} subscribers, or a custom deal).` : `Upgrade to a bigger plan${pk.top_plan_name ? ` (${pk.top_plan_name} includes ${pk.top_plan_subscribers.toLocaleString('en-US')} and can add subscriber packs)` : ''}.`;
+    add('subscriber_limit', 'high', `${u.bot_subscribers} bot subscribers, the plan allows ${l.subscribers}${l.subscriber_packs ? ` (${l.plan_subscribers} + ${l.subscriber_packs} subscriber packs)` : ''}. Broadcasts pause above the limit + 10% (bots keep answering, new subscribers are saved, nothing is deleted).`, fix,
+      pk.can_buy && pk.current < pk.max ? 'subscriber_packs' : pk.top_plan ? 'talk_to_us' : 'plans');
+  }
   if (l.connections !== billing.UNLIMITED && u.connections >= Number(l.connections)) add('connection_limit', 'low', `All ${l.connections} connections on the plan are used.`, 'Remove a bot, channel or group you no longer use, or upgrade.', 'channels');
   const meter = await billing.joinMeter(ws);
   if (meter.paused) add('join_limit', 'high', `This month's join requests (${meter.used}) are over the plan limit, so welcomes pause until ${day(meter.resets_at)}. People are still let in.`, 'Upgrade to keep welcoming everyone, or wait for the new month.', 'plans');
@@ -255,6 +262,11 @@ async function diagnose(scope, { live = true } = {}) {
   if (fb.length) add('broadcast_failed', 'medium', `Broadcast${fb.length > 1 ? 's' : ''} that failed: ${fb.map((x) => JSON.stringify(x.title || '#' + x.id)).join(', ')}.`, 'Run get_broadcasts for the reasons (often a paused plan at send time, or the bot lost its rights).', 'send');
   const stuck = await db.one("select count(*)::int n from broadcasts where workspace_id = $1 and status = 'sending' and started_at < now() - interval '3 hours' and sent = 0", [ws.id]);
   if (stuck.n) add('broadcast_stuck', 'high', 'A broadcast shows "Sending" for over 3 hours with nothing delivered.', 'Hand it to the technical team with the broadcast name.', null);
+  // Repeating messages that skipped their last send (plan paused, over the plan's repeating messages, connection broken).
+  const skipped = await db.many("select id, title, last_error from repeat_series where workspace_id = $1 and status = 'active' and last_skip_at > now() - interval '7 days' and last_error is not null and (last_run_at is null or last_skip_at > last_run_at) order by id limit 3", [ws.id]);
+  for (const r of skipped) add('repeat_skipped', 'medium', `Repeating message "${r.title}" skipped its last send: ${r.last_error}`, 'It carries on by itself at the next time once the reason is fixed (missed sends are never sent late). get_repeats shows the schedule.', 'repeats');
+  const conv = await db.one("select count(*)::int n from media_conversions where workspace_id = $1 and not ok and created_at > now() - interval '7 days'", [ws.id]);
+  if (conv.n) add('media_conversion_failed', 'low', `${conv.n} voice note or round video upload${conv.n > 1 ? 's' : ''} could not be converted in the last 7 days.`, 'Record again, or upload an MP3/M4A/OGG for voice and a short MP4 for a round video. If it says conversion isn\'t set up, hand it to the technical team.', 'send');
 
   // Payments (status only).
   const pays = await db.many("select reference, provider, status, reason, created_at, amount_cents from payments where workspace_id = $1 and created_at > now() - interval '30 days' order by id desc limit 10", [ws.id]);
@@ -294,6 +306,8 @@ const TOOLS = {
         setup_helper: { has_one: !!helperRow, name: helperRow ? (helperRow.name || '').split(' ')[0] || 'Helper' : null, invite_waiting: !!helperInvite, invite_expires: helperInvite ? day(helperInvite.expires_at) : null,
           can_send_broadcasts: ws.helper_send !== false, can_manage_billing: !!ws.helper_billing },
         extra_seats: extra,
+        subscriber_packs: Number(ws.subscriber_packs) || 0,
+        custom_subscriber_limit: ws.custom_subscriber_limit || null,
         // A setup helper is not the owner: they get the workspace, never the owner's login details (SEC-1).
         ...(helperView ? { you_are: 'the setup helper of this workspace, not its owner', helper_rules: { can: HELPER.CAN, cannot: HELPER.CANNOT, can_change_plan: !!ws.helper_billing, can_send_broadcasts: ws.helper_send !== false } } : {}),
         user: { first_name: (user.name || '').split(' ')[0] || null, email: maskEmail(user.email), email_verified: user.email_verified, country: user.country, telegram_linked: !!user.tg_user_id, telegram_username: user.tg_username || null, voosquare_linked: !!user.voo_id, since: day(user.created_at) },
@@ -382,7 +396,12 @@ const TOOLS = {
         features: [...new Set([...l.features, ...(l.legacy ? ['grandfathered features of the old plan'] : [])])],
         can_send, blocked_reason,
         connections: { used: u.connections, limit: l.connections, note: free ? 'On Free the limit counts channels and groups; 1 welcome bot comes free next to them.' : undefined },
-        bot_subscribers: { used: u.bot_subscribers, limit: l.subscribers, note: 'Channel and group members do not count.' },
+        bot_subscribers: { used: u.bot_subscribers, limit: l.subscribers, limit_with_grace: billing.withGrace(Number(l.subscribers)), plan_includes: l.plan_subscribers, note: 'Channel and group members do not count. Over the limit + 10%: broadcasts pause, bots keep answering, new subscribers are saved, nothing is deleted.' },
+        subscriber_packs: await (async () => {
+          const pk = await billing.packsInfo(ws, l);
+          return { has: pk.current, from_next_renewal: pk.pending, can_buy: pk.can_buy, why_not: pk.reason, pack_size: pk.size, price_a_month: pk.price_month, most_packs: pk.max,
+            one_more_now_costs: pk.one_now, renews_for: pk.renews, custom_limit_from_team: pk.custom_limit, above_this_talk_to_us: pk.max_total, link_key: pk.can_buy ? 'subscriber_packs' : pk.top_plan ? 'talk_to_us' : 'plans' };
+        })(),
         channel_group_members: u.chat_members,
         seats: { used: u.seats, limit: l.seats },
         ai_writes: { used: u.ai_used, limit: l.ai_writes, refill: refill ? day(refill) : ws.plan_status === 'trial' ? 'when the plan starts' : null },
@@ -505,6 +524,35 @@ const TOOLS = {
           top_errors: errs.map((e) => errLine(e.error, e.n)) });
       }
       return { broadcasts: out, note: 'Telegram gives bots no read receipts, so there are no read numbers. "Blocked the bot" failures are people who blocked it: a few percent is normal.' };
+    },
+  },
+
+  get_repeats: {
+    description: 'Repeating messages ("Repeat this message"): schedule, status (running, paused, waiting for approval, ended, stopped), next send in the workspace time zone, which version goes next (rotating versions), how many times sent, the last skip reason (plan paused, over the plan, missed while paused), auto-delete / auto-pin settings, the last runs (broadcast ids for message:<id> links) and the plan limit. Also voice note / round video conversions that failed lately.',
+    parameters: S(),
+    async run(scope) {
+      const R = require('./repeats');
+      const { ws } = await scopeRows(scope);
+      const all = await R.list(ws, { days: 7 });
+      const out = [];
+      for (const s of all.series.slice(0, 15)) {
+        const runs = await db.many('select id, status, total, sent, failed, run_date from broadcasts where series_id = $1 order by id desc limit 3', [s.id]);
+        out.push({ id: s.id, name: s.title, status: s.status, to: s.connection ? connName(s.connection) : null, schedule: s.schedule, timezone: s.timezone,
+          next_send: s.next_label, versions: s.versions.length, next_version: s.versions.length > 1 ? `version ${s.next_version + 1} of ${s.versions.length} (${s.rotation === 'random' ? 'random order, no repeats' : 'in order'})` : null,
+          sent_times: s.runs, last_sent: day(s.last_run_at), last_skipped: day(s.last_skip_at), last_problem: s.last_error,
+          delete_after_hours: s.delete_after_hours, pin: s.pin ? { notify: s.pin_notify, unpin_after_hours: s.unpin_after_hours } : false,
+          media: s.versions.filter((v) => v.media).map((v) => v.media.kind),
+          last_runs: runs.map((b) => ({ broadcast_id: b.id, date: b.run_date, status: b.status, delivered: b.sent, failed: b.failed })) });
+      }
+      const conv = await db.many("select kind, error, created_at from media_conversions where workspace_id = $1 and not ok and created_at > now() - interval '14 days' order by id desc limit 5", [ws.id]);
+      const ff = await require('./media-convert').detect();
+      return {
+        repeating_messages: out,
+        plan_limit: { running_now: all.limit.active, most_at_once: all.limit.max === -1 ? `unlimited (fair use ${all.limit.fair_use})` : all.limit.max },
+        failed_voice_or_round_video_conversions_14d: conv.map((c) => ({ kind: c.kind === 'voice' ? 'voice note' : 'round video', at: day(c.created_at), why: /not set up/.test(c.error || '') ? 'conversion is not set up on the server (team issue)' : 'the file could not be converted' })),
+        conversion_ready_on_server: ff.ok,
+        note: 'Runs missed while paused, while the plan could not send or during an outage are skipped, never sent late. Paused series do not count toward the plan limit. Telegram lets bots delete messages for 48 hours, so auto-delete is 1 to 47 hours.',
+      };
     },
   },
 
@@ -782,7 +830,7 @@ const TOOLS = {
   },
 
   diagnose_account: {
-    description: 'Checks the whole workspace for the common problems at once and returns each with a plain fix and a link key: plan paused or limits hit (live bots, subscribers, join requests, lead answers, AI writes, Cas builds), bots paused by plan, Needs attention, bot token not valid, webhook taken by another program, own bot not admin of the channel (Welcome bots) or of the checked channel (join checks), no join requests (invite link without "Approve new members"), failed welcomes, start-link clashes, many people blocking the bot, failed or stuck broadcasts, pending or failed payments, the Free plan branding line, unverified email, devices limit. Read-only. Use it first when something "doesn\'t work".',
+    description: 'Checks the whole workspace for the common problems at once and returns each with a plain fix and a link key: plan paused or limits hit (live bots, subscribers, join requests, lead answers, AI writes, Cas builds), bots paused by plan, Needs attention, bot token not valid, webhook taken by another program, own bot not admin of the channel (Welcome bots) or of the checked channel (join checks), no join requests (invite link without "Approve new members"), failed welcomes, start-link clashes, many people blocking the bot, failed or stuck broadcasts, repeating messages that skipped a send, voice notes or round videos that could not be converted, pending or failed payments, the Free plan branding line, unverified email, devices limit. Read-only. Use it first when something "doesn\'t work".',
     parameters: S(),
     async run(scope) { return diagnose(scope, { live: true }); },
   },
@@ -925,7 +973,7 @@ function definitions(names) {
 }
 const SUPPORT_TOOLS = Object.keys(TOOLS);
 // Cas (the in-app helper) only reads the workspace. Account and payment questions go to the support chat.
-const CAS_TOOLS = ['get_usage', 'get_connections', 'get_broadcasts', 'get_flows', 'get_bots', 'get_subscribers_summary', 'get_recent_errors', 'search_knowledge'];
+const CAS_TOOLS = ['get_usage', 'get_connections', 'get_broadcasts', 'get_repeats', 'get_flows', 'get_bots', 'get_subscribers_summary', 'get_recent_errors', 'search_knowledge'];
 
 /**
  * Run one tool for one scope. Never throws: returns { ok, output } with a redacted output.
